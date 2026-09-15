@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | BORRADOR |
-| **Depende de** | SPEC-002 |
-| **Sesiones** | S-10, S-11 |
+| **Depende de** | SPEC-008, SPEC-009 |
+| **Sesiones** | S-09 |
 
 ## 1. Objetivo
 
@@ -14,7 +14,7 @@ botones para editar, aprobar o rechazar.
 ## 2. Alcance
 
 **Incluye:** bot y webhook de Telegram, formateo del mensaje, teclado inline,
-aviso de `MANUAL` y `FAILED`, idempotencia de `update_id`.
+aviso cuando la IA falla, idempotencia de `update_id`.
 
 **No incluye:** la lógica de los botones (SPEC-004), comandos (SPEC-007).
 
@@ -40,7 +40,7 @@ Equipamiento: Gimnasio
 [✏️ Editar] [✅ Aprobar] [❌ Rechazar]
 ```
 
-`callback_data`: `act:<accion>:<planId>` — máximo 64 bytes (límite de Telegram).
+`callback_data`: `act:<accion>:<versionId>` — máximo 64 bytes (límite de Telegram).
 
 ### Entrada
 
@@ -55,21 +55,22 @@ Equipamiento: Gimnasio
    divide en varios mensajes; los botones van en el último.
 5. Los caracteres especiales de MarkdownV2 se escapan. El nombre del cliente
    es texto no confiable.
-6. Si el plan está en `MANUAL` o `FAILED`, se envía un aviso sin botones de
-   aprobación.
-7. El `message_id` enviado se guarda para poder editar el mensaje después.
-8. El envío solo ocurre si el plan está en `TRAINER_REVIEW`.
+6. Si la IA falló (la versión volvió a `NEW`), se envía un aviso **sin botones
+   de aprobación**, ofreciendo plantilla o creación manual.
+7. El `message_id` enviado se guarda para poder retirar los botones después.
+8. El envío con botones solo ocurre si la versión está en `DRAFT`.
 
 ## 5. Estados
 
-No cambia estados. Solo notifica sobre `TRAINER_REVIEW`, `MANUAL` y `FAILED`.
+No cambia estados. Notifica sobre `DRAFT`, y avisa cuando la IA falla y la
+versión vuelve a `NEW`.
 
 ## 6. Errores
 
 | Situación | Efecto |
 |---|---|
 | Telegram devuelve `429` | Reintento con backoff, máximo 3 |
-| El entrenador bloqueó el bot | Se registra; el plan sigue en `TRAINER_REVIEW` |
+| El entrenador bloqueó el bot | Se registra; la versión sigue en `DRAFT` |
 | Mensaje > 4096 caracteres | Se divide automáticamente |
 | Secreto inválido | `401`, sin procesar |
 | `update_id` duplicado | `200`, sin efecto |
@@ -84,13 +85,14 @@ No cambia estados. Solo notifica sobre `TRAINER_REVIEW`, `MANUAL` y `FAILED`.
 
 ## 8. Criterios de aceptación
 
-- **CA-1** — DADO un plan en `TRAINER_REVIEW`, CUANDO se notifica, ENTONCES
+- **CA-1** — DADO una versión en `DRAFT`, CUANDO se notifica, ENTONCES
   el entrenador recibe el mensaje con los tres botones.
 - **CA-2** — DADO un plan de 7 días que excede 4096 caracteres, CUANDO se
   envía, ENTONCES llega dividido y los botones van en el último mensaje.
 - **CA-3** — DADO un cliente llamado `Ana_*[test]`, CUANDO se formatea,
   ENTONCES el mensaje no rompe el parseo de MarkdownV2.
-- **CA-4** — DADO un plan en `MANUAL`, CUANDO se notifica, ENTONCES el aviso
+- **CA-4** — DADO que la IA falló y la versión volvió a `NEW`, CUANDO se
+  notifica, ENTONCES el aviso
   **no** incluye el botón de aprobar.
 - **CA-5** — DADO un `update` de un `chat_id` desconocido, CUANDO llega,
   ENTONCES se ignora y se registra el intento.

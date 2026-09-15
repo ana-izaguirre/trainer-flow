@@ -1,99 +1,100 @@
 # TrainerFlow — Roadmap por sesiones
 
-**Sesión = ~45 minutos de trabajo real.**
+**Sesión = ~45 minutos de trabajo real.** Cada una tiene objetivo, entregable y
+criterio de cierre. No se avanza con una sesión a medias.
 
-Cada sesión tiene un objetivo, un entregable concreto y un criterio de cierre.
-Si una sesión no cierra, se continúa en la siguiente. No se avanza con una
-sesión a medias.
-
-**24 sesiones ≈ 18 horas ≈ 4–5 semanas a 45 min/día.**
-
-> El plan original eran 21 días. Con TDD y tests E2E como requisito, 24
-> sesiones es la estimación honesta. El calendario es flexible; el orden no.
+**28 sesiones ≈ 21 horas ≈ 5–6 semanas a 45 min/día.**
 
 ---
 
-## Por qué este orden
+## El orden y su razón
 
-La máquina de estados va en la **sesión 5**, antes que cualquier integración.
-Es la pieza de la que depende el principio del producto (ningún plan llega al
-cliente sin aprobación). Construirla primero y con cobertura total significa
-que ninguna integración posterior puede romperlo por accidente.
+Dos decisiones marcan la secuencia:
+
+**1. La identidad y la máquina de estados van primero (S-05, S-06).** Son las
+dos piezas de las que depende todo lo demás. Construirlas antes significa que
+ninguna integración posterior puede romperlas por accidente.
+
+**2. El camino manual se construye ANTES que la IA (bloque 3 vs bloque 5).**
+En la sesión 11 ya hay un producto usable sin IA. Eso no es un orden arbitrario:
+es lo que garantiza que la IA nunca sea punto único de fallo. Si se construye al
+revés, el fallback siempre queda "para después".
 
 ---
 
-## Bloque 1 — Cimientos (S-01 → S-04)
+## Bloque 1 — Cimientos ✅ COMPLETADO
 
-*Objetivo: los datos entran y se guardan bien.*
+| # | Objetivo | Cierra cuando |
+|---|---|---|
+| **S-01** | Setup del entorno | `supabase start` levanta, tests en verde |
+| **S-02** | Esquema, parte 1 | Enums, `profiles`, `clients`, `assessments` |
+| **S-03** | Esquema, parte 2 | Planes, versiones, solicitudes, eventos, funciones |
+| **S-04** | RLS y tests | **SPEC-000 cerrada** — 44 tests en verde |
 
-| # | Objetivo | Entregable | Cierra cuando |
-|---|---|---|---|
-| **S-01** | Setup del entorno | Supabase CLI vinculado, estructura de carpetas, Vitest, secretos cargados | `supabase start` levanta y `pnpm test` corre en verde con un test trivial |
-| **S-02** | Esquema, parte 1 | Migración con enum `plan_state` + `trainers`, `clients`, `assessments` | `supabase db reset` aplica sin error |
-| **S-03** | Esquema, parte 2 | `workout_plans`, `plan_events`, `checkins`, `webhook_events`, `ai_usage` + tipos generados | `database.types.ts` compila |
-| **S-04** | RLS y constraints | Migración de políticas + tests de integración del esquema | **SPEC-000 cerrada** — CA-1 a CA-7 en verde |
+## Bloque 2 — El dominio (S-05 → S-08)
 
-## Bloque 2 — El corazón (S-05 → S-08)
-
-*Objetivo: la lógica que protege el principio del producto.*
+*Sin esto, nada de lo demás es seguro.*
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-05** | Máquina de estados (TDD) | `_core/state-machine.ts` | **100% de transiciones cubiertas**, válidas e inválidas. `DRAFT→SENT` imposible |
-| **S-06** | Parser de Tally (TDD) | Fixture real capturado + `_core/tally-parser.ts` | Payload completo, campos faltantes y tipos incorrectos, todos cubiertos |
-| **S-07** | Webhook: seguridad | Verificación de firma + idempotencia en `tally-webhook` | El mismo `eventId` dos veces produce **un solo** efecto |
-| **S-08** | Webhook: escritura | Cliente, evaluación, plan en `NEW`, `link_token` | **SPEC-001 cerrada** — CA-1 a CA-7 en verde |
+| **S-05** | Identidad y autorización (TDD) | `_core/authorization.ts` | **Cobertura 100%**, incluidos todos los casos denegados. **SPEC-009** |
+| **S-06** | Máquina de estados (TDD) | `_core/domain/state-machine.ts` | Las 11 válidas y **todas** las inválidas. `DRAFT→SENT` imposible |
+| **S-07** | Modelo Workout y Draft (TDD) | `_core/domain/` + `validateDraft` | JSON roto, días incorrectos y sets fuera de rango, rechazados |
+| **S-08** | Plantillas | `_core/templates.ts` | Las 4 plantillas pasan `validateDraft`. Cero consultas a la base |
 
-## Bloque 3 — Inteligencia (S-09 → S-11)
+## Bloque 3 — Producto usable SIN IA (S-09 → S-11)
 
-*Objetivo: Gemini genera, con límites y red de seguridad.*
-
-| # | Objetivo | Entregable | Cierra cuando |
-|---|---|---|---|
-| **S-09** | Rate limit (TDD) | `_core/rate-limit.ts` | Bajo, en el límite exacto, sobre el límite y ventana expirada, cubiertos |
-| **S-10** | Prompt y validación (TDD) | `_core/prompt-builder.ts` + `_core/plan-validator.ts` | JSON roto, días incorrectos y sets fuera de rango, rechazados |
-| **S-11** | Función `generate-plan` | Adaptador de Gemini + handler | **SPEC-002 cerrada** — incluido el camino `MANUAL` |
-
-## Bloque 4 — El entrenador (S-12 → S-16)
-
-*Objetivo: revisar y decidir desde Telegram.*
+*Al terminar este bloque ya hay algo que funciona.*
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-12** | Bot operativo | Bot creado, webhook registrado, secreto verificado, autorización por `chat_id` | Un `chat_id` desconocido es rechazado y registrado |
-| **S-13** | Formateo (TDD) | `_core/telegram-format.ts` | Escapado de MarkdownV2 y división a 4096 caracteres, cubiertos |
-| **S-14** | Envío al entrenador | Mensaje con los tres botones | **SPEC-003 cerrada** |
-| **S-15** | Aprobar y rechazar | Handlers de `callback_query` | Doble pulsación no duplica. `answerCallbackQuery` < 3s |
-| **S-16** | Editar | Flujo conversacional + versionado | **SPEC-004 cerrada** — `version = 2` tras una edición |
+| **S-09** | Bot de Telegram | Webhook, secreto, autorización por `chat_id` | Un `chat_id` desconocido es rechazado y registrado |
+| **S-10** | Editor por comandos | `_core/editor/commands.ts` | Crear, cargar plantilla, añadir y quitar ejercicios |
+| **S-11** | **E2E-1** | Flujo manual completo | **SPEC-008 cerrada.** Crear → editar → aprobar → enviar, **sin una sola llamada a la IA** |
 
-## Bloque 5 — El cliente (S-17 → S-18)
+> 🎯 **Hito.** Aquí el producto ya sirve. Todo lo demás lo mejora.
 
-*Objetivo: la rutina llega a quien la va a usar.*
+## Bloque 4 — Ingesta (S-12 → S-14)
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-17** | Vinculación | Deep link + `/start <token>` | `telegram_chat_id` guardado. Token inválido da respuesta neutra |
-| **S-18** | Entrega | Mensaje al cliente + entrega diferida | **SPEC-005 cerrada** — aprobar sin vincular no pierde la rutina |
+| **S-12** | Parser de Tally (TDD) | Fixture real + `_core/tally-parser.ts` | Payload completo, campos faltantes y tipos incorrectos |
+| **S-13** | Webhook: seguridad | Firma + idempotencia | El mismo `eventId` dos veces produce **un solo** efecto |
+| **S-14** | Webhook: escritura | Cliente, evaluación, plan, `link_token` | **SPEC-001 cerrada** |
 
-## Bloque 6 — Seguimiento (S-19 → S-21)
-
-*Objetivo: el ciclo semanal se cierra solo.*
-
-| # | Objetivo | Entregable | Cierra cuando |
-|---|---|---|---|
-| **S-19** | Cron de check-ins | `pg_cron` + `weekly-checkin` | Correr el cron dos veces **no duplica** check-ins |
-| **S-20** | Respuestas | Captura + aviso de molestias | **SPEC-006 cerrada** |
-| **S-21** | Comandos | `/clientes`, `/cliente`, `/pendientes`, `/checkins`, `/ayuda` | **SPEC-007 cerrada** — un cliente no obtiene datos |
-
-## Bloque 7 — Cierre (S-22 → S-24)
-
-*Objetivo: funciona de verdad, con una persona real.*
+## Bloque 5 — La IA como capacidad (S-15 → S-18)
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-22** | E2E camino crítico | Test de los 9 pasos | Pasa en verde, sin llamadas externas reales |
-| **S-23** | E2E degradación + seguridad | Test de Gemini caído + repaso de `SECURITY.md` | El sistema responde con Gemini en `429`. Cero secretos en git |
-| **S-24** | Deploy y prueba real | Funciones desplegadas + un cliente real de principio a fin | El entrenador aprueba una rutina y el cliente la recibe |
+| **S-15** | `AIProvider` + rate limit (TDD) | `_core/ports/ai-provider.ts` | Bajo, en el límite, sobre y ventana expirada, cubiertos |
+| **S-16** | Proveedor de Gemini | `_shared/ai/gemini-provider.ts` | **El grep de "gemini" sobre `_core` no devuelve nada** |
+| **S-17** | Función `generate-version` | Handler + degradación | Un fallo devuelve la versión a `NEW`, no la mata |
+| **S-18** | **E2E-2 y E2E-3** | IA completa y fallo de IA | **SPEC-002 cerrada.** Con `429` el producto sigue funcionando |
+
+## Bloque 6 — El cliente (S-19 → S-22)
+
+| # | Objetivo | Entregable | Cierra cuando |
+|---|---|---|---|
+| **S-19** | Vinculación | Deep link + `/start <token>` | Token inválido da respuesta neutra |
+| **S-20** | Entrega | Mensaje al cliente + entrega diferida | **SPEC-005 cerrada** |
+| **S-21** | Cron de check-ins | `pg_cron` + `weekly-checkin` | Correr el cron dos veces no duplica |
+| **S-22** | Respuestas de check-in | Captura + aviso de molestias | **SPEC-006 cerrada** |
+
+## Bloque 7 — El ciclo completo (S-23 → S-25)
+
+| # | Objetivo | Entregable | Cierra cuando |
+|---|---|---|---|
+| **S-23** | Solicitudes de cambio | Botones + aviso al entrenador | Una solicitud **no** muta la versión |
+| **S-24** | **E2E-4** | Ciclo de revisión completo | **SPEC-010 cerrada.** v1 queda byte a byte igual |
+| **S-25** | Comandos del entrenador | `/clientes`, `/cliente`, `/pendientes`… | **SPEC-007 cerrada** |
+
+## Bloque 8 — Cierre (S-26 → S-28)
+
+| # | Objetivo | Entregable | Cierra cuando |
+|---|---|---|---|
+| **S-26** | Observabilidad | `request_id` + logs estructurados + `duration_ms` | Se puede seguir una petición de extremo a extremo |
+| **S-27** | Seguridad | `tests/integration/security.test.ts` | Los 11 casos de `SECURITY.md` en verde. Cero secretos en git |
+| **S-28** | Deploy y prueba real | Funciones desplegadas + un cliente real | El entrenador aprueba una rutina y el cliente la recibe |
 
 ---
 
@@ -101,18 +102,22 @@ que ninguna integración posterior puede romperlo por accidente.
 
 Antes de cerrar cualquier sesión:
 
-1. Los tests están en verde.
-2. El trabajo está commiteado con un mensaje que referencia la spec.
-3. Si la sesión cierra una spec, su estado pasa a `IMPLEMENTADA`.
-4. Si algo quedó abierto, se anota al inicio de la siguiente sesión.
+1. `pnpm typecheck` pasa.
+2. `pnpm lint` pasa.
+3. Los tests están en verde.
+4. El trabajo está commiteado, con el mensaje referenciando la spec.
+5. Si la sesión cierra una spec, su estado pasa a `IMPLEMENTADA`.
+6. Lo que quedó abierto se anota al inicio de la siguiente.
 
 ## Si el tiempo aprieta
 
 Orden de recorte, de menos a más doloroso:
 
-1. **S-21** (comandos) — el entrenador puede consultar en Supabase mientras tanto.
-2. **S-19/S-20** (check-ins) — se pueden hacer a mano con 10 clientes.
-3. **S-16** (editar) — rechazar y regenerar cubre el caso, peor pero funciona.
+1. **S-25** (comandos) — se puede consultar en Supabase Studio mientras tanto.
+2. **S-21/S-22** (check-ins) — con 10 clientes se hacen a mano.
+3. **S-23/S-24** (solicitudes de cambio) — el cliente puede escribirle por chat.
+4. **Bloque 5 entero** (la IA) — 😮 **sí, se puede recortar.** Ese es el punto:
+   el producto ya funciona desde la sesión 11.
 
-**Nunca se recorta:** S-05 (máquina de estados), S-07 (idempotencia),
-S-12 (autorización). Sin esas tres el sistema no es seguro.
+**Nunca se recorta:** S-05 (autorización), S-06 (máquina de estados),
+S-13 (idempotencia). Sin esas tres el sistema no es seguro.

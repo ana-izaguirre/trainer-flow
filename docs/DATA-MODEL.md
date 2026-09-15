@@ -1,227 +1,297 @@
 # TrainerFlow — Modelo de datos
 
-ORM: **ninguno**. Se usa `supabase-js` con tipos generados desde el esquema:
+**10 tablas.** Sin ORM: `supabase-js` con tipos generados desde el esquema.
 
 ```bash
-supabase gen types typescript --linked > supabase/functions/_core/database.types.ts
+pnpm types:local     # contra la base local
+pnpm types           # contra el proyecto vinculado
 ```
 
-Migraciones en SQL versionado bajo `supabase/migrations/`.
+`database.types.ts` se versiona y **nunca se edita a mano**.
 
 ---
 
-## Relaciones
+## Mapa
 
 ```
-trainers
-   └── clients
-         ├── assessments      (histórico: 1 cliente → N evaluaciones)
-         ├── workout_plans    (histórico: 1 cliente → N rutinas)
-         │     └── plan_events (audit trail de transiciones)
-         └── checkins
+profiles ─────────────┐  identidad interna (Telegram)
+   │                  │
+   │ role='trainer'   │ role='client'
+   ▼                  ▼
+clients ──────────────┘  la relación entrenador ↔ cliente
+   ├── assessments        evaluaciones de Tally (histórico)
+   ├── checkins           seguimiento semanal
+   └── workout_plans      un plan por ciclo
+         ├── current_version_id ──┐
+         └── workout_versions ◄───┘   las revisiones, inmutables
+               ├── change_requests    solicitudes del cliente
+               ├── ai_generations     intentos de IA + rate limit
+               └── plan_events        audit trail
 
-webhook_events   (idempotencia, sin relaciones)
-ai_usage         (control de rate limit, sin relaciones)
+webhook_events   idempotencia. Sin relaciones
 ```
+
+**Las plantillas NO son una tabla.** Viven como constante tipada en
+`_core/templates.ts`: sin migración, sin query, y funcionan aunque la base de
+datos esté caída. Es el punto §6 llevado al extremo simple.
 
 ---
 
-## Tablas
+## `profiles` — identidad
 
-### `trainers`
-
-Un solo registro en V1, pero la tabla existe desde el día 1 para evitar una
-migración dolorosa después.
-
-| Columna | Tipo | Notas |
-|---|---|---|
-| `id` | `uuid` PK | `gen_random_uuid()` |
-| `full_name` | `text` NOT NULL | |
-| `telegram_chat_id` | `bigint` UNIQUE | chat del entrenador |
-| `created_at` | `timestamptz` | `now()` |
-
-### `clients`
+Toda persona que interactúa con el bot tiene un perfil. La identidad viene del
+webhook de Telegram, verificado server-side.
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `uuid` PK | |
-| `trainer_id` | `uuid` FK → `trainers` | `ON DELETE RESTRICT` |
+| `telegram_user_id` | `bigint` UNIQUE NOT NULL | **la identidad**. Viene del update verificado |
+| `telegram_chat_id` | `bigint` UNIQUE | para enviar mensajes |
+| `role` | `user_role` NOT NULL | `trainer` \| `client` |
 | `full_name` | `text` NOT NULL | |
-| `email` | `text` | de Tally, puede faltar |
-| `telegram_chat_id` | `bigint` UNIQUE NULL | NULL hasta que se vincule |
-| `link_token` | `text` UNIQUE NOT NULL | para el deep link de Telegram |
-| `linked_at` | `timestamptz` NULL | cuándo se vinculó |
 | `created_at` | `timestamptz` | |
 
-`link_token`: aleatorio, seguro para URL, `CHECK length BETWEEN 16 AND 64`.
-Telegram limita el payload de `/start` a 64 caracteres.
+> **`user_id` ≠ `chat_id`.** Coinciden en chats privados, pero son conceptos
+> distintos. La identidad es `user_id`; el destino de un mensaje es `chat_id`.
 
-**La vinculación es atómica:** `telegram_chat_id` y `linked_at` son ambos NULL
-o ambos tienen valor. Expresado como `CHECK`, no como convención.
+`UNIQUE (id, role)` existe para poder referenciar el rol desde otras tablas.
 
-Índice único parcial `(trainer_id, lower(email)) WHERE email IS NOT NULL` — un
-mismo email no se repite dentro de la cartera de un entrenador, y la
-comparación ignora mayúsculas.
+## `clients` — la relación
 
-### `assessments`
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `trainer_id` | `uuid` FK → `profiles` | `ON DELETE RESTRICT` |
+| `profile_id` | `uuid` FK → `profiles` UNIQUE | NULL hasta que se vincule |
+| `full_name` | `text` NOT NULL | |
+| `email` | `text` | de Tally, puede faltar |
+| `link_token` | `text` UNIQUE NOT NULL | `CHECK length BETWEEN 16 AND 64` |
+| `linked_at` | `timestamptz` | |
+| `created_at` | `timestamptz` | |
 
-Respuestas del formulario. Un cliente puede reevaluarse con el tiempo.
+**El rol se valida en la base de datos**, no solo en código, mediante una FK
+compuesta contra `profiles (id, role)`:
+
+```sql
+trainer_role text not null generated always as ('trainer') stored,
+foreign key (trainer_id, trainer_role) references profiles (id, role)
+```
+
+Así es **imposible** asignar el perfil de un cliente como entrenador.
+
+Otras restricciones:
+- La vinculación es atómica: `(profile_id IS NULL) = (linked_at IS NULL)`
+- Índice único parcial `(trainer_id, lower(email)) WHERE email IS NOT NULL`
+
+`link_token` es una credencial: CSPRNG, nunca en logs, máximo 64 caracteres
+(límite del `/start` de Telegram).
+
+## `assessments` — evaluaciones
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `uuid` PK | |
 | `client_id` | `uuid` FK → `clients` | `ON DELETE CASCADE` |
 | `raw_payload` | `jsonb` NOT NULL | payload íntegro de Tally |
-| `goal` | `text` NOT NULL | objetivo |
-| `level` | `text` NOT NULL | `beginner` / `intermediate` / `advanced` |
+| `goal` | `text` NOT NULL | |
+| `level` | `text` NOT NULL | `beginner` \| `intermediate` \| `advanced` |
 | `days_per_week` | `smallint` NOT NULL | `CHECK BETWEEN 1 AND 7` |
 | `session_minutes` | `smallint` NOT NULL | `CHECK BETWEEN 15 AND 180` |
 | `equipment` | `text` NOT NULL | |
 | `has_limitations` | `boolean` NOT NULL | |
-| `limitations_detail` | `text` NULL | |
-| `lifestyle` | `text` NULL | |
-| `notes` | `text` NULL | |
+| `limitations_detail` | `text` | **dato de salud.** Nunca en logs |
+| `lifestyle`, `notes` | `text` | |
 | `created_at` | `timestamptz` | |
 
-`raw_payload` se guarda siempre: si el parsing falla o Tally cambia campos,
-el dato original no se pierde.
+`raw_payload` se guarda siempre: si el parsing falla o Tally cambia campos, el
+dato original no se pierde.
 
-`CHECK`: sin limitaciones declaradas (`has_limitations = false`) no puede
-haber `limitations_detail`. El parser de SPEC-001 normaliza antes de insertar.
-
-### `workout_plans`
+## `workout_plans` — el contenedor
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `uuid` PK | |
-| `client_id` | `uuid` FK → `clients` | |
-| `assessment_id` | `uuid` FK → `assessments` | |
-| `state` | `plan_state` NOT NULL | enum, ver abajo |
-| `version` | `smallint` NOT NULL | empieza en 1, sube con cada edición |
-| `content` | `jsonb` NULL | la rutina estructurada |
+| `client_id` | `uuid` FK → `clients` | `ON DELETE CASCADE` |
+| `assessment_id` | `uuid` FK → `assessments` **NULL** | ver abajo |
+| `current_version_id` | `uuid` FK → `workout_versions` NULL | la versión vigente |
+| `created_at` / `updated_at` | `timestamptz` | |
+
+> **`assessment_id` es nullable a propósito.** Una rutina creada a mano o desde
+> una plantilla no necesita un formulario de Tally. Es el punto §1 expresado en
+> el esquema: el dominio no depende de la IA ni del formulario.
+
+## `workout_versions` — las revisiones
+
+**El corazón del modelo.** Cada versión guarda un snapshot completo (§7).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `plan_id` | `uuid` FK → `workout_plans` | `ON DELETE CASCADE` |
+| `version_number` | `smallint` NOT NULL | 1, 2, 3… |
+| `state` | `version_state` NOT NULL | ver `STATE-MACHINE.md` |
+| `content` | `jsonb` NULL | el `Workout` completo y validado |
+| `source` | `version_source` NOT NULL | `ai` \| `template` \| `manual` |
+| `template_id` | `text` NULL | cuál plantilla, si `source='template'` |
+| `created_by` | `uuid` FK → `profiles` | quién la creó |
 | `trainer_feedback` | `text` NULL | instrucción de la última edición |
-| `failure_reason` | `text` NULL | por qué falló la generación |
-| `telegram_message_id` | `bigint` NULL | para retirar los botones tras actuar (SPEC-003) |
-| `edit_count` | `smallint` NOT NULL | `CHECK BETWEEN 0 AND 5` (SPEC-004, regla 9) |
-| `sent_at` | `timestamptz` NULL | base del cálculo de `week_number` (SPEC-006) |
-| `created_at` / `updated_at` | `timestamptz` | `updated_at` por trigger |
+| `edit_count` | `smallint` NOT NULL | `CHECK BETWEEN 0 AND 5` |
+| `sent_at` | `timestamptz` NULL | base del `week_number` de los check-ins |
+| `created_at` / `updated_at` | `timestamptz` | |
 
-Índice parcial para `/pendientes`:
-`CREATE INDEX ON workout_plans (client_id) WHERE state = 'TRAINER_REVIEW';`
+`UNIQUE (plan_id, version_number)` — y también es la idempotencia: un reintento
+no puede crear dos veces la misma versión.
 
-Dos invariantes se expresan como `CHECK`, no solo en TypeScript:
+Restricciones de consistencia:
+- Una versión en `DRAFT`, `APPROVED` o `SENT` **tiene contenido**
+- `state = 'SENT'` **si y solo si** `sent_at` no es NULL
+- `template_id` no es NULL **si y solo si** `source = 'template'`
 
-- Un plan revisable o ya enviado **tiene contenido**: `content` solo puede ser
-  NULL en `NEW`, `GENERATING`, `FAILED`, `MANUAL` y `REJECTED`.
-- `state = 'SENT'` **si y solo si** `sent_at` no es NULL.
+**Una versión en `SENT` no se modifica nunca.** Un cambio produce `version + 1`.
 
-### `plan_events` — audit trail
+## `change_requests` — solicitudes del cliente
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `version_id` | `uuid` FK → `workout_versions` | sobre qué versión |
+| `client_id` | `uuid` FK → `clients` | |
+| `reason` | `change_reason` NOT NULL | ver abajo |
+| `comment` | `text` NULL | máximo 500 caracteres |
+| `state` | `text` NOT NULL | `OPEN` \| `RESOLVED` |
+| `resolved_by_version_id` | `uuid` FK → `workout_versions` NULL | la versión que lo resolvió |
+| `created_at` / `resolved_at` | `timestamptz` | |
+
+Motivos (`change_reason`): `too_hard`, `too_easy`, `too_long`, `no_equipment`,
+`uncomfortable_exercise`, `want_variety`, `other`.
+
+> **Es una tabla aparte, no columnas en la versión.** El punto §7 dice que la
+> versión anterior debe permanecer intacta. Escribir la solicitud dentro de v1
+> sería mutarla.
+
+Índice parcial `WHERE state = 'OPEN'` para `/pendientes`.
+
+## `ai_generations` — intentos de IA y rate limit
+
+Una fila por **cada** intento, exitoso o no.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `bigint` identity PK | |
+| `provider` | `text` NOT NULL | `gemini`. Nunca hardcodeado en `_core` |
+| `model` | `text` NOT NULL | |
+| `operation` | `text` NOT NULL | `generate` \| `edit` |
+| `version_id` | `uuid` FK → `workout_versions` NULL | trazabilidad |
+| `request_id` | `uuid` NULL | cruza con los logs |
+| `status` | `text` NOT NULL | `GENERATING` \| `SUCCEEDED` \| `FAILED` |
+| `failure_reason` | `text` NULL | `RATE_LIMITED`, `TIMEOUT`, `INVALID_OUTPUT`… |
+| `tokens_in` / `tokens_out` | `integer` NULL | `CHECK >= 0` |
+| `latency_ms` | `integer` NULL | `CHECK >= 0` |
+| `created_at` / `finished_at` | `timestamptz` | |
+
+Índice `(provider, created_at DESC)`.
+
+> **El rate limit es una ventana, no un saldo.** El tier gratuito limita
+> peticiones por minuto y por día, y se reinicia. El chequeo es
+> `COUNT(*) WHERE created_at > now() - intervalo`, nunca una resta.
+> Los límites viven en configuración, no en el código.
+
+## `plan_events` — audit trail
 
 Append-only. Responde *"¿por qué Carlos no recibió su rutina?"*.
 
 | Columna | Tipo | Notas |
 |---|---|---|
-| `id` | `bigserial` PK | |
+| `id` | `bigint` identity PK | |
 | `plan_id` | `uuid` FK → `workout_plans` | |
-| `from_state` | `plan_state` NULL | NULL en la creación |
-| `to_state` | `plan_state` NOT NULL | |
-| `actor` | `text` NOT NULL | `system` / `gemini` / `trainer` / `client` |
-| `metadata` | `jsonb` NULL | sin datos sensibles |
+| `version_id` | `uuid` FK → `workout_versions` NULL | NULL en eventos del plan |
+| `event_type` | `text` NOT NULL | `state_transition`, `change_requested`… |
+| `from_state` / `to_state` | `version_state` NULL | solo en transiciones |
+| `actor` | `text` NOT NULL | `system` \| `ai` \| `trainer` \| `client` |
+| `request_id` | `uuid` NULL | cruza con los logs |
+| `metadata` | `jsonb` NULL | **nunca datos de salud ni credenciales** |
 | `created_at` | `timestamptz` | |
 
-### `checkins`
+## `checkins` — seguimiento semanal
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | `uuid` PK | |
 | `client_id` | `uuid` FK → `clients` | |
-| `plan_id` | `uuid` FK → `workout_plans` **NOT NULL** | ver nota abajo |
+| `version_id` | `uuid` FK → `workout_versions` **NOT NULL** | la versión que está siguiendo |
 | `week_number` | `smallint` NOT NULL | `CHECK >= 1` |
-| `state` | `text` NOT NULL | `PENDING` / `COMPLETED` |
+| `state` | `text` NOT NULL | `PENDING` \| `COMPLETED` |
 | `answers` | `jsonb` NULL | |
-| `sent_at` / `completed_at` | `timestamptz` NULL | |
-| `reminder_sent_at` | `timestamptz` NULL | garantiza un único recordatorio (SPEC-006, regla 6) |
-
-`UNIQUE (client_id, plan_id, week_number)` — evita check-ins duplicados si el
-cron corre dos veces.
-
-> **`plan_id` es NOT NULL a propósito.** En PostgreSQL los NULL no colisionan
-> entre sí dentro de una restricción `UNIQUE`. Con `plan_id` anulable, dos
-> check-ins con `plan_id = NULL` pasarían la restricción y el cron podría
-> duplicarlos — justo lo que la restricción existe para impedir. Como solo
-> reciben check-in los clientes con un plan en `SENT` (SPEC-006, regla 1),
-> `plan_id` siempre tiene valor.
-
-`state = 'COMPLETED'` **si y solo si** `completed_at` no es NULL.
-
-### `webhook_events` — idempotencia
-
-| Columna | Tipo | Notas |
-|---|---|---|
-| `id` | `bigserial` PK | |
-| `source` | `text` NOT NULL | `tally` / `telegram` |
-| `external_id` | `text` NOT NULL | id del evento en el origen |
-| `payload` | `jsonb` NOT NULL | |
-| `processed_at` | `timestamptz` NULL | NULL = recibido, no procesado |
+| `sent_at` / `reminder_sent_at` / `completed_at` | `timestamptz` NULL | |
 | `created_at` | `timestamptz` | |
 
-**`UNIQUE (source, external_id)` es la garantía de idempotencia.**
-Todo webhook inserta aquí primero. Violación de unicidad = duplicado → 200 y salir.
+`UNIQUE (client_id, version_id, week_number)` — correr el cron dos veces no
+duplica check-ins.
 
-Para Telegram, `external_id` es el `update_id`.
-Para Tally, el `eventId` del payload.
+> **`version_id` es NOT NULL a propósito.** En PostgreSQL los NULL no colisionan
+> dentro de un `UNIQUE`, así que con la columna anulable esa garantía no
+> existiría de verdad.
 
-### `ai_usage` — rate limit
+## `webhook_events` — idempotencia
 
 | Columna | Tipo | Notas |
 |---|---|---|
-| `id` | `bigserial` PK | |
-| `provider` | `text` NOT NULL | `gemini` |
-| `model` | `text` NOT NULL | |
-| `operation` | `text` NOT NULL | `generate` / `edit` |
-| `plan_id` | `uuid` NULL | trazabilidad |
-| `tokens_in` / `tokens_out` | `integer` NULL | |
-| `latency_ms` | `integer` NULL | |
-| `success` | `boolean` NOT NULL | |
-| `error_code` | `text` NULL | |
-| `created_at` | `timestamptz` NOT NULL | **clave para la ventana** |
+| `id` | `bigint` identity PK | |
+| `source` | `text` NOT NULL | `tally` \| `telegram` |
+| `external_id` | `text` NOT NULL | `eventId` o `update_id` |
+| `payload` | `jsonb` NOT NULL | |
+| `request_id` | `uuid` NULL | |
+| `processed_at` | `timestamptz` NULL | |
+| `created_at` | `timestamptz` | |
 
-`CREATE INDEX ON ai_usage (provider, created_at DESC);`
-
-**Modelo mental correcto:** el tier gratuito de Gemini limita por *ventana de
-tiempo* (peticiones por minuto y por día), no es un saldo que se agota.
-El chequeo es `COUNT(*) WHERE created_at > now() - interval`, no una resta.
-
-Los límites viven en configuración, no hardcodeados — los cambia el proveedor.
+**`UNIQUE (source, external_id)` es la garantía de idempotencia del sistema.**
+Todo webhook inserta aquí antes de hacer nada más. Si viola la unicidad, el
+evento ya se procesó: `200` y salir.
 
 ---
 
-## Enum de estados
+## Enums
 
 ```sql
-CREATE TYPE plan_state AS ENUM (
-  'NEW',            -- evaluación guardada, sin generar
-  'GENERATING',     -- Gemini trabajando
-  'DRAFT',          -- borrador listo
-  'TRAINER_REVIEW', -- esperando al entrenador
-  'EDITING',        -- Gemini aplicando correcciones
-  'APPROVED',       -- aprobado, pendiente de envío
-  'SENT',           -- entregado al cliente
-  'REJECTED',       -- descartado
-  'FAILED',         -- Gemini falló
-  'MANUAL'          -- sin cuota de IA: el entrenador lo hace a mano
-);
+CREATE TYPE user_role      AS ENUM ('trainer', 'client');
+CREATE TYPE version_source AS ENUM ('ai', 'template', 'manual');
+CREATE TYPE version_state  AS ENUM
+  ('NEW', 'GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED');
+CREATE TYPE change_reason  AS ENUM
+  ('too_hard', 'too_easy', 'too_long', 'no_equipment',
+   'uncomfortable_exercise', 'want_variety', 'other');
 ```
-
-`FAILED` y `MANUAL` no estaban en el diseño original. Son necesarios para que
-la degradación controlada (ADR-005) tenga dónde apoyarse.
 
 ---
 
-## Seguridad de datos
+## Atomicidad
 
-- **RLS activo en todas las tablas.** Las Edge Functions usan `service_role`,
-  que la salta; RLS protege frente a accesos con `anon key`.
-- `limitations_detail` contiene información de salud: nunca se registra en
-  logs ni se manda a servicios que no sean Gemini.
-- `link_token` es una credencial: se genera con CSPRNG y nunca se loguea.
+Una sola operación toca varias tablas y **debe ser todo o nada**: crear una
+versión, apuntar `current_version_id` y registrar el evento.
+
+`supabase-js` no hace transacciones de varias sentencias, así que vive en una
+función de PostgreSQL:
+
+```sql
+create function create_workout_version(...) returns uuid
+```
+
+Una llamada RPC desde la Edge Function. Atómica por definición, sin librerías.
+
+**Ninguna otra operación la necesita:** aprobar, rechazar y enviar tocan una
+sola tabla, y un `UPDATE` ya es atómico.
+
+---
+
+## Seguridad
+
+- **RLS activo en las 10 tablas, con denegación total.**
+- Las Edge Functions usan `service_role`, que salta RLS por diseño. **La
+  autorización real vive en `_core/authorization.ts`**, funciones puras con
+  cobertura del 100%.
+- RLS es la red de seguridad frente a una fuga de la `anon key`.
+- Las políticas por rol están diseñadas en `SECURITY.md` y se activan cuando
+  exista un cliente que porte un JWT. Hoy no lo hay: la interfaz es Telegram.
+- `limitations_detail` y `comment` contienen información de salud: nunca se
+  escriben en logs ni en `plan_events.metadata`.
+- `link_token` es una credencial: CSPRNG, nunca logueada, nunca en errores.

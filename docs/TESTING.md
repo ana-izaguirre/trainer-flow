@@ -33,43 +33,91 @@ nada. Es el motivo de la regla del ADR-001.
 
 | Módulo | Casos obligatorios |
 |---|---|
-| `state-machine.ts` | Cada transición válida. **Cada transición inválida rechazada.** Que `DRAFT → SENT` sea imposible. |
-| `tally-parser.ts` | Payload completo. Campos faltantes. Tipos incorrectos. Campo extra desconocido. |
-| `rate-limit.ts` | Bajo el límite. En el límite exacto. Sobre el límite. Ventana expirada. |
-| `plan-validator.ts` | Respuesta de Gemini válida. JSON roto. Días ≠ los pedidos. Ejercicio contraindicado por la limitación declarada. |
+| `authorization.ts` | Cada regla: permitido **y cada caso denegado**. Cliente no ve `DRAFT`. Cambiar un ID no da acceso. |
+| `state-machine.ts` | Las 11 transiciones válidas. **Todas las inválidas rechazadas.** Que `DRAFT → SENT` sea imposible. |
+| `validate-draft.ts` | Draft válido. JSON roto. Campos faltantes. Días ≠ los pedidos. `sets` fuera de rango. **Manual inválido se rechaza igual que IA inválida.** |
+| `templates.ts` | Las 4 plantillas pasan `validateDraft`. Filtrado por criterios. |
+| `editor/commands.ts` | Cada comando del editor. Comando sobre versión `SENT` rechazado. |
+| `ai/rate-limit.ts` | Bajo el límite. En el límite exacto. Sobre el límite. Ventana expirada. |
+| `ai/prompt-builder.ts` | Incluye las limitaciones del cliente siempre. |
 | `telegram-format.ts` | Escapado de caracteres especiales. Mensaje que excede 4096 caracteres. |
+
+### Un test que no prueba código
+
+```typescript
+it('_core no menciona a ningún proveedor de IA', () => {
+  // El punto §2: el dominio no conoce a Gemini.
+  expect(grepCore(/gemini|openai|anthropic/i)).toEqual([]);
+});
+```
+
+Protege una decisión de arquitectura, no un comportamiento. Es barato y falla
+en el momento exacto en que alguien acopla el core a un proveedor.
 
 ## Integration — qué se prueba
 
-- **Idempotencia real:** insertar el mismo `(source, external_id)` dos veces
-  y comprobar que la segunda falla por constraint.
-- Las políticas RLS bloquean lo que deben bloquear.
-- Los `CHECK` constraints rechazan datos inválidos.
-- El índice parcial de `TRAINER_REVIEW` se usa.
+- **Idempotencia real:** insertar el mismo `(source, external_id)` dos veces y
+  comprobar que la segunda falla por constraint.
+- **Versionado inmutable:** crear v2 no toca v1.
+- **Atomicidad:** `create_workout_version` deja las tres tablas consistentes.
+- **Guarda de concurrencia:** una doble pulsación registra una sola acción.
+- **Roles en la base de datos:** no se puede asignar un cliente como entrenador.
+- RLS deniega todo, y `anon` no ejecuta las funciones atómicas.
+- Los `CHECK` rechazan datos inválidos.
 
-## E2E — el camino crítico
+## Security — los 11 casos
 
-Un solo escenario, ejecutado contra Supabase local:
+`tests/integration/security.test.ts` cubre la tabla de `SECURITY.md`. Con RLS en
+denegación total, **`_core/authorization.ts` es la única capa que separa a un
+cliente de los datos de otro**: por eso su cobertura es del 100% obligatorio.
 
-```
-1. POST simulado de Tally con firma válida
-2. → cliente y evaluación creados, respuesta < 1s
-3. → plan generado (Gemini mockeado), estado TRAINER_REVIEW
-4. → mensaje enviado al chat del entrenador (Telegram mockeado)
-5. callback_query "aprobar"
-6. → estado APPROVED
-7. → rutina enviada al cliente, estado SENT
-8. → plan_events contiene las 5 transiciones en orden
-```
+## E2E — los cuatro flujos críticos
 
-Y el escenario de degradación:
+Contra PostgreSQL real, con Telegram y el `AIProvider` mockeados.
+
+### E2E-1 — Rutina manual *(el más importante)*
 
 ```
-1. Gemini devuelve 429
-2. → plan en estado MANUAL
-3. → entrenador recibe aviso
-4. → el sistema sigue respondiendo
+entrenador crea rutina → carga plantilla → añade ejercicios
+                       → aprueba → envía
+→ el cliente ve la versión publicada
+→ ai_generations tiene CERO filas
 ```
+
+Prueba que el producto funciona **sin IA**.
+
+### E2E-2 — Rutina con IA
+
+```
+solicita generación → el proveedor devuelve un draft → se valida
+                    → el entrenador lo edita → aprueba → envía
+→ el cliente recibe la versión EDITADA, no la respuesta cruda de la IA
+```
+
+Se asevera que `contenido_enviado !== respuesta_del_proveedor`. Ese assert es
+el principio de producto convertido en test.
+
+### E2E-3 — Fallo de IA
+
+```
+solicita generación → el proveedor devuelve 429
+                    → la versión vuelve a NEW
+                    → el entrenador recibe el aviso
+                    → elige plantilla → completa → publica
+```
+
+Prueba la degradación controlada de extremo a extremo.
+
+### E2E-4 — Solicitud de cambio
+
+```
+v1 SENT → el cliente pide un cambio → el entrenador crea v2
+        → v2 aprobada y enviada
+→ current_version_id apunta a v2
+→ v1 conserva su contenido BYTE A BYTE, su estado y su sent_at
+```
+
+El assert sobre v1 es lo que prueba el punto §7.
 
 ## Reglas no negociables
 

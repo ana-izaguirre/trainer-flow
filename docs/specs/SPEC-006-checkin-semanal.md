@@ -4,7 +4,7 @@
 |---|---|
 | **Estado** | BORRADOR |
 | **Depende de** | SPEC-005 |
-| **Sesiones** | S-17, S-18 |
+| **Sesiones** | S-21, S-22 |
 
 ## 1. Objetivo
 
@@ -60,7 +60,7 @@ Molestias: ninguna
 
 1. Solo reciben check-in los clientes con un plan en `SENT`.
 2. `week_number` se calcula desde `sent_at` del plan.
-3. **`UNIQUE (client_id, plan_id, week_number)` garantiza que el cron no
+3. **`UNIQUE (client_id, version_id, week_number)` garantiza que el cron no
    duplica check-ins** aunque corra dos veces.
 4. Estados del check-in: `PENDING` al enviar, `COMPLETED` al responder.
 5. Las respuestas son estructuradas (botones), salvo el campo de molestias.
@@ -70,7 +70,7 @@ Molestias: ninguna
 
 ## 5. Estados
 
-No toca `plan_state`. Usa `checkins.state`: `PENDING → COMPLETED`.
+No toca `version_state`. Usa `checkins.state`: `PENDING → COMPLETED`.
 
 ## 6. Errores
 

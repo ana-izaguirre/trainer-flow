@@ -6,7 +6,8 @@ Escala: **Probabilidad** (baja/media/alta) × **Impacto** (bajo/medio/alto/crít
 
 | # | Riesgo | P | I | Estado |
 |---|---|---|---|---|
-| R-01 | Gemini propone un ejercicio contraindicado | Media | **Crítico** | Mitigado por diseño |
+| R-01 | La IA propone un ejercicio contraindicado | Media | **Crítico** | Mitigado por diseño |
+| R-13 | **Una sola capa de autorización** | Media | **Alto** | Mitigado parcialmente |
 | R-02 | Secretos filtrados a GitHub | Baja | **Crítico** | Mitigado |
 | R-03 | La invocación asíncrona no es confiable | Media | Alto | Plan B definido |
 | R-04 | La calidad de las rutinas no convence al entrenador | Media | **Alto** | Sin mitigar |
@@ -18,6 +19,10 @@ Escala: **Probabilidad** (baja/media/alta) × **Impacto** (bajo/medio/alto/crít
 | R-10 | Supabase pausa el proyecto por inactividad | Media | Medio | Aceptado |
 | R-11 | Fricción entre Deno y Node en el híbrido | Media | Bajo | Mitigado |
 | R-12 | Un desconocido encuentra el bot | Media | Alto | Mitigado |
+
+> **R-06 bajó de probabilidad.** El orden nuevo del roadmap entrega un producto
+> usable en la sesión 11, así que quedarse sin tiempo ya no significa quedarse
+> sin producto.
 
 ---
 
@@ -65,7 +70,11 @@ confiable. La idempotencia hace que sea seguro tener ambos mecanismos.
 perfectamente y ser inútil si las rutinas son malas y hay que reescribirlas
 enteras.
 
-**Sin mitigar todavía.** Lo que propongo:
+**Mitigado en parte por el rediseño:** las plantillas y el camino manual existen
+desde la sesión 11, antes que la IA. Si las rutinas generadas no convencen, el
+producto **igual sirve**. La IA deja de ser una apuesta y pasa a ser un extra.
+
+Lo que sigue pendiente:
 
 1. **Validar antes de S-11.** Pegar 3 evaluaciones reales en la interfaz web
    de Gemini y enseñarle los resultados al entrenador. Si no le sirven, el
@@ -149,6 +158,27 @@ Los bots de Telegram son públicos. Cualquiera puede escribirle.
 **Mitigación:** toda interacción valida el `chat_id` contra el entrenador o un
 cliente registrado (SPEC-003, SPEC-004, SPEC-007). Un desconocido no puede
 aprobar rutinas ni obtener datos. Los intentos se registran.
+
+---
+
+## R-13 — Una sola capa de autorización
+
+Con Telegram como única interfaz, todo pasa por `service_role`, que salta RLS.
+**`_core/authorization.ts` es lo único que separa a un cliente de los datos de
+otro.** Un bug en una de esas funciones expone datos, sin segunda línea.
+
+**Mitigación:**
+- Cobertura del 100% obligatoria sobre ese módulo, casos denegados incluidos.
+- Los 11 tests de seguridad de `SECURITY.md`.
+- La FK compuesta contra `profiles (id, role)` impide en la base de datos
+  confundir un cliente con un entrenador.
+- Denegado y no-existe dan la misma respuesta: no se puede enumerar recursos.
+
+**Riesgo residual real.** Con un entrenador y diez clientes el radio de impacto
+es pequeño, pero crece con cada cliente nuevo.
+
+**Señal de que hace falta más:** un segundo entrenador. Ahí se activan las
+políticas RLS por rol de `SECURITY.md`, que exigen un cliente con JWT.
 
 ---
 

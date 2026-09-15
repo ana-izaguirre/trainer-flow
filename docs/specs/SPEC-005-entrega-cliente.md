@@ -4,7 +4,7 @@
 |---|---|
 | **Estado** | BORRADOR |
 | **Depende de** | SPEC-004 |
-| **Sesiones** | S-07, S-14, S-15 |
+| **Sesiones** | S-19, S-20 |
 
 ## 1. Objetivo
 

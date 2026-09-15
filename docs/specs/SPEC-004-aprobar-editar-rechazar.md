@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | BORRADOR |
-| **Depende de** | SPEC-003 |
-| **Sesiones** | S-11, S-12, S-13 |
+| **Depende de** | SPEC-003, SPEC-009 |
+| **Sesiones** | S-10, S-11 |
 
 ## 1. Objetivo
 
@@ -22,7 +22,7 @@ conversacional de edición, versionado, audit trail.
 
 ### Entrada
 
-`callback_query` con `callback_data = act:<approve|edit|reject>:<planId>`.
+`callback_query` con `callback_data = act:<approve|edit|reject>:<versionId>`.
 
 Para editar, el siguiente mensaje de texto del entrenador es la instrucción.
 
@@ -35,7 +35,7 @@ Bot: "¿Qué quieres cambiar en la rutina de Carlos?"
    ↓
 Entrenador: "Quita sentadilla, tiene molestia de rodilla"
    ↓
-Estado EDITING → Gemini → versión 2 → TRAINER_REVIEW
+La versión en DRAFT se modifica in-place. No cambia de estado.
    ↓
 Nuevo mensaje con botones
 ```
@@ -48,10 +48,11 @@ Nuevo mensaje con botones
    si el trabajo posterior es lento. Si no, Telegram muestra el botón colgado.
 3. **Solo el entrenador puede aprobar, editar o rechazar.** Se verifica el
    `chat_id`.
-4. Aprobar: `TRAINER_REVIEW → APPROVED`. Dispara SPEC-005.
-5. Rechazar: `TRAINER_REVIEW → REJECTED`. Terminal. Se pide el motivo, opcional.
-6. Editar: `TRAINER_REVIEW → EDITING`. Al volver de Gemini, `version + 1` y
-   vuelta a `TRAINER_REVIEW`.
+4. Aprobar: `DRAFT → APPROVED`. Dispara SPEC-005.
+5. Rechazar: `DRAFT → REJECTED`. Terminal. Se pide el motivo, opcional.
+6. Editar una versión en `DRAFT`: se modifica **in-place**. No crea versión ni
+   cambia estado. Editar una versión en `SENT` **no está permitido**: se crea
+   `version + 1` (SPEC-010).
 7. **La edición también consume cuota** y pasa por el mismo chequeo de rate
    limit de SPEC-002.
 8. Tras actuar, los botones del mensaje original se retiran para evitar
@@ -63,11 +64,9 @@ Nuevo mensaje con botones
 ## 5. Estados
 
 ```
-TRAINER_REVIEW ──┬──► APPROVED  ──► (SPEC-005)
-                 ├──► REJECTED  (terminal)
-                 └──► EDITING ──┬──► TRAINER_REVIEW  (versión +1)
-                                ├──► FAILED
-                                └──► MANUAL
+DRAFT ──┬── EDIT ────► DRAFT  (in-place, no cambia estado)
+        ├── APPROVE ─► APPROVED ──► (SPEC-005)
+        └── REJECT ──► REJECTED  (terminal)
 ```
 
 **Prohibido por diseño:** cualquier camino a `SENT` que no pase por `APPROVED`.
@@ -90,17 +89,17 @@ TRAINER_REVIEW ──┬──► APPROVED  ──► (SPEC-005)
 - La instrucción de edición es entrada no confiable: se valida longitud
   (máximo 500 caracteres) y se pasa a Gemini como dato, no como instrucción
   de sistema.
-- El `planId` del `callback_data` se valida como UUID y se comprueba que
-  pertenece a un cliente del entrenador.
+- El `versionId` del `callback_data` se valida como UUID y por **pertenencia**,
+  contra la identidad resuelta del webhook (SPEC-009), nunca contra el ID recibido.
 
 ## 8. Criterios de aceptación
 
-- **CA-1** — DADO un plan en `TRAINER_REVIEW`, CUANDO el entrenador aprueba,
+- **CA-1** — DADO una versión en `DRAFT`, CUANDO el entrenador aprueba,
   ENTONCES pasa a `APPROVED` y se registra en `plan_events`.
 - **CA-2** — DADO un plan ya en `APPROVED`, CUANDO se vuelve a pulsar
   aprobar, ENTONCES se responde "ya fue procesada" y el estado no cambia.
-- **CA-3** — DADO un plan en `TRAINER_REVIEW`, CUANDO se pide una edición,
-  ENTONCES pasa por `EDITING` y vuelve con `version = 2`.
+- **CA-3** — DADO una versión en `DRAFT`, CUANDO se pide una edición,
+  ENTONCES se modifica in-place, sigue en `DRAFT` y `version_number` no cambia.
 - **CA-4** — DADO un `callback_query` de un `chat_id` que no es el entrenador,
   CUANDO llega, ENTONCES se ignora y el estado no cambia.
 - **CA-5** — DADO cualquier `callback_query`, CUANDO llega, ENTONCES

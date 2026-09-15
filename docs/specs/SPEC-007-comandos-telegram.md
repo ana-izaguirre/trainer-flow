@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | **Estado** | BORRADOR |
-| **Depende de** | SPEC-003 |
-| **Sesiones** | S-19 |
+| **Depende de** | SPEC-003, SPEC-009 |
+| **Sesiones** | S-25 |
 
 ## 1. Objetivo
 
@@ -45,7 +45,7 @@ Objetivo: Ganancia muscular · Intermedio
 
 ### `/pendientes`
 
-Planes en `TRAINER_REVIEW`, `MANUAL` o `FAILED`, con acción directa.
+Versiones en `DRAFT` y solicitudes de cambio abiertas, con acción directa.
 
 ### `/checkins`
 
@@ -97,7 +97,7 @@ Solo lectura. No cambia estados.
   ENTONCES se listan ambos para elegir.
 - **CA-4** — DADO un cliente que envía `/clientes`, CUANDO llega, ENTONCES
   recibe un mensaje genérico y **ningún dato**.
-- **CA-5** — DADO 2 planes en `TRAINER_REVIEW`, CUANDO se envía `/pendientes`,
+- **CA-5** — DADO 2 versiones en `DRAFT`, CUANDO se envía `/pendientes`,
   ENTONCES aparecen ambos con botones funcionales.
 - **CA-6** — DADO 25 clientes, CUANDO se envía `/clientes`, ENTONCES se
   pagina en varios mensajes.

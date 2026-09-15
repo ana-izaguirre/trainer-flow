@@ -4,7 +4,7 @@
 |---|---|
 | **Estado** | BORRADOR |
 | **Depende de** | SPEC-000 |
-| **Sesiones** | S-04, S-05, S-06 |
+| **Sesiones** | S-12, S-13, S-14 |
 
 ## 1. Objetivo
 
@@ -82,7 +82,8 @@ export type ParseResult =
    Una reevaluación no rompe la vinculación.
 6. `link_token`: 32 bytes de CSPRNG en base64url. Máximo 64 caracteres
    (límite del `/start` de Telegram).
-7. Se crea un `workout_plan` en estado `NEW`, versión 1, `content` en NULL.
+7. Se crea un `workout_plan` y, con `create_workout_version`, su primera
+   versión en estado `NEW` con `source='ai'` y `content` en NULL.
 8. **La respuesta se envía antes de invocar la generación.** El webhook nunca
    espera a Gemini.
 9. Si el parsing falla, el evento queda guardado y el entrenador recibe un
