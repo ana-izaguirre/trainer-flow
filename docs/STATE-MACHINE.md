@@ -1,8 +1,14 @@
 # TrainerFlow — Máquina de estados
 
 > Documentada antes de implementarse, como exige el punto §10 de las decisiones
-> de arquitectura. La implementación vive en `_core/domain/state-machine.ts`
-> y es una función pura sin dependencias.
+> de arquitectura.
+>
+> **Estado: implementada** (S-06). `_core/domain/state-machine.ts`, sin
+> dependencias, con **cobertura del 100%** y 70 tests: las 11 transiciones
+> válidas y **las 43 inválidas**, una por una.
+>
+> `state-machine.test.ts` copia la tabla de este documento literalmente. Si
+> discrepan, **este documento manda**.
 
 ## Principio que hace cumplir
 
@@ -207,7 +213,25 @@ export function nextState(
 ): VersionState | null {
   return TRANSITIONS[from][event] ?? null;
 }
+
+/** Un estado terminal no acepta ningún evento. */
+export function isTerminal(state: VersionState): boolean;
+
+/** Los eventos válidos desde un estado. Para construir los botones. */
+export function allowedEvents(from: VersionState): readonly VersionEvent[];
 ```
+
+### Tres tests que son el principio de producto, no comportamiento
+
+```typescript
+it('DRAFT → SENT NO EXISTE por ningún evento', ...);
+it('el ÚNICO camino a SENT sale de APPROVED', ...);
+it('la IA no puede llevar una versión más allá de DRAFT', ...);
+```
+
+El segundo no comprueba una transición concreta: recorre las 54 combinaciones
+y asevera que **solo una** produce `SENT`. Si alguien añadiera un atajo, ese
+test lo detecta aunque la transición nueva funcione perfectamente.
 
 ### Por qué no XState
 
