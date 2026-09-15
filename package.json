@@ -1,14 +1,21 @@
 {
   "name": "trainer-flow",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
+  "version": "0.1.0",
+  "description": "Automatización de rutinas para entrenadores personales, con revisión humana obligatoria",
   "license": "ISC",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "types": "supabase gen types typescript --linked > supabase/functions/_core/database.types.ts",
+    "db:reset": "supabase db reset",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -16,9 +23,11 @@
       "onFail": "download"
     }
   },
-  "type": "module",
   "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^10.9.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^2.1.8"
   }
 }
