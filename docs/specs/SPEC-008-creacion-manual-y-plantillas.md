@@ -2,7 +2,16 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — `validateDraft` implementado (S-07) |
+| **Estado** | **PARCIAL** — plantillas y validación implementadas (S-07, S-08) |
+
+## Resultado parcial
+
+| Pieza | Sesión | Estado |
+|---|---|---|
+| Modelo `Workout` y `validateDraft` | S-07 | ✅ 61 tests, cobertura 100% |
+| Plantillas (`_core/templates.ts`) | S-08 | ✅ 27 tests |
+| Editor por comandos | S-10 | ⏳ |
+| **E2E-1** (flujo manual completo) | S-11 | ⏳ |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-06, S-07 |
 
@@ -95,10 +104,19 @@ Manual     → WorkoutDraft { source: 'manual',   raw: unknown }  ─┘        
 5. Editar una versión en `DRAFT` la modifica **in-place**: no crea versión ni
    cambia estado.
 6. Editar una versión en `SENT` **no está permitido**: se crea `version + 1`.
-7. Las plantillas se filtran por días, nivel y equipamiento de la evaluación,
-   si existe. Sin evaluación, se listan todas.
+7. Las plantillas se **ordenan** por días, nivel y equipamiento — **no se
+   filtran**. Si se filtraran, un cliente con criterios poco comunes se
+   quedaría sin ninguna opción justo cuando la IA acaba de fallar, que es
+   exactamente el momento en que las plantillas tienen que estar ahí.
+   `templatesFor` nunca devuelve una lista vacía.
 8. **Nunca se selecciona una plantilla automáticamente** (§6). El entrenador
    elige siempre.
+9. **Si el cliente declaró limitaciones, `applyTemplate` inyecta un aviso.**
+   Una plantilla no sabe nada del hombro de nadie. Sin el aviso, el borrador
+   fallaría `validateDraft` con `LIMITATIONS_NOT_ACKNOWLEDGED` y el entrenador
+   no podría ni cargarlo. Con él, pasa la misma validación que exigimos a la
+   IA y el recordatorio queda a la vista. **Qué ajustar sigue siendo criterio
+   del entrenador.**
 
 ## 5. Estados
 
@@ -145,6 +163,10 @@ DRAFT ── EDIT ──► DRAFT   (in-place)
   ENTONCES no se ejecuta ninguna consulta a PostgreSQL.
 - **CA-8** — DADO una evaluación de 4 días nivel intermedio, CUANDO se listan
   las plantillas, ENTONCES `upper-lower-4d` aparece primero.
+- **CA-9** — DADO criterios que no encajan con ninguna plantilla, CUANDO se
+  listan, ENTONCES se devuelven **todas**, nunca una lista vacía.
+- **CA-10** — DADO un cliente con limitaciones, CUANDO se carga una plantilla,
+  ENTONCES el borrador incluye un aviso y pasa `validateDraft`.
 
 ## 9. Tests
 

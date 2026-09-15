@@ -221,7 +221,51 @@ pnpm types:local      # regenerar database.types.ts
 
 ## Estado
 
-🚧 En desarrollo. Fase: documentación y esquema.
+🚧 **En desarrollo.** El dominio está construido; falta conectarlo a Telegram.
+
+```
+182 tests unitarios · 45 de integración · typecheck ✅ · lint ✅
+Cobertura del 100% en los tres módulos críticos
+```
+
+### Progreso
+
+| Bloque | Sesiones | Estado |
+|---|---|---|
+| 1 · Cimientos | S-01 → S-04 | ✅ Esquema, RLS, migraciones |
+| 2 · El dominio | S-05 → S-08 | ✅ Autorización, estados, validación, plantillas |
+| 3 · Producto usable **sin IA** | S-09 → S-11 | ⬜ Bot, editor, E2E-1 |
+| 4 · Ingesta | S-12 → S-14 | ⬜ |
+| 5 · La IA | S-15 → S-18 | ⬜ |
+| 6 · El cliente | S-19 → S-22 | ⬜ |
+| 7 · Ciclo completo | S-23 → S-25 | ⬜ |
+| 8 · Cierre | S-26 → S-28 | ⬜ |
+
+**Hito próximo: la sesión 11.** Ahí el producto ya sirve — crear una rutina,
+aprobarla y enviarla, **sin una sola llamada a la IA**.
+
+### Los tres módulos con cobertura obligatoria del 100%
+
+| Módulo | Qué garantiza |
+|---|---|
+| `authorization.ts` | Con RLS en denegación total, es lo único que separa a un cliente de los datos de otro |
+| `domain/state-machine.ts` | Hace imposible que una rutina llegue al cliente sin aprobación |
+| `domain/validate-draft.ts` | La frontera con la IA: nada entra al dominio sin pasar por aquí |
+
+Si la cobertura de cualquiera baja del 100%, **el CI se pone rojo**.
+
+### Specs
+
+| Spec | Estado |
+|---|---|
+| SPEC-000 · Esquema | ✅ Implementada |
+| SPEC-008 · Manual y plantillas | 🟡 Parcial (validación y plantillas) |
+| SPEC-009 · Identidad y autorización | 🟡 Parcial (el core) |
+| SPEC-001 a 007, 010 | 📝 Borrador |
+
+Una spec toca varias capas, así que se cierra en varias sesiones. `SPEC-009`
+define las reglas de autorización **y** cómo el webhook resuelve la identidad:
+las reglas son S-05, el webhook es S-09.
 
 ### Fuera de alcance en V1
 

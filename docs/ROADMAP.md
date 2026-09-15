@@ -31,7 +31,7 @@ revés, el fallback siempre queda "para después".
 | **S-03** | Esquema, parte 2 | Planes, versiones, solicitudes, eventos, funciones |
 | **S-04** | RLS y tests | **SPEC-000 cerrada** — 44 tests en verde |
 
-## Bloque 2 — El dominio (S-05 → S-08)
+## Bloque 2 — El dominio (S-05 → S-08) ✅ COMPLETADO
 
 *Sin esto, nada de lo demás es seguro.*
 
@@ -40,7 +40,7 @@ revés, el fallback siempre queda "para después".
 | **S-05** ✅ | Identidad y autorización (TDD) | `_core/authorization.ts` | **Cobertura 100%** verificada, 22 tests. **SPEC-009 parcial** |
 | **S-06** ✅ | Máquina de estados (TDD) | `_core/domain/state-machine.ts` | **Cobertura 100%**, 70 tests: 11 válidas + las 43 inválidas |
 | **S-07** ✅ | Modelo Workout y Draft (TDD) | `_core/domain/` + `validateDraft` | **Cobertura 100%**, 60 tests. Manual e IA se validan igual |
-| **S-08** | Plantillas | `_core/templates.ts` | Las 4 plantillas pasan `validateDraft`. Cero consultas a la base |
+| **S-08** ✅ | Plantillas | `_core/templates.ts` | 27 tests. Las 4 pasan `validateDraft`. Cero consultas a la base |
 
 ## Bloque 3 — Producto usable SIN IA (S-09 → S-11)
 
