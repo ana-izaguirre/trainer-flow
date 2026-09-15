@@ -20,7 +20,7 @@ Corre en **cada push** y en cada PR hacia `main`.
 | `pnpm lint` | oxlint, incluido el aislamiento de `_core` (ADR-001) |
 | `pnpm test:coverage` | 155 tests unitarios + **los umbrales del 100%** |
 | `pnpm test:integration` | 45 tests contra PostgreSQL real |
-| Escáner de secretos | Ningún secreto en el historial, `.env` fuera de git |
+| Escáner de secretos | Ningún secreto en el historial, ningún `.env` versionado |
 
 ### Por qué los tests de integración no necesitan Supabase
 

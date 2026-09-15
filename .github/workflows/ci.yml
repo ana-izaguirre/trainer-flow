@@ -96,10 +96,27 @@ jobs:
           fi
           echo "Sin secretos aparentes."
 
-      - name: Comprobar que .env no está versionado
+      # Cualquier .env en cualquier directorio, no solo en la raíz.
+      # Único permitido: .env.example, que no contiene secretos ni sus nombres.
+      - name: Comprobar que ningún .env está versionado
         run: |
-          if git ls-files --error-unmatch .env .env.local 2>/dev/null; then
-            echo "::error::.env está versionado"
+          tracked=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '^\.env\.example$' || true)
+          if [ -n "$tracked" ]; then
+            echo "::error::Hay archivos .env versionados:"
+            echo "$tracked"
             exit 1
           fi
-          echo ".env fuera de git."
+          echo "Ningún .env versionado."
+
+      # .env.example nunca debe llevar el nombre de una clave: un hueco vacío
+      # llamado GEMINI_API_KEY= es una invitación a pegarla ahí.
+      - name: Comprobar que .env.example no declara secretos
+        run: |
+          declarados=$(grep -vE '^[[:space:]]*#' .env.example \
+            | grep -iE '^[[:space:]]*[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD)[A-Z_]*=' || true)
+          if [ -n "$declarados" ]; then
+            echo "::error::.env.example declara variables de secreto:"
+            echo "$declarados"
+            exit 1
+          fi
+          echo ".env.example limpio."
