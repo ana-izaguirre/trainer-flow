@@ -1,14 +1,18 @@
 import { defineConfig } from 'vitest/config';
 
+/**
+ * Tests unitarios: solo `_core/`, que es TypeScript puro.
+ * No necesitan base de datos ni red, y corren en milisegundos.
+ *
+ * Los tests de integración van en vitest.integration.config.ts.
+ * Ver docs/TESTING.md.
+ */
 export default defineConfig({
   test: {
-    // Solo se prueba _core/ (TypeScript puro) y tests/.
-    // Las funciones de Deno no se prueban con Vitest: ver docs/TESTING.md.
-    include: [
-      'supabase/functions/_core/**/*.test.ts',
-      'tests/**/*.test.ts',
-    ],
+    include: ['supabase/functions/_core/**/*.test.ts'],
     environment: 'node',
+    // _core/ está vacío hasta S-05 (máquina de estados).
+    passWithNoTests: true,
     coverage: {
       provider: 'v8',
       include: ['supabase/functions/_core/**/*.ts'],
@@ -17,7 +21,8 @@ export default defineConfig({
         'supabase/functions/_core/database.types.ts',
       ],
       thresholds: {
-        // La máquina de estados sostiene el principio del producto.
+        // La máquina de estados sostiene el principio del producto:
+        // ninguna rutina llega al cliente sin aprobación humana.
         // Ver docs/TESTING.md, regla 3.
         'supabase/functions/_core/state-machine.ts': {
           statements: 100,

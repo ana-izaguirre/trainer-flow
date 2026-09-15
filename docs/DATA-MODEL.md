@@ -53,8 +53,15 @@ migración dolorosa después.
 | `linked_at` | `timestamptz` NULL | cuándo se vinculó |
 | `created_at` | `timestamptz` | |
 
-`link_token`: aleatorio, mínimo 32 caracteres, seguro para URL.
+`link_token`: aleatorio, seguro para URL, `CHECK length BETWEEN 16 AND 64`.
 Telegram limita el payload de `/start` a 64 caracteres.
+
+**La vinculación es atómica:** `telegram_chat_id` y `linked_at` son ambos NULL
+o ambos tienen valor. Expresado como `CHECK`, no como convención.
+
+Índice único parcial `(trainer_id, lower(email)) WHERE email IS NOT NULL` — un
+mismo email no se repite dentro de la cartera de un entrenador, y la
+comparación ignora mayúsculas.
 
 ### `assessments`
 
@@ -79,6 +86,9 @@ Respuestas del formulario. Un cliente puede reevaluarse con el tiempo.
 `raw_payload` se guarda siempre: si el parsing falla o Tally cambia campos,
 el dato original no se pierde.
 
+`CHECK`: sin limitaciones declaradas (`has_limitations = false`) no puede
+haber `limitations_detail`. El parser de SPEC-001 normaliza antes de insertar.
+
 ### `workout_plans`
 
 | Columna | Tipo | Notas |
@@ -91,10 +101,19 @@ el dato original no se pierde.
 | `content` | `jsonb` NULL | la rutina estructurada |
 | `trainer_feedback` | `text` NULL | instrucción de la última edición |
 | `failure_reason` | `text` NULL | por qué falló la generación |
-| `created_at` / `updated_at` | `timestamptz` | |
+| `telegram_message_id` | `bigint` NULL | para retirar los botones tras actuar (SPEC-003) |
+| `edit_count` | `smallint` NOT NULL | `CHECK BETWEEN 0 AND 5` (SPEC-004, regla 9) |
+| `sent_at` | `timestamptz` NULL | base del cálculo de `week_number` (SPEC-006) |
+| `created_at` / `updated_at` | `timestamptz` | `updated_at` por trigger |
 
 Índice parcial para `/pendientes`:
 `CREATE INDEX ON workout_plans (client_id) WHERE state = 'TRAINER_REVIEW';`
+
+Dos invariantes se expresan como `CHECK`, no solo en TypeScript:
+
+- Un plan revisable o ya enviado **tiene contenido**: `content` solo puede ser
+  NULL en `NEW`, `GENERATING`, `FAILED`, `MANUAL` y `REJECTED`.
+- `state = 'SENT'` **si y solo si** `sent_at` no es NULL.
 
 ### `plan_events` — audit trail
 
@@ -116,14 +135,24 @@ Append-only. Responde *"¿por qué Carlos no recibió su rutina?"*.
 |---|---|---|
 | `id` | `uuid` PK | |
 | `client_id` | `uuid` FK → `clients` | |
-| `plan_id` | `uuid` FK → `workout_plans` NULL | |
-| `week_number` | `smallint` NOT NULL | |
+| `plan_id` | `uuid` FK → `workout_plans` **NOT NULL** | ver nota abajo |
+| `week_number` | `smallint` NOT NULL | `CHECK >= 1` |
 | `state` | `text` NOT NULL | `PENDING` / `COMPLETED` |
 | `answers` | `jsonb` NULL | |
 | `sent_at` / `completed_at` | `timestamptz` NULL | |
+| `reminder_sent_at` | `timestamptz` NULL | garantiza un único recordatorio (SPEC-006, regla 6) |
 
 `UNIQUE (client_id, plan_id, week_number)` — evita check-ins duplicados si el
 cron corre dos veces.
+
+> **`plan_id` es NOT NULL a propósito.** En PostgreSQL los NULL no colisionan
+> entre sí dentro de una restricción `UNIQUE`. Con `plan_id` anulable, dos
+> check-ins con `plan_id = NULL` pasarían la restricción y el cron podría
+> duplicarlos — justo lo que la restricción existe para impedir. Como solo
+> reciben check-in los clientes con un plan en `SENT` (SPEC-006, regla 1),
+> `plan_id` siempre tiene valor.
+
+`state = 'COMPLETED'` **si y solo si** `completed_at` no es NULL.
 
 ### `webhook_events` — idempotencia
 

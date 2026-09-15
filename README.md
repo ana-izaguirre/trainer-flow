@@ -463,7 +463,7 @@ supabase functions deploy <nombre>  # desplegarla
 
 | Spec | Qué cubre | Estado |
 |---|---|---|
-| SPEC-000 | Esquema de base de datos | 📝 Borrador |
+| SPEC-000 | Esquema de base de datos | ✅ Implementada |
 | SPEC-001 | Ingesta de Tally | 📝 Borrador |
 | SPEC-002 | Generación con Gemini | 📝 Borrador |
 | SPEC-003 | Revisión en Telegram | 📝 Borrador |

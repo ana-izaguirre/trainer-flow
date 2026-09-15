@@ -1,0 +1,39 @@
+# Configuración del proyecto Supabase.
+# Documentación: https://supabase.com/docs/guides/local-development/cli/config
+
+project_id = "trainer-flow"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 16
+
+[db.migrations]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+# TrainerFlow no usa Supabase Auth en V1: la identidad del entrenador y de los
+# clientes se resuelve por telegram_chat_id dentro de las Edge Functions.
+enabled = false
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+
+[analytics]
+enabled = false

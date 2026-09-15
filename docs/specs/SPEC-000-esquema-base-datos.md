@@ -2,9 +2,54 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **IMPLEMENTADA** (CA-7 pendiente de verificar en local) |
 | **Depende de** | — |
-| **Sesiones** | S-02, S-03 |
+| **Sesiones** | S-02, S-03, S-04 |
+
+## Resultado de la implementación
+
+| CA | Qué verifica | Estado |
+|---|---|---|
+| CA-1 | Las 8 tablas se crean sin error | ✅ Verificado |
+| CA-2 | `UNIQUE (source, external_id)` rechaza duplicados | ✅ Verificado |
+| CA-3 | Los `CHECK` rechazan datos inválidos | ✅ Verificado |
+| CA-4 | Borrar un cliente arrastra sus datos | ✅ Verificado |
+| CA-5 | Un entrenador con clientes no se borra | ✅ Verificado |
+| CA-6 | `anon` no obtiene ningún dato | ✅ Verificado |
+| CA-7 | Los tipos generados compilan | ⏳ Pendiente |
+
+**35 tests de integración**, 32 en verde y 3 en espera de CA-7.
+
+```bash
+pnpm test:integration
+```
+
+**Sobre CA-7.** `supabase gen types` necesita Docker, y en el entorno remoto
+donde se implementó esto el registro de imágenes está bloqueado. El archivo
+**no se escribió a mano** a propósito: se genera en local con
+
+```bash
+pnpm types:local     # contra la base de datos local
+pnpm types           # contra el proyecto vinculado
+```
+
+`tests/integration/types.test.ts` ya contiene el guardián contra la deriva:
+en cuanto el archivo exista, verifica que declara las 8 tablas, todas sus
+columnas y los 10 valores del enum. Hasta entonces esos 3 tests quedan en
+espera.
+
+### Cambios sobre el diseño original
+
+Tres decisiones se ajustaron al implementar, y `DATA-MODEL.md` ya las refleja:
+
+1. **`checkins.plan_id` pasa a NOT NULL.** En PostgreSQL los NULL no colisionan
+   dentro de una restricción `UNIQUE`, así que con `plan_id` anulable la
+   garantía de idempotencia del cron (regla 5) no existía de verdad.
+2. **Cuatro columnas nuevas** que specs posteriores necesitan:
+   `workout_plans.telegram_message_id`, `.edit_count`, `.sent_at` y
+   `checkins.reminder_sent_at`.
+3. **Cinco `CHECK` de consistencia** añadidos, por la regla 3 de esta spec
+   (toda restricción expresable en SQL existe como `CHECK`).
 
 ## 1. Objetivo
 

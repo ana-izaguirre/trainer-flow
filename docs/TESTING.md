@@ -86,8 +86,18 @@ Y el escenario de degradación:
 ## Comandos
 
 ```bash
-pnpm test           # unit, en watch
-pnpm test:run       # unit, una pasada (CI)
-pnpm test:e2e       # e2e contra Supabase local
-supabase start      # levanta Postgres local
+pnpm test             # unit (_core), en watch
+pnpm test:run         # unit, una pasada (CI)
+pnpm test:coverage    # unit con cobertura
+pnpm test:integration # integración, contra PostgreSQL real
+pnpm test:all         # unit + integración
+pnpm typecheck        # tsc --noEmit
 ```
+
+Los tests unitarios y los de integración usan configuraciones separadas
+(`vitest.config.ts` y `vitest.integration.config.ts`) porque tienen requisitos
+distintos: los unitarios no tocan nada externo y corren en paralelo; los de
+integración comparten base de datos y corren en serie.
+
+La base de tests se recrea desde las migraciones en cada ejecución. Eso es lo
+que verifica CA-1 de SPEC-000: si una migración se rompe, los tests no arrancan.
