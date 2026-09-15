@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "node_modules",
+    "coverage",
+    "dist",
+    "supabase/functions/_core/database.types.ts"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "off"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "no-console": "off"
+  },
+  "overrides": [
+    {
+      "files": ["supabase/functions/_core/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^(npm|jsr|https?):",
+                "message": "_core no puede importar dependencias externas (ADR-001)."
+              },
+              {
+                "group": ["**/_shared/**"],
+                "message": "_core no puede importar adaptadores de I/O (ADR-001)."
+              }
+            ]
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          { "name": "Deno", "message": "_core no puede depender de Deno (ADR-001)." },
+          { "name": "process", "message": "_core no puede depender de Node (ADR-001)." },
+          { "name": "fetch", "message": "_core no hace I/O. Eso vive en _shared (ADR-001)." }
+        ]
+      }
+    }
+  ]
+}

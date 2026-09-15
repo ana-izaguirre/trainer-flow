@@ -1,1 +1,25 @@
-node_modules
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Entorno — NUNCA commitear secretos
+.env
+.env.*
+!.env.example
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# Build y cobertura
+dist/
+coverage/
+*.tsbuildinfo
+
+# Sistema operativo y editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
