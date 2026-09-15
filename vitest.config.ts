@@ -20,6 +20,11 @@ export default defineConfig({
     passWithNoTests: true,
     coverage: {
       provider: 'v8',
+      // `json-summary` lo exige la acción que comenta la cobertura en el PR.
+      // `json` añade el detalle por archivo con las líneas sin cubrir.
+      reporter: ['text', 'json-summary', 'json'],
+      // Se reporta siempre, también cuando no se ejecutó ningún test del archivo.
+      reportOnFailure: true,
       include: ['supabase/functions/_core/**/*.ts'],
       exclude: [
         'supabase/functions/_core/**/*.test.ts',

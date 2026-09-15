@@ -212,6 +212,7 @@ pnpm types:local      # regenerar database.types.ts
 | [`SECURITY.md`](docs/SECURITY.md) | Secretos, autorización, datos de salud |
 | [`RISKS.md`](docs/RISKS.md) | Riesgos con su mitigación |
 | [`ROADMAP.md`](docs/ROADMAP.md) | El MVP dividido en sesiones |
+| [`DEPLOY.md`](docs/DEPLOY.md) | CI, despliegue y desarrollo local |
 | [`specs/`](docs/specs/) | Las specs con sus criterios de aceptación |
 
 **Antes de tocar código:** `CLAUDE.md`, la spec correspondiente y `ARCHITECTURE.md`.
