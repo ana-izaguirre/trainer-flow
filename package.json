@@ -1,7 +1,7 @@
 {
   "name": "trainer-flow",
   "version": "0.1.0",
-  "description": "Automatizaci\u00f3n de rutinas para entrenadores personales, con revisi\u00f3n humana obligatoria",
+  "description": "Automatización de rutinas para entrenadores personales, con revisión humana obligatoria",
   "license": "ISC",
   "type": "module",
   "private": true,
@@ -30,6 +30,7 @@
     }
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^2.1.8",

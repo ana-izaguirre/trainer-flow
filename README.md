@@ -194,9 +194,16 @@ pnpm test             # unit (_core), en watch
 pnpm test:run         # unit, una pasada
 pnpm test:integration # integración, contra PostgreSQL real
 pnpm test:all         # todo
-pnpm typecheck        # tsc --noEmit
+pnpm typecheck        # TypeScript / Node — _core y tests
+pnpm lint             # oxlint
+pnpm deno:check       # TypeScript / Deno — todas las Edge Functions
+pnpm deno:lint        # linter de Deno
 pnpm types:local      # regenerar database.types.ts
 ```
+
+**Dos typecheckers a propósito.** Node comprueba el dominio; Deno comprueba
+todo, incluidos `_shared/` y los handlers. Que el mismo `_core` pase los dos es
+la premisa del ADR-001, verificada en cada push.
 
 ---
 
@@ -224,8 +231,8 @@ pnpm types:local      # regenerar database.types.ts
 🚧 **En desarrollo.** El dominio está construido; falta conectarlo a Telegram.
 
 ```
-182 tests unitarios · 45 de integración · typecheck ✅ · lint ✅
-Cobertura del 100% en los tres módulos críticos
+268 tests unitarios · 45 de integración · cobertura global del 100%
+typecheck ✅  lint ✅  deno:check ✅  deno:lint ✅
 ```
 
 ### Progreso
@@ -234,7 +241,7 @@ Cobertura del 100% en los tres módulos críticos
 |---|---|---|
 | 1 · Cimientos | S-01 → S-04 | ✅ Esquema, RLS, migraciones |
 | 2 · El dominio | S-05 → S-08 | ✅ Autorización, estados, validación, plantillas |
-| 3 · Producto usable **sin IA** | S-09 → S-11 | ⬜ Bot, editor, E2E-1 |
+| 3 · Producto usable **sin IA** | S-09 → S-11 | 🟡 Bot ✅ · editor y E2E-1 pendientes |
 | 4 · Ingesta | S-12 → S-14 | ⬜ |
 | 5 · La IA | S-15 → S-18 | ⬜ |
 | 6 · El cliente | S-19 → S-22 | ⬜ |

@@ -48,7 +48,7 @@ revés, el fallback siempre queda "para después".
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-09** | Bot de Telegram | Webhook, secreto, autorización por `chat_id` | Un `chat_id` desconocido es rechazado y registrado |
+| **S-09** ✅ | Bot de Telegram | Webhook, secreto, identidad, idempotencia | 79 tests. Un desconocido recibe respuesta neutra y queda registrado |
 | **S-10** | Editor por comandos | `_core/editor/commands.ts` | Crear, cargar plantilla, añadir y quitar ejercicios |
 | **S-11** | **E2E-1** | Flujo manual completo | **SPEC-008 cerrada.** Crear → editar → aprobar → enviar, **sin una sola llamada a la IA** |
 

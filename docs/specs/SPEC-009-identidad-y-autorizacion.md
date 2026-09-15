@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — núcleo implementado (S-05) |
+| **Estado** | **PARCIAL** — núcleo (S-05) + webhook e identidad (S-09) |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-05 (core) · S-09 (webhook) · S-26 (logs) |
 
@@ -13,14 +13,14 @@
 
 | CA | Qué verifica | Estado |
 |---|---|---|
-| CA-1 | Secreto de cabecera inválido → 401 | ⏳ S-09, necesita el webhook |
-| CA-2 | `telegram_user_id` sin perfil → mensaje neutro | ⏳ S-09 |
+| CA-1 | Secreto de cabecera inválido → 401 | ✅ S-09 |
+| CA-2 | `telegram_user_id` sin perfil → mensaje neutro | ✅ S-09 |
 | CA-3 | Entrenador A no accede a clientes de B | ✅ |
 | CA-4 | Cliente A no accede a datos de B | ✅ |
 | CA-5 | Cliente no puede aprobar | ✅ (el registro del intento, en S-09) |
 | CA-6 | Cliente solo ve versiones en `SENT` | ✅ |
 | CA-7 | Cambiar un ID no da acceso ajeno | ✅ |
-| CA-8 | Los logs no filtran datos del recurso | ⏳ S-26, necesita el logger |
+| CA-8 | Los logs no filtran datos del recurso | ✅ S-09, con redacción por nombre de campo |
 
 Lo pendiente no es lógica de autorización: son las capas que la invocan.
 

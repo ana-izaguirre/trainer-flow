@@ -77,6 +77,11 @@ testing de Node es mejor.
 
 **Consecuencia.** El dominio se prueba en milisegundos sin levantar nada.
 
+**Verificado, no supuesto.** `pnpm deno:check` compila el mismo `_core` con el
+compilador de Deno en cada push. El `tsc` de Node comprueba `_core` y los
+tests; Deno comprueba además `_shared/` y los handlers, que usan `Deno.env`,
+`fetch` e imports `npm:` que Node no puede resolver.
+
 ---
 
 ### ADR-002 — Los webhooks no esperan a la IA

@@ -16,8 +16,10 @@ Corre en **cada push** y en cada PR hacia `main`.
 
 | Paso | Qué comprueba |
 |---|---|
-| `pnpm typecheck` | TypeScript estricto, sin errores |
+| `pnpm typecheck` | TypeScript estricto en `_core` y los tests (Node) |
 | `pnpm lint` | oxlint, incluido el aislamiento de `_core` (ADR-001) |
+| `pnpm deno:check` | **El mismo `_core` compila también en Deno**, más `_shared` y los handlers |
+| `pnpm deno:lint` | El linter de Deno, que conoce idioms que oxlint no |
 | `pnpm test:coverage` | 155 tests unitarios + **los umbrales del 100%** |
 | `pnpm test:integration` | 45 tests contra PostgreSQL real |
 | Escáner de secretos | Ningún secreto en el historial, ningún `.env` versionado |
