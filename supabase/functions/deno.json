@@ -1,0 +1,17 @@
+{
+  "//": "Configuración de Deno para las Edge Functions. Node usa tsconfig.json; este archivo existe para poder comprobar que el MISMO código de _core compila también bajo Deno, que es la premisa del ADR-001.",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "lib": ["deno.ns", "esnext"]
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "exclude": ["**/*.test.ts"]
+}

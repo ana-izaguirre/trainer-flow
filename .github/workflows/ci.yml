@@ -61,6 +61,18 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # El código de las Edge Functions corre en Deno, no en Node. Esto
+      # comprueba que el MISMO `_core` compila en los dos runtimes, que es la
+      # premisa del ADR-001 y hasta ahora era una suposición.
+      #
+      # Deno viene como devDependency, así que la versión la fija el lockfile
+      # y no hace falta una action aparte.
+      - name: Deno — typecheck de las Edge Functions
+        run: pnpm deno:check
+
+      - name: Deno — lint
+        run: pnpm deno:lint
+
       # Falla si la cobertura de authorization.ts, state-machine.ts o
       # validate-draft.ts baja del 100%. Ver vitest.config.ts.
       - name: Tests unitarios y cobertura
