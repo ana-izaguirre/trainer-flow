@@ -9,7 +9,12 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    include: ['supabase/functions/_core/**/*.test.ts'],
+    include: [
+      'supabase/functions/_core/**/*.test.ts',
+      // Tests sobre la arquitectura: leen archivos, así que no pueden vivir
+      // dentro de _core (ADR-001).
+      'tests/unit/**/*.test.ts',
+    ],
     environment: 'node',
     // _core/ está vacío hasta S-05 (máquina de estados).
     passWithNoTests: true,
@@ -21,10 +26,20 @@ export default defineConfig({
         'supabase/functions/_core/database.types.ts',
       ],
       thresholds: {
-        // La máquina de estados sostiene el principio del producto:
-        // ninguna rutina llega al cliente sin aprobación humana.
-        // Ver docs/TESTING.md, regla 3.
-        'supabase/functions/_core/state-machine.ts': {
+        // Estos dos módulos sostienen las garantías del sistema y por eso
+        // exigen cobertura total. Ver docs/TESTING.md y ADR-010.
+        //
+        //   authorization.ts  → con RLS en denegación total, es LO ÚNICO que
+        //                       separa a un cliente de los datos de otro.
+        //   state-machine.ts  → hace imposible que una rutina llegue al
+        //                       cliente sin aprobación humana.
+        'supabase/functions/_core/authorization.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'supabase/functions/_core/domain/state-machine.ts': {
           statements: 100,
           branches: 100,
           functions: 100,

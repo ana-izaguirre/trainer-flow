@@ -42,17 +42,19 @@ nada. Es el motivo de la regla del ADR-001.
 | `ai/prompt-builder.ts` | Incluye las limitaciones del cliente siempre. |
 | `telegram-format.ts` | Escapado de caracteres especiales. Mensaje que excede 4096 caracteres. |
 
-### Un test que no prueba código
+### Tests que no prueban código, sino arquitectura
 
-```typescript
-it('_core no menciona a ningún proveedor de IA', () => {
-  // El punto §2: el dominio no conoce a Gemini.
-  expect(grepCore(/gemini|openai|anthropic/i)).toEqual([]);
-});
-```
+`tests/unit/architecture.test.ts` comprueba que **ningún archivo de `_core`
+menciona un proveedor de IA** (ADR-007, SPEC-002 CA-8). Falla en el momento
+exacto en que alguien acopla el dominio a Gemini.
 
-Protege una decisión de arquitectura, no un comportamiento. Es barato y falla
-en el momento exacto en que alguien acopla el core a un proveedor.
+Vive fuera de `_core` a propósito: necesita leer el sistema de archivos, y ahí
+dentro eso está prohibido.
+
+**El resto del aislamiento lo hace cumplir el linter**, no un test: `Deno`,
+`process`, `fetch`, imports `npm:`/`jsr:`/`https:` y cualquier import de
+`_shared` fallan en `pnpm lint` con el mensaje del ADR. Comprobado con
+violaciones deliberadas: las 6 reglas disparan.
 
 ## Integration — qué se prueba
 

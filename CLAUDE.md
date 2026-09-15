@@ -65,6 +65,7 @@ Reglas que se derivan:
 | IA | Gemini, tras la interfaz `AIProvider` |
 | Interfaz | Telegram Bot — **sin frontend en V1** |
 | Tests | **Node** + Vitest |
+| Lint | **oxlint** — `typescript-eslint` aún no soporta TS 7 |
 
 ---
 
@@ -102,6 +103,9 @@ Si necesita entrada/salida, no pertenece ahí.
 - TypeScript estricto. **Nada de `any`** — para datos externos, `unknown`.
 - Los imports dentro de `functions/` llevan extensión `.ts` (Deno lo exige).
 - **TDD obligatorio en `_core/`**: primero el test rojo.
+- **El linter hace cumplir el aislamiento de `_core`** (ADR-001): `Deno`,
+  `process`, `fetch`, imports `npm:`/`jsr:`/`https:` y cualquier import de
+  `_shared` están prohibidos ahí y fallan en `pnpm lint`.
 - Cada Edge Function valida su entrada **y la autorización** antes de tocar datos.
 - Ningún webhook hace trabajo lento en línea: recibe, guarda, responde 200,
   dispara aparte.

@@ -2,9 +2,27 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — núcleo implementado (S-05) |
 | **Depende de** | SPEC-000 |
-| **Sesiones** | S-05 |
+| **Sesiones** | S-05 (core) · S-09 (webhook) · S-26 (logs) |
+
+## Resultado
+
+`_core/authorization.ts` está implementado con **cobertura del 100%**
+(statements, branches, functions, lines) y 22 tests.
+
+| CA | Qué verifica | Estado |
+|---|---|---|
+| CA-1 | Secreto de cabecera inválido → 401 | ⏳ S-09, necesita el webhook |
+| CA-2 | `telegram_user_id` sin perfil → mensaje neutro | ⏳ S-09 |
+| CA-3 | Entrenador A no accede a clientes de B | ✅ |
+| CA-4 | Cliente A no accede a datos de B | ✅ |
+| CA-5 | Cliente no puede aprobar | ✅ (el registro del intento, en S-09) |
+| CA-6 | Cliente solo ve versiones en `SENT` | ✅ |
+| CA-7 | Cambiar un ID no da acceso ajeno | ✅ |
+| CA-8 | Los logs no filtran datos del recurso | ⏳ S-26, necesita el logger |
+
+Lo pendiente no es lógica de autorización: son las capas que la invocan.
 
 ## 1. Objetivo
 
@@ -57,15 +75,31 @@ export type AuthzResult =
   | { allowed: true }
   | { allowed: false; reason: AuthzDenial };
 
+export function canViewClient(actor: Identity, client: ClientRef): AuthzResult;
 export function canManageClient(actor: Identity, client: ClientRef): AuthzResult;
-export function canEditVersion(actor: Identity, version: VersionRef): AuthzResult;
-export function canApproveVersion(actor: Identity, version: VersionRef): AuthzResult;
 export function canViewVersion(actor: Identity, version: VersionRef): AuthzResult;
+export function canModifyVersion(actor: Identity, version: VersionRef): AuthzResult;
 export function canRequestChange(actor: Identity, version: VersionRef): AuthzResult;
 ```
 
-Reciben los datos ya cargados y devuelven una decisión. No consultan nada:
-así se prueban al 100% sin base de datos.
+Reciben los datos ya cargados y devuelven una decisión. No consultan nada: así
+se prueban al 100% sin base de datos.
+
+### Dónde termina la autorización y empieza la máquina de estados
+
+| Pregunta | Quién responde |
+|---|---|
+| ¿Quién eres y de quién es este recurso? | `authorization.ts` |
+| ¿Es legal esta transición desde este estado? | `state-machine.ts` (SPEC-006) |
+
+Por eso hay **una sola** `canModifyVersion` en vez de `canEdit`, `canApprove` y
+`canReject`: las tres responden a la misma pregunta —*¿es el entrenador dueño
+de esta versión?*— y tenerlas separadas sería el mismo código tres veces. Qué
+transición es legal desde `DRAFT` lo decide la máquina de estados.
+
+**La excepción es `canViewVersion`**, que sí mira el estado: para un cliente,
+*qué puede ver* depende de si la versión está en `SENT`. Eso es una pregunta de
+visibilidad, no de transición.
 
 ## 4. Reglas de negocio
 
@@ -131,6 +165,7 @@ Por eso: **cobertura del 100% obligatoria**, incluidos todos los casos denegados
 |---|---|
 | Unit | Cada función de autorización: permitido y **cada** denegado |
 | Unit | `canViewVersion` deniega al cliente todo lo que no sea `SENT` |
+| Unit | Un cliente sin vincular (`profileId` NULL) no accede a nada |
 | Unit | `resolveIdentity` con update válido, sin perfil y malformado |
 | Integration | CA-1 a CA-7 |
 | **Security** | Los 11 casos de `SECURITY.md` |

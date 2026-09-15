@@ -37,7 +37,7 @@ revés, el fallback siempre queda "para después".
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-05** | Identidad y autorización (TDD) | `_core/authorization.ts` | **Cobertura 100%**, incluidos todos los casos denegados. **SPEC-009** |
+| **S-05** ✅ | Identidad y autorización (TDD) | `_core/authorization.ts` | **Cobertura 100%** verificada, 22 tests. **SPEC-009 parcial** |
 | **S-06** | Máquina de estados (TDD) | `_core/domain/state-machine.ts` | Las 11 válidas y **todas** las inválidas. `DRAFT→SENT` imposible |
 | **S-07** | Modelo Workout y Draft (TDD) | `_core/domain/` + `validateDraft` | JSON roto, días incorrectos y sets fuera de rango, rechazados |
 | **S-08** | Plantillas | `_core/templates.ts` | Las 4 plantillas pasan `validateDraft`. Cero consultas a la base |
