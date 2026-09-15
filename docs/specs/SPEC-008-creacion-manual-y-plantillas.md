@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — `validateDraft` implementado (S-07) |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-06, S-07 |
 
@@ -163,9 +163,10 @@ DRAFT ── EDIT ──► DRAFT   (in-place)
 ```
 supabase/functions/_core/templates.ts
 supabase/functions/_core/templates.test.ts
-supabase/functions/_core/domain/draft.ts
-supabase/functions/_core/domain/validate-draft.ts
-supabase/functions/_core/domain/validate-draft.test.ts
+supabase/functions/_core/domain/workout.ts          ✅ S-07
+supabase/functions/_core/domain/draft.ts            ✅ S-07
+supabase/functions/_core/domain/validate-draft.ts   ✅ S-07
+supabase/functions/_core/domain/validate-draft.test.ts ✅ S-07
 supabase/functions/_core/editor/commands.ts
 supabase/functions/_core/editor/commands.test.ts
 supabase/functions/telegram-webhook/handlers/editor.ts

@@ -33,6 +33,8 @@ export default defineConfig({
         //                       separa a un cliente de los datos de otro.
         //   state-machine.ts  → hace imposible que una rutina llegue al
         //                       cliente sin aprobación humana.
+        //   validate-draft.ts → la frontera con la IA: nada entra al dominio
+        //                       sin pasar por aquí.
         'supabase/functions/_core/authorization.ts': {
           statements: 100,
           branches: 100,
@@ -40,6 +42,13 @@ export default defineConfig({
           lines: 100,
         },
         'supabase/functions/_core/domain/state-machine.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        // Frontera con la IA: todo lo que entra aquí es dato no confiable.
+        'supabase/functions/_core/domain/validate-draft.ts': {
           statements: 100,
           branches: 100,
           functions: 100,
