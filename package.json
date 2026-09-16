@@ -23,7 +23,7 @@
     "deno:lint": "deno lint --config supabase/functions/deno.json supabase/functions",
     "test:e2e": "vitest run --config vitest.integration.config.ts tests/e2e",
     "dev:tunnel": "bash scripts/dev-tunnel.sh",
-    "deno:test": "deno test --allow-env --config supabase/functions/deno.json supabase/functions/_shared supabase/functions/telegram-webhook"
+    "deno:test": "deno test --allow-env --config supabase/functions/deno.json supabase/functions"
   },
   "devEngines": {
     "packageManager": {

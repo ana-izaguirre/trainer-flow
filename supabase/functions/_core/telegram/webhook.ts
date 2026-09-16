@@ -18,7 +18,7 @@
 import type { UserRole } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import { parseUpdate } from './update.ts';
-import { secretsMatch } from './secret.ts';
+import { constantTimeEquals } from '../security/constant-time.ts';
 
 /** Lo mismo para un desconocido que para un token inválido: no se filtra nada. */
 export const NEUTRAL_REPLY = 'No te tengo registrado. Habla con tu entrenador.';
@@ -67,7 +67,7 @@ export async function handleTelegramWebhook(
   deps: WebhookDeps,
 ): Promise<WebhookOutcome> {
   // ── 1. El secreto, antes de tocar nada ─────────────────────────────────
-  if (!secretsMatch(input.secretHeader, deps.expectedSecret)) {
+  if (!constantTimeEquals(input.secretHeader, deps.expectedSecret)) {
     return { kind: 'unauthorized' };
   }
 

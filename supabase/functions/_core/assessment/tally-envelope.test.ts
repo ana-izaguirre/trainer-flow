@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseTallyEnvelope } from './tally-envelope.ts';
+import { redactCredentialUrls, parseTallyEnvelope } from './tally-envelope.ts';
 
 const FIXTURE: unknown = JSON.parse(
   readFileSync(
@@ -214,5 +214,48 @@ describe('🔒 el payload trae credenciales', () => {
     expect(result.value.credentialUrls).toEqual(
       expect.arrayContaining(['submissionPdfUrl', 'submissionPreviewUrl']),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('redactCredentialUrls', () => {
+  it('quita las dos URLs con credencial', () => {
+    const raw = {
+      eventId: 'e',
+      data: {
+        responseId: 'r',
+        submissionPdfUrl: 'https://x?accessToken=VIVO',
+        submissionPreviewUrl: 'https://y?accessToken=VIVO',
+      },
+    };
+
+    expect(JSON.stringify(redactCredentialUrls(raw))).not.toContain('VIVO');
+  });
+
+  it('no muta la entrada', () => {
+    // Si mutara, quien llame se quedaría sin las URLs para depurar el envío
+    // en el momento, que es cuando sí hacen falta.
+    const raw = { data: { submissionPdfUrl: 'https://x?accessToken=VIVO' } };
+
+    redactCredentialUrls(raw);
+
+    expect(raw.data.submissionPdfUrl).toContain('VIVO');
+  });
+
+  it('conserva todo lo demás', () => {
+    const raw = { eventId: 'e', data: { responseId: 'r', fields: [1, 2] } };
+    expect(redactCredentialUrls(raw)).toEqual(raw);
+  });
+
+  it.each([null, undefined, 'texto', 42, []])('devuelve %s tal cual', (raw) => {
+    // La función recibe `unknown`: lo que no es un sobre se devuelve intacto
+    // en vez de reventar. El que llama decide qué hacer con ello.
+    expect(redactCredentialUrls(raw)).toEqual(raw);
+  });
+
+  it('un `data` que no es objeto se devuelve tal cual', () => {
+    const raw = { eventId: 'e', data: 'no soy un objeto' };
+    expect(redactCredentialUrls(raw)).toEqual(raw);
   });
 });

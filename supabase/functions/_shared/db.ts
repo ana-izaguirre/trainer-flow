@@ -6,6 +6,7 @@
  */
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { Identity } from '../_core/domain/identity.ts';
+import type { TallyRepo } from '../_core/ports/tally-ports.ts';
 import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
 import { requireEnv } from './env.ts';
 
@@ -87,5 +88,20 @@ export function createTelegramRepo(db: Db, requestId: string): TelegramRepo {
       claimWebhookEvent(db, 'telegram', externalId, payload, requestId),
     markProcessed: (externalId) => markWebhookProcessed(db, 'telegram', externalId),
     findIdentity: (telegramUserId) => findIdentity(db, telegramUserId),
+  };
+}
+
+/**
+ * Implementa el puerto `TallyRepo`.
+ *
+ * Reusa `claimWebhookEvent` con `source = 'tally'`: la idempotencia es el
+ * mismo `UNIQUE (source, external_id)` para los dos proveedores, así que
+ * Telegram y Tally no pueden pisarse aunque compartan un identificador.
+ */
+export function createTallyRepo(db: Db, requestId: string): TallyRepo {
+  return {
+    claimEvent: (externalId, payload) =>
+      claimWebhookEvent(db, 'tally', externalId, payload, requestId),
+    markProcessed: (externalId) => markWebhookProcessed(db, 'tally', externalId),
   };
 }

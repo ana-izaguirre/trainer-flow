@@ -137,3 +137,26 @@ export function parseTallyEnvelope(raw: unknown): EnvelopeResult {
     },
   };
 }
+
+/**
+ * Devuelve el payload sin las URLs de descarga.
+ *
+ * SPEC-001 regla 3: el `raw_payload` se guarda **siempre**, porque si el
+ * parsing falla o Tally cambia sus campos el dato original es lo único que
+ * queda. Pero `submissionPdfUrl` y `submissionPreviewUrl` llevan un JWT
+ * firmado que da acceso a la respuesta completa, con los datos de salud
+ * dentro. Guardarlas sería meter una credencial viva en la base de datos.
+ *
+ * No muta la entrada: devuelve una copia.
+ */
+export function redactCredentialUrls(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+
+  const data = raw['data'];
+  if (!isRecord(data)) return raw;
+
+  const limpio: Record<string, unknown> = { ...data };
+  for (const campo of CREDENTIAL_URL_FIELDS) delete limpio[campo];
+
+  return { ...raw, data: limpio };
+}
