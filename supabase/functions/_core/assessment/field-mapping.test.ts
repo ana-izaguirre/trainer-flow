@@ -14,7 +14,7 @@ import { mapFormFields, type FormField, type FieldMapping } from './field-mappin
 
 const MAPPING: FieldMapping = {
   fullName: { label: 'Nombre completo' },
-  telegramHandle: { label: 'Tu usuario de Telegram' },
+  goalDetail: { label: 'Detalle del objetivo' },
   goal: { label: '¿Cuál es tu objetivo?' },
   level: { label: 'Nivel de experiencia' },
   daysPerWeek: { label: '¿Cuántos días por semana?', numeric: true },
@@ -37,7 +37,7 @@ describe('mapeo básico por etiqueta', () => {
     const result = mapFormFields(
       [
         campo('Nombre completo', 'Carlos Pérez'),
-        campo('Tu usuario de Telegram', '@carlitos'),
+        campo('Detalle del objetivo', '@carlitos'),
         campo('¿Cuál es tu objetivo?', 'Ganancia muscular'),
       ],
       MAPPING,
@@ -45,7 +45,7 @@ describe('mapeo básico por etiqueta', () => {
 
     expect(result).toMatchObject({
       fullName: 'Carlos Pérez',
-      telegramHandle: '@carlitos',
+      goalDetail: '@carlitos',
       goal: 'Ganancia muscular',
     });
   });
@@ -183,11 +183,11 @@ describe('valores ausentes', () => {
     ['array vacío', []],
     ['string vacío', ''],
   ])('omite el campo cuando el valor es %s', (_nombre, value) => {
-    const result = mapFormFields([campo('Tu usuario de Telegram', value)], MAPPING);
+    const result = mapFormFields([campo('Detalle del objetivo', value)], MAPPING);
 
     // Omitido, no `null`: así la validación distingue "no contestó" de
     // "contestó algo inválido".
-    expect('telegramHandle' in result).toBe(false);
+    expect('goalDetail' in result).toBe(false);
   });
 
   it('el cero sí se conserva', () => {
@@ -223,16 +223,16 @@ describe('datos hostiles', () => {
 
   it('si dos campos comparten etiqueta, gana el último no vacío', () => {
     const result = mapFormFields(
-      [campo('Tu usuario de Telegram', '@viejo'), campo('Tu usuario de Telegram', '@nuevo')],
+      [campo('Detalle del objetivo', '@viejo'), campo('Detalle del objetivo', '@nuevo')],
       MAPPING,
     );
 
-    expect(result['telegramHandle']).toBe('@nuevo');
+    expect(result['goalDetail']).toBe('@nuevo');
   });
 
   it('un campo vacío no pisa uno que ya tenía valor', () => {
-    const result = mapFormFields([campo('Tu usuario de Telegram', '@bueno'), campo('Tu usuario de Telegram', '')], MAPPING);
-    expect(result['telegramHandle']).toBe('@bueno');
+    const result = mapFormFields([campo('Detalle del objetivo', '@bueno'), campo('Detalle del objetivo', '')], MAPPING);
+    expect(result['goalDetail']).toBe('@bueno');
   });
 });
 
