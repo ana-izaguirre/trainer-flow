@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml)
 [![Cobertura](https://img.shields.io/badge/cobertura-100%25-brightgreen)](docs/TESTING.md)
-[![Tests](https://img.shields.io/badge/tests-513%20unit%20%2B%2056%20integraci%C3%B3n-blue)](docs/TESTING.md)
+[![Tests](https://img.shields.io/badge/tests-504%20core%20%C2%B7%2021%20deno%20%C2%B7%2051%20integraci%C3%B3n-blue)](docs/TESTING.md)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-estricto-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Deno](https://img.shields.io/badge/Deno-Edge%20Functions-70FFAF?logo=deno&logoColor=black)](supabase/functions/deno.json)

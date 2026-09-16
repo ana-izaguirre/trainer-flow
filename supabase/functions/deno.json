@@ -1,5 +1,5 @@
 {
-  "//": "Configuraci\u00f3n de Deno para las Edge Functions. Node usa tsconfig.json; este archivo existe para poder comprobar que el MISMO c\u00f3digo de _core compila tambi\u00e9n bajo Deno, que es la premisa del ADR-001.",
+  "//": "Configuración de Deno para las Edge Functions. Node usa tsconfig.json; este archivo existe para poder comprobar que el MISMO código de _core compila también bajo Deno, que es la premisa del ADR-001.",
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -15,8 +15,9 @@
     }
   },
   "exclude": [
-    "**/*.test.ts"
+    "_core/**/*.test.ts"
   ],
   "nodeModulesDir": "manual",
-  "//lib": "Sin override de lib: los defaults de Deno ya traen los tipos web (Request, Response, fetch, crypto). Que _core no los use lo hace cumplir el linter, no el compilador."
+  "//lib": "Sin override de lib: los defaults de Deno ya traen los tipos web (Request, Response, fetch, crypto). Que _core no los use lo hace cumplir el linter, no el compilador.",
+  "//exclude": "Solo los tests de _core, que son de Vitest e importan npm. Los de _shared y los handlers SÍ entran: son tests de Deno y tienen que compilar y pasar el linter como el resto (SPEC-011)."
 }
