@@ -117,8 +117,55 @@ comprueba la `Response` **sin Docker, sin red y sin Supabase**.
 | `env.ts` | Presente · ausente → lanza · cadena vacía → lanza · `optionalEnv` → `null` |
 | `logger.ts` | Forma estructurada · el nivel correcto · **nunca imprime un secreto** |
 | `telegram/client.ts` | URL y cuerpo correctos · **el token nunca entra al log** · trunca a 4096 · `response.ok === false` → `null` · fallo de red → `null`, no excepción · `message_id` ausente o de tipo raro → `null` |
-| `db.ts` | `claimWebhookEvent`: sin error → `true` · `23505` → `false` · otro error → lanza |
+| `db.ts` | **Contra PostgREST real** (ver §7.1). `claimWebhookEvent`: sin error → `true` · `23505` → `false` · otro error → lanza · `findIdentity` resuelve y devuelve `null` si no existe |
 | `telegram-webhook/index.ts` | Secreto incorrecto → **401** · cuerpo ilegible → no lanza · `buildDeps()` sin entorno → lanza nombrando la variable |
+
+### 7.1 · `db.ts` necesita PostgREST, no Postgres
+
+`db.ts` no ejecuta SQL: llama a la API REST.
+
+```typescript
+db.from('webhook_events').insert({ ... })   // ← PostgREST, no SQL
+```
+
+Por eso los 56 tests de integración actuales **no lo prueban**: usan el driver
+`pg` con SQL crudo y verifican el *esquema*. `db.ts` no lo toca nadie.
+
+Sustituir `supabase-js` con un doble sería probar el doble. La alternativa
+honesta es levantar PostgREST, que son **dos contenedores**, no los diez de
+un Supabase completo:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+  postgrest:
+    image: postgrest/postgrest:v12
+    env:
+      PGRST_DB_URI: postgresql://postgres:postgres@postgres:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_JWT_SECRET: <cadena de prueba, no es un secreto>
+```
+
+**Qué NO hace falta levantar:** Auth, Storage, Realtime, Studio, Inbucket,
+imgproxy. El proyecto no usa ninguno — `config.toml` ya tiene `auth` y
+`analytics` en `false`.
+
+### 7.2 · Dos niveles de Docker, y por qué no son el mismo
+
+| | Nivel A — CI | Nivel B — S-28 |
+|---|---|---|
+| Qué levanta | Postgres + PostgREST | `supabase start` (todo) |
+| Cuándo | **Cada push** | A mano, antes de desplegar |
+| Cuánto tarda | segundos | minutos |
+| Qué prueba | `db.ts` de verdad | El stack completo |
+| Necesita el registro de imágenes | no (imágenes públicas) | **sí** |
+
+El nivel B no puede correr en cada push: es lento, y depende del registro de
+imágenes de Supabase, que ya nos dio un 403 una vez. Un smoke test que a
+veces no corre no es un smoke test.
+
+**El nivel A es el que cambia las cosas**, y cuesta doce líneas de YAML.
 
 ## 8. Errores
 
@@ -153,8 +200,10 @@ comprueba la `Response` **sin Docker, sin red y sin Supabase**.
   ENTONCES devuelve `null` en vez de propagar la excepción.
 - **CA-6** — DADO un texto de 5000 caracteres, CUANDO se envía, ENTONCES el
   cuerpo de la petición lleva 4096.
-- **CA-7** — DADO `claimWebhookEvent` con un error `23505`, CUANDO se invoca,
-  ENTONCES devuelve `false` en vez de lanzar.
+- **CA-7** — DADO **PostgREST levantado sobre el esquema real**, CUANDO se
+  llama dos veces a `claimWebhookEvent` con el mismo `external_id`, ENTONCES
+  la primera devuelve `true` y la segunda `false`. Sin dobles: la idempotencia
+  se verifica contra el `UNIQUE` de verdad.
 - **CA-8** — DADO el CI, CUANDO corre, ENTONCES `pnpm deno:test` es una
   verificación más y **no necesita Docker**.
 
@@ -187,6 +236,7 @@ supabase/functions/_shared/env.test.ts                 nuevo
 supabase/functions/_shared/logger.test.ts              nuevo
 supabase/functions/_shared/telegram/client.test.ts     nuevo
 supabase/functions/_shared/db.test.ts                  nuevo
+docker-compose.test.yml                                nuevo (Postgres + PostgREST)
 supabase/functions/telegram-webhook/index.ts           refactor
 supabase/functions/telegram-webhook/index.test.ts      nuevo
 supabase/functions/deno.json                           incluir *.test.ts
