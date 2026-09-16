@@ -30,9 +30,9 @@ describe('el payload real de Tally', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value.eventId).toBe('71804ed2-dfd5-4242-9477-e2651f072c80');
+    expect(result.value.eventId).toBe('b693cb5a-e605-43ff-86de-369efaf6e04d');
     expect(result.value.formId).toBe('GxAKrk');
-    expect(result.value.responseId).toBe('Nqgd4rl');
+    expect(result.value.responseId).toBe('jepgppE');
   });
 
   it('el eventId es lo que garantiza la idempotencia', () => {
@@ -53,7 +53,7 @@ describe('el payload real de Tally', () => {
 
     // 🔑 Confirmado con el payload real: el valor es el ID de la opción,
     // no su texto. La rama defensiva del mapeo es la que aplica.
-    expect(objetivo?.value).toEqual(['7f847e84-a9df-4e3e-ad60-44fcc66bbc4d']);
+    expect(objetivo?.value).toEqual(['65cf61b3-da85-4208-9dbf-0cfff3f6ecb1']);
   });
 
   it('conserva los campos aplanados que Tally añade por cada casilla', () => {
