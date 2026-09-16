@@ -14,15 +14,15 @@ import { mapFormFields, type FormField, type FieldMapping } from './field-mappin
 
 const MAPPING: FieldMapping = {
   fullName: { label: 'Nombre completo' },
-  email: { label: 'Email' },
+  telegramHandle: { label: 'Tu usuario de Telegram' },
   goal: { label: '¿Cuál es tu objetivo?' },
   level: { label: 'Nivel de experiencia' },
-  daysPerWeek: { label: '¿Cuántos días por semana?' },
-  sessionMinutes: { label: 'Minutos por sesión' },
+  daysPerWeek: { label: '¿Cuántos días por semana?', numeric: true },
+  sessionMinutes: { label: '¿Cuánto tiempo tienes por sesión?', numeric: true },
   equipment: { label: 'Equipamiento disponible' },
   hasLimitations: { label: '¿Tienes alguna lesión o limitación?', trueWhen: ['Sí', 'Si', 'Yes'] },
   limitationsDetail: { label: 'Cuéntanos más sobre tu limitación' },
-  lifestyle: { label: 'Estilo de vida' },
+  lifestyle: { label: '¿Cómo describirías tu día a día?' },
   notes: { label: 'Algo más que debamos saber' },
 };
 
@@ -37,7 +37,7 @@ describe('mapeo básico por etiqueta', () => {
     const result = mapFormFields(
       [
         campo('Nombre completo', 'Carlos Pérez'),
-        campo('Email', 'carlos@example.com'),
+        campo('Tu usuario de Telegram', '@carlitos'),
         campo('¿Cuál es tu objetivo?', 'Ganancia muscular'),
       ],
       MAPPING,
@@ -45,7 +45,7 @@ describe('mapeo básico por etiqueta', () => {
 
     expect(result).toMatchObject({
       fullName: 'Carlos Pérez',
-      email: 'carlos@example.com',
+      telegramHandle: '@carlitos',
       goal: 'Ganancia muscular',
     });
   });
@@ -183,16 +183,24 @@ describe('valores ausentes', () => {
     ['array vacío', []],
     ['string vacío', ''],
   ])('omite el campo cuando el valor es %s', (_nombre, value) => {
-    const result = mapFormFields([campo('Email', value)], MAPPING);
+    const result = mapFormFields([campo('Tu usuario de Telegram', value)], MAPPING);
 
     // Omitido, no `null`: así la validación distingue "no contestó" de
     // "contestó algo inválido".
-    expect('email' in result).toBe(false);
+    expect('telegramHandle' in result).toBe(false);
   });
 
   it('el cero sí se conserva', () => {
-    const result = mapFormFields([campo('Minutos por sesión', 0)], MAPPING);
+    const result = mapFormFields([campo('¿Cuánto tiempo tienes por sesión?', 0)], MAPPING);
     expect(result['sessionMinutes']).toBe(0);
+  });
+
+  it('un campo sin `numeric` sale como texto aunque llegue un número', () => {
+    // Hay un solo camino para obtener un número: declararlo. Si un campo de
+    // texto devolviera a veces number y a veces string, el tipo del resultado
+    // dependería de lo que mandara el formulario ese día.
+    const result = mapFormFields([campo('¿Cuál es tu objetivo?', 42)], MAPPING);
+    expect(result['goal']).toBe('42');
   });
 
   it('el false de una pregunta sí/no se conserva', () => {
@@ -215,15 +223,76 @@ describe('datos hostiles', () => {
 
   it('si dos campos comparten etiqueta, gana el último no vacío', () => {
     const result = mapFormFields(
-      [campo('Email', 'viejo@x.com'), campo('Email', 'nuevo@x.com')],
+      [campo('Tu usuario de Telegram', '@viejo'), campo('Tu usuario de Telegram', '@nuevo')],
       MAPPING,
     );
 
-    expect(result['email']).toBe('nuevo@x.com');
+    expect(result['telegramHandle']).toBe('@nuevo');
   });
 
   it('un campo vacío no pisa uno que ya tenía valor', () => {
-    const result = mapFormFields([campo('Email', 'bueno@x.com'), campo('Email', '')], MAPPING);
-    expect(result['email']).toBe('bueno@x.com');
+    const result = mapFormFields([campo('Tu usuario de Telegram', '@bueno'), campo('Tu usuario de Telegram', '')], MAPPING);
+    expect(result['telegramHandle']).toBe('@bueno');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('valores numéricos', () => {
+  // Un formulario no ofrece "60": ofrece "60 minutos". El número hay que
+  // sacarlo del texto de la opción, y hacerlo aquí evita que cada campo
+  // numérico invente su propia forma de leerlo.
+  it.each([
+    ['60 minutos', 60],
+    ['Menos de 30 minutos', 30],
+    ['3 días', 3],
+    ['2', 2],
+  ])('extrae el entero de %s', (texto, esperado) => {
+    const result = mapFormFields([campo('¿Cuánto tiempo tienes por sesión?', texto)], MAPPING);
+    expect(result['sessionMinutes']).toBe(esperado);
+  });
+
+  it('en un rango se queda con el extremo bajo', () => {
+    // Prometer menos tiempo del que el cliente tiene es seguro. Prometer más
+    // produce una rutina que no le cabe en el día.
+    const result = mapFormFields([campo('¿Cuánto tiempo tienes por sesión?', '45-60 min')], MAPPING);
+    expect(result['sessionMinutes']).toBe(45);
+  });
+
+  it('omite el campo cuando la respuesta no lleva ningún número', () => {
+    // Esto es lo que pasa hoy: la pregunta de tiempo tiene mezcladas opciones
+    // de estilo de vida. "Sedentario" no es un tiempo, y colarlo como si lo
+    // fuera sería peor que fallar. La validación dirá qué falta.
+    const result = mapFormFields([campo('¿Cuánto tiempo tienes por sesión?', 'Sedentario')], MAPPING);
+    expect('sessionMinutes' in result).toBe(false);
+  });
+
+  it('resuelve el id de la opción antes de buscar el número', () => {
+    const result = mapFormFields(
+      [
+        campo('¿Cuántos días por semana?', ['opt-3'], {
+          type: 'MULTIPLE_CHOICE',
+          options: [
+            { id: 'opt-3', text: '3 días por semana' },
+            { id: 'opt-5', text: '5 días por semana' },
+          ],
+        }),
+      ],
+      MAPPING,
+    );
+
+    expect(result['daysPerWeek']).toBe(3);
+  });
+
+  it('un número negativo se lee con su signo', () => {
+    // No es un tiempo válido, pero inventarse un 15 sería peor: que falle la
+    // validación, que para eso está.
+    const result = mapFormFields([campo('¿Cuánto tiempo tienes por sesión?', '-15')], MAPPING);
+    expect(result['sessionMinutes']).toBe(-15);
+  });
+
+  it('un campo numérico sin respuesta se omite', () => {
+    const result = mapFormFields([campo('¿Cuánto tiempo tienes por sesión?', null)], MAPPING);
+    expect('sessionMinutes' in result).toBe(false);
   });
 });

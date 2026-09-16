@@ -17,7 +17,15 @@ import { LEVELS } from '../domain/assessment.ts';
 
 export interface ParsedAssessment {
   readonly fullName: string;
-  readonly email: string | null;
+  /**
+   * Usuario de Telegram tal como lo declaró el cliente, ya normalizado.
+   *
+   * Es una PISTA para distinguir a dos clientes con el mismo nombre, no una
+   * identidad: lo escribe el cliente y puede equivocarse o poner el de otro.
+   * **No autoriza nada.** El `telegram_user_id` real solo sale de un update
+   * firmado por Telegram (ADR-009). SPEC-001 regla 5.
+   */
+  readonly telegramHandle: string | null;
   readonly goal: string;
   readonly level: Level;
   readonly daysPerWeek: number;
@@ -41,7 +49,6 @@ export type AssessmentResult =
 
 export const ASSESSMENT_LIMITS = {
   name: 200,
-  email: 320,
   goal: 200,
   equipment: 200,
   /** SPEC-001 regla 7: el texto libre se trunca, no invalida la evaluación. */
@@ -51,13 +58,29 @@ export const ASSESSMENT_LIMITS = {
 } as const;
 
 /**
- * Validación de email deliberadamente simple.
+ * Un usuario de Telegram, escrito como lo escribe la gente.
  *
- * Un regex «completo» de RFC 5322 rechaza direcciones válidas y acepta basura.
- * Lo único que importa aquí es no guardar algo que obviamente no es un email:
- * si de verdad llega el correo se comprueba enviándolo, no con una expresión.
+ * Nadie copia su usuario de una sola forma: unos ponen `@carlitos`, otros
+ * pegan `https://t.me/carlitos`, otros solo `carlitos`. Las tres son la misma
+ * persona, y si se guardan distinto dejan de serlo para el sistema.
+ *
+ * Reglas de Telegram: de 5 a 32 caracteres, letras, dígitos y guion bajo,
+ * empezando por letra. Se acepta además un ID numérico de 5 a 15 dígitos,
+ * porque es lo que pega quien no tiene usuario configurado.
  */
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const HANDLE_URL_PREFIX = /^(?:https?:\/\/)?(?:t|telegram)\.me\//i;
+const USERNAME_PATTERN = /^[a-z][a-z0-9_]{4,31}$/;
+const NUMERIC_ID_PATTERN = /^\d{5,15}$/;
+
+function normalizeHandle(value: string): string | null {
+  const bare = value
+    .trim()
+    .replace(HANDLE_URL_PREFIX, '')
+    .replace(/^@/, '')
+    .toLowerCase();
+
+  return USERNAME_PATTERN.test(bare) || NUMERIC_ID_PATTERN.test(bare) ? bare : null;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -189,15 +212,21 @@ export function validateAssessment(raw: unknown): AssessmentResult {
     errors.add('hasLimitations', 'hasLimitations debe ser un booleano.');
   }
 
-  // ── email ──
-  const rawEmail = raw['email'];
-  let email: string | null = null;
-  if (typeof rawEmail === 'string' && rawEmail.trim().length > 0) {
-    const normalized = rawEmail.trim().toLowerCase();
-    if (normalized.length > ASSESSMENT_LIMITS.email || !EMAIL_PATTERN.test(normalized)) {
-      errors.add('email', 'email no parece una dirección válida.');
-    } else {
-      email = normalized;
+  // ── usuario de Telegram ──
+  // Un handle mal escrito invalida la evaluación en vez de descartarse en
+  // silencio: si se ignorara, la siguiente evaluación del mismo cliente
+  // crearía un cliente duplicado y nadie se enteraría. Fallar aquí hace que
+  // el entrenador lo vea (SPEC-001 regla 10).
+  const rawHandle = raw['telegramHandle'];
+  let telegramHandle: string | null = null;
+  if (rawHandle !== null && rawHandle !== undefined) {
+    if (typeof rawHandle !== 'string') {
+      errors.add('telegramHandle', 'telegramHandle debe ser texto.');
+    } else if (rawHandle.trim().length > 0) {
+      telegramHandle = normalizeHandle(rawHandle);
+      if (telegramHandle === null) {
+        errors.add('telegramHandle', 'telegramHandle no parece un usuario de Telegram.');
+      }
     }
   }
 
@@ -223,7 +252,7 @@ export function validateAssessment(raw: unknown): AssessmentResult {
     ok: true,
     value: {
       fullName,
-      email,
+      telegramHandle,
       goal,
       level,
       daysPerWeek,

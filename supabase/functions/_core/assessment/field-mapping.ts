@@ -39,6 +39,16 @@ export interface FieldRule {
    * booleano; si no, se deja como texto.
    */
   readonly trueWhen?: readonly string[];
+  /**
+   * El valor es un número escondido en el texto de una opción: un formulario
+   * no ofrece «60», ofrece «60 minutos».
+   *
+   * Sin número en la respuesta el campo **se omite**, y la validación falla
+   * diciendo qué falta. Es lo que queremos: si la pregunta de tiempo por
+   * sesión trae mezclada una opción de estilo de vida, «Sedentario» no puede
+   * colarse como si fuera una duración.
+   */
+  readonly numeric?: boolean;
 }
 
 /** Qué pregunta alimenta cada campo del dominio. */
@@ -81,6 +91,20 @@ function toText(value: unknown, options: readonly FormOption[] | undefined): str
   }
 
   return resolve(value);
+}
+
+/**
+ * El primer entero que aparece en el texto.
+ *
+ * En un rango se queda con el extremo bajo (`"45-60 min"` → `45`): prometer
+ * menos tiempo del que el cliente tiene es seguro; prometer más produce una
+ * rutina que no le cabe en el día.
+ */
+function firstInteger(text: string | null): number | null {
+  if (text === null) return null;
+
+  const match = /-?\d+/.exec(text);
+  return match === null ? null : Number.parseInt(match[0], 10);
 }
 
 function isFormField(value: unknown): value is FormField {
@@ -126,14 +150,23 @@ export function mapFormFields(
       continue;
     }
 
+    if (target.rule.numeric === true) {
+      const parsed = firstInteger(text);
+      // Una respuesta sin número se omite igual que una ausente: no hay valor
+      // que inventar, y la validación dirá cuál falta.
+      if (parsed !== null) result[target.domainField] = parsed;
+      continue;
+    }
+
     // Un valor vacío no pisa uno que ya se había resuelto, y tampoco crea la
     // clave: la ausencia se representa omitiendo el campo.
     if (text === null) continue;
 
-    // El cero y el false llegan aquí como texto y se conservan: solo se
-    // descarta la ausencia real.
-    result[target.domainField] =
-      typeof field.value === 'number' || typeof field.value === 'boolean' ? field.value : text;
+    // Todo lo demás sale como texto, incluido un número o un booleano que
+    // llegue del formulario. Quien necesite el número lo declara con
+    // `numeric: true`: tener dos caminos para eso es lo que hacía ambiguo el
+    // tipo del resultado.
+    result[target.domainField] = text;
   }
 
   return result;
