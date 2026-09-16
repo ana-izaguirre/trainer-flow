@@ -2,7 +2,25 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — validación del dominio (S-12) |
+
+## Resultado parcial
+
+| Capa | ¿Depende del formato de Tally? | Estado |
+|---|---|---|
+| Validación de valores del dominio | ❌ No | ✅ S-12, 60 tests, cobertura 100% |
+| Mapeo etiqueta → campo | ⚠️ Configuración | ⏸️ Espera el formulario real |
+| Lectura del sobre de Tally | ✅ **Sí** | ⏸️ **Espera un payload real** |
+| Webhook, firma, idempotencia | — | ⏳ S-13, S-14 |
+
+> **Por qué las dos capas de abajo están paradas.** Para las preguntas de
+> selección, Tally puede enviar el **ID de la opción** en `value` y las
+> etiquetas en otro campo. Escribir el parser suponiendo que `value` trae el
+> texto produciría código que compila, pasa los tests y falla con el primer
+> cliente real. Es el riesgo **R-08**, y la sección 3 de esta spec ya lo dice:
+> *"antes de codificar el parser hay que capturar un payload real"*.
+>
+> `validateAssessment` no depende de eso, así que se implementó igual.
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-12, S-13, S-14 |
 

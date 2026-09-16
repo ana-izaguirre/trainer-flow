@@ -31,6 +31,15 @@ export default defineConfig({
         'supabase/functions/_core/database.types.ts',
       ],
       thresholds: {
+        // El proyecto está al 100% hoy. Fijarlo como umbral global convierte
+        // "cobertura del 100%" de una afirmación del README en algo que el CI
+        // hace cumplir. Los umbrales por archivo de abajo son redundantes con
+        // este, pero documentan cuáles importan y por qué.
+        statements: 100,
+        branches: 100,
+        functions: 100,
+        lines: 100,
+
         // Estos dos módulos sostienen las garantías del sistema y por eso
         // exigen cobertura total. Ver docs/TESTING.md y ADR-010.
         //
