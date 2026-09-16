@@ -55,6 +55,21 @@ jobs:
       # El orden NO es intercambiable: una Edge Function no crea tablas, solo
       # lee y escribe en las que existen. Al revés, el primer webhook falla
       # con «relation does not exist».
+      # Un token caducado hace fallar `supabase link` con un 401 que no
+      # explica nada. Esto falla antes y dice qué hacer.
+      - name: Comprobar el token antes de tocar nada
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          codigo=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            https://api.supabase.com/v1/projects)
+
+          if [ "$codigo" != "200" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN no sirve (HTTP $codigo). Renuévalo en https://supabase.com/dashboard/account/tokens y actualiza el secret."
+            exit 1
+          fi
+
       - name: Enlazar el proyecto
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
