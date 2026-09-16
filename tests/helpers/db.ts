@@ -24,6 +24,7 @@ const SETUP_FILES = [
   'supabase/migrations/0001_initial_schema.sql',
   'supabase/migrations/0002_rls_policies.sql',
   'supabase/migrations/0003_functions.sql',
+  'supabase/migrations/0004_client_telegram_handle.sql',
 ] as const;
 
 /**
@@ -116,9 +117,9 @@ export async function createClient(
   name = 'Carlos Pérez',
 ): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO clients (trainer_id, full_name, email, link_token)
+    `INSERT INTO clients (trainer_id, full_name, telegram_handle, link_token)
      VALUES ($1, $2, $3, $4) RETURNING id`,
-    [trainerId, name, `${randomToken().slice(0, 8)}@example.com`, randomToken()],
+    [trainerId, name, `c${randomToken().slice(0, 10)}`, randomToken()],
   );
   return rows[0]!.id;
 }

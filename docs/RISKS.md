@@ -19,6 +19,7 @@ Escala: **Probabilidad** (baja/media/alta) × **Impacto** (bajo/medio/alto/crít
 | R-10 | Supabase pausa el proyecto por inactividad | Media | Medio | Aceptado |
 | R-11 | Fricción entre Deno y Node en el híbrido | Media | Bajo | Mitigado |
 | R-12 | Un desconocido encuentra el bot | Media | Alto | Mitigado |
+| R-14 | Un cliente declara el Telegram de otro en el formulario | Baja | Bajo | Aceptado |
 
 > **R-06 bajó de probabilidad.** El orden nuevo del roadmap entrega un producto
 > usable en la sesión 11, así que quedarse sin tiempo ya no significa quedarse
@@ -179,6 +180,37 @@ es pequeño, pero crece con cada cliente nuevo.
 
 **Señal de que hace falta más:** un segundo entrenador. Ahí se activan las
 políticas RLS por rol de `SECURITY.md`, que exigen un cliente con JWT.
+
+---
+
+## R-14 — Un cliente declara el Telegram de otro en el formulario
+
+`telegram_handle` sale de un campo de texto de un formulario público. Nada
+impide escribir el usuario de otra persona.
+
+**Qué pasaría.** La evaluación se engancharía al cliente equivocado: el
+entrenador vería, bajo «Carlos», una evaluación que no es de Carlos.
+
+**Qué NO pasaría, y es lo que importa.** Quien lo escribe no recibe nada. La
+rutina viaja por el `link_token` del cliente legítimo, y el acceso al bot
+exige un `telegram_user_id` verificado por Telegram (ADR-009). El handle no
+abre ninguna puerta: es contaminación de datos, no una fuga.
+
+**Mitigación:**
+- El handle nunca autoriza. Es una pista de identidad y está documentado como
+  tal en el esquema, en la spec y en el propio tipo.
+- El entrenador revisa cada rutina antes de enviarla (principio #1): una
+  evaluación que no encaja con el cliente se ve.
+- El `link_token` no cambia cuando llega una reevaluación, así que una
+  evaluación falsa no puede secuestrar el canal de un cliente ya vinculado.
+
+**Por qué se acepta.** La alternativa es verificar el handle antes de guardarlo,
+y Telegram no ofrece forma de hacerlo sin que la persona escriba primero al
+bot. Eso ya existe: es el deep link. Pedir verificación en el formulario sería
+duplicar ADR-006 para evitar un daño que se corrige editando un campo.
+
+**Señal de que hace falta más:** que ocurra una vez de verdad. Entonces la
+evaluación se guarda sin enganchar y el entrenador elige a qué cliente va.
 
 ---
 

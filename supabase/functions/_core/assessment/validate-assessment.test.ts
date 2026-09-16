@@ -13,7 +13,7 @@ import { ASSESSMENT_LIMITS, validateAssessment } from './validate-assessment.ts'
 function campos(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     fullName: 'Carlos Pérez',
-    email: 'carlos@example.com',
+    telegramHandle: '@Carlitos',
     goal: 'Ganancia muscular',
     level: 'intermediate',
     daysPerWeek: 4,
@@ -43,7 +43,7 @@ describe('evaluación válida', () => {
 
     expect(result.value).toEqual({
       fullName: 'Carlos Pérez',
-      email: 'carlos@example.com',
+      telegramHandle: 'carlitos',
       goal: 'Ganancia muscular',
       level: 'intermediate',
       daysPerWeek: 4,
@@ -180,31 +180,63 @@ describe('limitaciones', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('email', () => {
+describe('telegramHandle', () => {
   it('es opcional', () => {
-    expect(validateAssessment(campos({ email: null })).ok).toBe(true);
-    const sinEmail = campos();
-    delete sinEmail['email'];
-    expect(validateAssessment(sinEmail).ok).toBe(true);
+    expect(validateAssessment(campos({ telegramHandle: null })).ok).toBe(true);
+    const sinHandle = campos();
+    delete sinHandle['telegramHandle'];
+    expect(validateAssessment(sinHandle).ok).toBe(true);
   });
 
-  it('normaliza a minúsculas', () => {
-    const result = validateAssessment(campos({ email: 'Carlos@Example.COM' }));
-    if (result.ok) expect(result.value.email).toBe('carlos@example.com');
-  });
-
-  it('un email en blanco se trata como ausente', () => {
-    const result = validateAssessment(campos({ email: '   ' }));
+  // La gente escribe su usuario de cinco maneras distintas. Todas valen, y
+  // todas acaban en la misma forma: así dos evaluaciones del mismo cliente se
+  // reconocen como el mismo cliente (SPEC-001 regla 4).
+  it.each([
+    ['@Carlitos', 'carlitos'],
+    ['Carlitos', 'carlitos'],
+    ['  @carlitos  ', 'carlitos'],
+    ['t.me/Carlitos', 'carlitos'],
+    ['https://t.me/carlitos', 'carlitos'],
+    ['http://t.me/carlitos', 'carlitos'],
+    ['telegram.me/carlitos', 'carlitos'],
+    ['https://t.me/@carlitos', 'carlitos'],
+  ])('%s se normaliza a %s', (entrada, esperado) => {
+    const result = validateAssessment(campos({ telegramHandle: entrada }));
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.email).toBeNull();
+    if (result.ok) expect(result.value.telegramHandle).toBe(esperado);
   });
 
-  it.each(['sin-arroba', '@sindominio.com', 'con espacio@x.com', 'a@b'])(
-    'rechaza %s',
-    (email) => {
-      expect(errores(campos({ email }))).toContain('email');
-    },
-  );
+  it('acepta un ID numérico, que es lo que pega quien no tiene usuario', () => {
+    const result = validateAssessment(campos({ telegramHandle: '123456789' }));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.telegramHandle).toBe('123456789');
+  });
+
+  it('un handle en blanco se trata como ausente', () => {
+    const result = validateAssessment(campos({ telegramHandle: '   ' }));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.telegramHandle).toBeNull();
+  });
+
+  it('un handle que no es texto se rechaza', () => {
+    expect(errores(campos({ telegramHandle: 12345 }))).toContain('telegramHandle');
+  });
+
+  it.each([
+    ['abcd', 'cuatro caracteres, mínimo cinco'],
+    ['1carlos', 'empieza por dígito'],
+    ['_carlos', 'empieza por guion bajo'],
+    ['carlos perez', 'lleva espacio'],
+    ['carlos-perez', 'lleva guion'],
+    ['cárlitos', 'lleva acento'],
+    ['c'.repeat(33), 'treinta y tres caracteres'],
+    ['1234', 'un ID numérico de cuatro dígitos no existe'],
+    ['1'.repeat(16), 'un ID numérico de dieciséis dígitos no existe'],
+    ['https://instagram.com/carlitos', 'otra red no es Telegram'],
+    ['t.me/joinchat/AAAA', 'un enlace de invitación no es un usuario'],
+  ])('rechaza %s (%s)', (telegramHandle) => {
+    expect(errores(campos({ telegramHandle }))).toContain('telegramHandle');
+  });
 });
 
 // ---------------------------------------------------------------------------
