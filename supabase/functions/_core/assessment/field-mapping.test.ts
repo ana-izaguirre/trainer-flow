@@ -339,3 +339,54 @@ describe('traducción al valor del dominio', () => {
     expect(nivel('Semiprofesional')['level']).toBe('Semiprofesional');
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('sí/no leído de una lista de casillas', () => {
+  const LESIONES: FieldMapping = {
+    hasLimitations: { label: 'Lesiones', falseWhen: ['Ninguna'] },
+  };
+
+  const opciones = [
+    { id: 'u-ninguna', text: 'Ninguna' },
+    { id: 'u-rodilla', text: 'Rodilla' },
+    { id: 'u-hombro', text: 'Hombro' },
+  ];
+
+  const lesiones = (value: unknown) =>
+    mapFormFields([campo('Lesiones', value, { type: 'CHECKBOXES', options: opciones })], LESIONES)[
+      'hasLimitations'
+    ];
+
+  it('solo «Ninguna» → false', () => {
+    expect(lesiones(['u-ninguna'])).toBe(false);
+  });
+
+  it('una lesión → true', () => {
+    expect(lesiones(['u-rodilla'])).toBe(true);
+  });
+
+  it('varias lesiones → true', () => {
+    expect(lesiones(['u-rodilla', 'u-hombro'])).toBe(true);
+  });
+
+  it('«Ninguna» Y una lesión → true', () => {
+    // Tally permite la contradicción. Ante la duda se avisa: equivocarse
+    // hacia el aviso de más no lastima a nadie, hacia el de menos sí.
+    expect(lesiones(['u-ninguna', 'u-rodilla'])).toBe(true);
+  });
+
+  it('sin marcar nada → false', () => {
+    expect(lesiones([])).toBe(false);
+    expect(lesiones(null)).toBe(false);
+  });
+
+  it('no distingue mayúsculas ni acentos', () => {
+    expect(mapFormFields([campo('Lesiones', 'NINGUNA')], LESIONES)['hasLimitations']).toBe(false);
+  });
+
+  it('el campo siempre existe: un sí/no no admite ausencia', () => {
+    const r = mapFormFields([campo('Lesiones', null)], LESIONES);
+    expect('hasLimitations' in r).toBe(true);
+  });
+});

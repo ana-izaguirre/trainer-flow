@@ -40,6 +40,17 @@ export interface FieldRule {
    */
   readonly trueWhen?: readonly string[];
   /**
+   * Un sí/no leído de una lista de casillas: `true` cuando el cliente marcó
+   * algo que **no** está en esta lista de negaciones.
+   *
+   * «Lesiones» ofrece `Ninguna` junto a las partes del cuerpo, y Tally deja
+   * marcar las dos cosas. Ante esa contradicción el resultado es `true`:
+   * `hasLimitations` es lo que dispara el aviso de seguridad de la rutina, y
+   * equivocarse hacia el aviso de más no lastima a nadie; hacia el de menos,
+   * sí.
+   */
+  readonly falseWhen?: readonly string[];
+  /**
    * El valor es un número escondido en el texto de una opción: un formulario
    * no ofrece «60», ofrece «60 minutos».
    *
@@ -82,12 +93,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Convierte el valor crudo en texto, resolviendo identificadores de opción.
+ * Las respuestas marcadas, ya resueltas a texto.
  *
- * Devuelve `null` cuando no hay respuesta, para distinguir «no contestó» de
- * «contestó algo vacío».
+ * Una casilla marcada es un elemento de la lista. Las vacías se descartan,
+ * así que una lista vacía significa «no contestó».
  */
-function toText(value: unknown, options: readonly FormOption[] | undefined): string | null {
+function toTextList(value: unknown, options: readonly FormOption[] | undefined): string[] {
   const resolve = (item: unknown): string | null => {
     if (item === null || item === undefined) return null;
 
@@ -98,12 +109,19 @@ function toText(value: unknown, options: readonly FormOption[] | undefined): str
     return match?.text ?? asText;
   };
 
-  if (Array.isArray(value)) {
-    const parts = value.map(resolve).filter((part): part is string => part !== null);
-    return parts.length === 0 ? null : parts.join(', ');
-  }
+  const items = Array.isArray(value) ? value : [value];
+  return items.map(resolve).filter((part): part is string => part !== null);
+}
 
-  return resolve(value);
+/**
+ * El valor como un solo texto.
+ *
+ * Devuelve `null` cuando no hay respuesta, para distinguir «no contestó» de
+ * «contestó algo vacío».
+ */
+function toText(value: unknown, options: readonly FormOption[] | undefined): string | null {
+  const parts = toTextList(value, options);
+  return parts.length === 0 ? null : parts.join(', ');
 }
 
 /**
@@ -167,6 +185,17 @@ export function mapFormFields(
 
       const affirmatives = target.rule.trueWhen.map(normalize);
       result[target.domainField] = text !== null && affirmatives.includes(normalize(text));
+      continue;
+    }
+
+    if (target.rule.falseWhen !== undefined) {
+      const negations = target.rule.falseWhen.map(normalize);
+      // `.some` sobre una lista vacía es `false`: sin marcar nada, no hay
+      // limitación declarada. Y basta UNA marca fuera de las negaciones para
+      // que sea `true`, aunque también esté marcada «Ninguna».
+      result[target.domainField] = toTextList(field.value, field.options).some(
+        (selected) => !negations.includes(normalize(selected)),
+      );
       continue;
     }
 

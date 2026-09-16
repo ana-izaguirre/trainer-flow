@@ -30,15 +30,43 @@ const MAPPING: FieldMapping = {
   sessionMinutes: { label: 'Tiempo por sesión',                   numeric: true },
   lifestyle:      { label: 'Estilo de vida' },
   equipment:      { label: 'Equipamiento disponible' },
+  hasLimitations: { label: 'Lesiones, dolor o limitaciones', falseWhen: ['Ninguna'] },
   limitationsDetail: { label: 'Cuéntanos brevemente qué debemos tener en cuenta.' },
   notes:          { label: '¿Hay algo más que tu entrenador deba saber?' },
 };
 ```
 
-> **Sigue abierto:** `hasLimitations`. La pregunta «Lesiones, dolor o
-> limitaciones» son casillas con `Ninguna` entre las opciones, así que el
-> booleano es *«marcó algo que no sea Ninguna»*. Eso es una regla nueva y
-> necesita decisión antes de escribirse.
+`falseWhen` lee un sí/no de una lista de casillas: es `true` cuando el cliente
+marcó algo que **no** está en la lista de negaciones.
+
+La pregunta de lesiones ofrece `Ninguna` junto a las partes del cuerpo, y Tally
+deja marcar las dos cosas. **Ante esa contradicción el resultado es `true`.**
+No es una preferencia estética: `hasLimitations` es lo que dispara el aviso de
+seguridad de la rutina. Equivocarse hacia el aviso de más no lastima a nadie;
+hacia el de menos, sí.
+
+| El cliente marca | `hasLimitations` |
+|---|---|
+| `Ninguna` | `false` |
+| `Rodilla` | `true` |
+| `Ninguna` + `Rodilla` | **`true`** |
+| nada | `false` |
+
+> ### ⚠️ Sigue abierto: qué parte del cuerpo
+>
+> Las casillas dicen **dónde** duele (`Rodilla`, `Hombro`), pero hoy solo
+> alimentan el booleano. Si el cliente marca `Rodilla` y deja el texto libre
+> vacío, `limitationsDetail` queda en `null` y **la IA nunca se entera de que
+> es la rodilla**: genera sentadillas con un aviso genérico.
+>
+> Es el dato más valioso que tenemos para la seguridad y lo estamos tirando.
+> Tres salidas, y hay que elegir una antes de S-14:
+>
+> | | Coste |
+> |---|---|
+> | **A** · `ParsedAssessment` gana `limitationAreas: string[]` | columna nueva + migración |
+> | **B** · Las casillas alimentan también `limitationsDetail` | regla nueva en el mapeo |
+> | **C** · En Tally, el texto libre pasa a obligatorio si marcó algo | cero código, pero el dato sigue sin estructurar |
 
 Cambiar el texto de una pregunta en el formulario es cambiar una línea aquí,
 no tocar el parser. La comparación ignora mayúsculas, acentos y espacios
@@ -255,7 +283,9 @@ Registra una fila en `plan_events` con `from_state = NULL`,
 - **CA-9** — DADA la opción `"Principiante (Menos de 6 meses)"`, CUANDO se
   mapea, ENTONCES `level` vale `"beginner"`; y CUANDO alguien edita el
   paréntesis de la opción, ENTONCES **sigue valiendo `"beginner"`**.
-- **CA-10** — DADO un payload persistido, CUANDO se lee `raw_payload`,
+- **CA-10** — DADO un cliente que marca `Ninguna` **y** `Rodilla`, CUANDO se
+  mapea, ENTONCES `hasLimitations` es `true`. Ante la contradicción, se avisa.
+- **CA-11** — DADO un payload persistido, CUANDO se lee `raw_payload`,
   ENTONCES no contiene `submissionPdfUrl` ni `submissionPreviewUrl`.
 
 ## 10. Tests
@@ -265,6 +295,7 @@ Registra una fila en `plan_events` con `from_state = NULL`,
 | Unit | `validateAssessment` con todos los campos, válidos e inválidos |
 | Unit | `numeric: true` extrae el entero; sin número, omite el campo |
 | Unit | `valueMap` traduce por prefijo; sin coincidencia, pasa tal cual |
+| Unit | `falseWhen`: solo negaciones → `false`; una marca fuera → `true` |
 | Unit | `parseTallyEnvelope` contra el fixture real |
 | Unit | Campo desconocido en el payload → se ignora sin romper |
 | Unit | `verifySignature` acepta la firma correcta y rechaza la incorrecta |
