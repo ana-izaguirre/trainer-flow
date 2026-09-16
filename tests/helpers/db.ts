@@ -190,3 +190,44 @@ function randomToken(): string {
     'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)],
   ).join('');
 }
+
+/** Guarda el contenido editado de una versión, como haría el handler. */
+export async function saveVersionContent(
+  db: Client,
+  versionId: string,
+  content: unknown,
+): Promise<void> {
+  await db.query(`UPDATE workout_versions SET content = $2 WHERE id = $1`, [
+    versionId,
+    JSON.stringify(content),
+  ]);
+}
+
+/** Vincula un cliente a un perfil de Telegram, como hace el deep link. */
+export async function linkClient(
+  db: Client,
+  clientId: string,
+  profileId: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE clients SET profile_id = $2, linked_at = now() WHERE id = $1`,
+    [clientId, profileId],
+  );
+}
+
+/** El estado actual de una versión, tal como está en la base de datos. */
+export async function readVersion(
+  db: Client,
+  versionId: string,
+): Promise<{ state: string; content: unknown; sent_at: Date | null; version_number: number }> {
+  const { rows } = await db.query<{
+    state: string;
+    content: unknown;
+    sent_at: Date | null;
+    version_number: number;
+  }>(
+    `SELECT state, content, sent_at, version_number FROM workout_versions WHERE id = $1`,
+    [versionId],
+  );
+  return rows[0]!;
+}

@@ -78,7 +78,8 @@ jobs:
       - name: Tests unitarios y cobertura
         run: pnpm test:coverage
 
-      - name: Tests de integración
+      # Incluye los E2E: comparten el requisito de PostgreSQL.
+      - name: Tests de integración y E2E
         run: pnpm test:integration
 
       # Comenta la tabla de cobertura en el PR. `always()` para que el comentario

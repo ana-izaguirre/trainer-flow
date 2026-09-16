@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — plantillas y validación implementadas (S-07, S-08) |
+| **Estado** | **PARCIAL** — dominio completo y E2E-1 (S-07, S-08, S-10, S-11) |
 
 ## Resultado parcial
 
@@ -11,7 +11,7 @@
 | Modelo `Workout` y `validateDraft` | S-07 | ✅ 61 tests, cobertura 100% |
 | Plantillas (`_core/templates.ts`) | S-08 | ✅ 27 tests |
 | Editor por comandos | S-10 | ✅ 68 tests, cobertura 100% |
-| **E2E-1** (flujo manual completo) | S-11 | ⏳ |
+| **E2E-1** (flujo manual completo) | S-11 | ✅ 3 tests contra PostgreSQL real |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-06, S-07 |
 

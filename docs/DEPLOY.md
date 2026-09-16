@@ -85,6 +85,19 @@ funcionalidad **de pago**. En el plan gratuito hay un solo proyecto.
 | Una Edge Function | `supabase functions serve <nombre>` | Docker |
 | **Un webhook real** | ⚠️ **un túnel** | ver abajo |
 
+### Qué cubre cada capa de tests
+
+| Capa | Cubre | No cubre |
+|---|---|---|
+| Unit (`_core`) | Dominio, y **el flujo del webhook con sus pasos en orden** | Nada externo |
+| Integración | Esquema, constraints, RLS, funciones SQL | HTTP |
+| **E2E-1** | El camino manual completo contra PostgreSQL real | HTTP y Telegram |
+| *Pendiente (S-28)* | PostgREST y Telegram respondiendo de verdad | — |
+
+El flujo del webhook se prueba **sin levantar nada** porque devuelve un
+`WebhookOutcome` en vez de una `Response` (ADR-011). Lo único sin cubrir es que
+los servicios externos contesten, y eso necesita Docker.
+
 ### El problema del webhook
 
 Telegram y Tally necesitan una **URL pública** para entregarte el evento. Tu

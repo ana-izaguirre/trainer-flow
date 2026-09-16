@@ -77,7 +77,14 @@ cliente de los datos de otro**: por eso su cobertura es del 100% obligatorio.
 
 Contra PostgreSQL real, con Telegram y el `AIProvider` mockeados.
 
-### E2E-1 — Rutina manual *(el más importante)*
+### E2E-1 — Rutina manual *(el más importante)* ✅ IMPLEMENTADO
+
+`tests/e2e/manual-workout.test.ts`. **Qué cubre y qué no:** el flujo de dominio
+completo contra PostgreSQL real, usando las funciones SQL, la máquina de
+estados, la validación, el editor, la autorización y el formateo. **No** cubre
+el transporte HTTP ni la API de Telegram — levantar las Edge Functions necesita
+PostgREST. El handler lo verifica `deno check`.
+
 
 ```
 entrenador crea rutina → carga plantilla → añade ejercicios

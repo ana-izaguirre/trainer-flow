@@ -212,7 +212,7 @@ la premisa del ADR-001, verificada en cada push.
 | Documento | Contenido |
 |---|---|
 | [`PRODUCT.md`](docs/PRODUCT.md) | Qué se construye y qué queda fuera |
-| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Las 10 decisiones (ADRs) y su razón |
+| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Las 11 decisiones (ADRs) y su razón |
 | [`DATA-MODEL.md`](docs/DATA-MODEL.md) | Las 10 tablas, constraints, RLS |
 | [`STATE-MACHINE.md`](docs/STATE-MACHINE.md) | Estados, transiciones, por qué no XState |
 | [`TESTING.md`](docs/TESTING.md) | TDD, pirámide, qué se prueba siempre |
@@ -231,9 +231,13 @@ la premisa del ADR-001, verificada en cada push.
 🚧 **En desarrollo.** El dominio está construido; falta conectarlo a Telegram.
 
 ```
-360 tests unitarios · 45 de integración · cobertura global del 100%
+375 tests unitarios · 48 de integración y E2E · cobertura global del 100%
 typecheck ✅  lint ✅  deno:check ✅  deno:lint ✅
 ```
+
+**El producto ya funciona sin IA.** `E2E-1` recorre el camino completo — crear,
+editar, aprobar, enviar — y asevera que `ai_generations` queda con **cero
+filas**.
 
 ### Progreso
 
@@ -241,15 +245,16 @@ typecheck ✅  lint ✅  deno:check ✅  deno:lint ✅
 |---|---|---|
 | 1 · Cimientos | S-01 → S-04 | ✅ Esquema, RLS, migraciones |
 | 2 · El dominio | S-05 → S-08 | ✅ Autorización, estados, validación, plantillas |
-| 3 · Producto usable **sin IA** | S-09 → S-11 | 🟡 Bot ✅ · editor ✅ · **E2E-1 pendiente** |
+| 3 · Producto usable **sin IA** | S-09 → S-11 | ✅ **Hito alcanzado** |
 | 4 · Ingesta | S-12 → S-14 | ⬜ |
 | 5 · La IA | S-15 → S-18 | ⬜ |
 | 6 · El cliente | S-19 → S-22 | ⬜ |
 | 7 · Ciclo completo | S-23 → S-25 | ⬜ |
 | 8 · Cierre | S-26 → S-28 | ⬜ |
 
-**Hito próximo: la sesión 11.** Ahí el producto ya sirve — crear una rutina,
-aprobarla y enviarla, **sin una sola llamada a la IA**.
+**Hito alcanzado en la sesión 11.** El producto ya sirve: crear una rutina,
+aprobarla y enviarla, **sin una sola llamada a la IA**. Lo que viene la mejora,
+no la habilita.
 
 ### Los tres módulos con cobertura obligatoria del 100%
 

@@ -42,7 +42,7 @@ revés, el fallback siempre queda "para después".
 | **S-07** ✅ | Modelo Workout y Draft (TDD) | `_core/domain/` + `validateDraft` | **Cobertura 100%**, 60 tests. Manual e IA se validan igual |
 | **S-08** ✅ | Plantillas | `_core/templates.ts` | 27 tests. Las 4 pasan `validateDraft`. Cero consultas a la base |
 
-## Bloque 3 — Producto usable SIN IA (S-09 → S-11)
+## Bloque 3 — Producto usable SIN IA (S-09 → S-11) ✅ COMPLETADO
 
 *Al terminar este bloque ya hay algo que funciona.*
 
@@ -50,7 +50,7 @@ revés, el fallback siempre queda "para después".
 |---|---|---|---|
 | **S-09** ✅ | Bot de Telegram | Webhook, secreto, identidad, idempotencia | 79 tests. Un desconocido recibe respuesta neutra y queda registrado |
 | **S-10** ✅ | Editor y formateo | `_core/editor/` + `_core/telegram/format.ts` | 92 tests. Cobertura 100%. MarkdownV2 escapado y división a 4096 |
-| **S-11** | **E2E-1** | Flujo manual completo | **SPEC-008 cerrada.** Crear → editar → aprobar → enviar, **sin una sola llamada a la IA** |
+| **S-11** ✅ | **E2E-1** | Flujo manual completo | ✅ Crear → editar → aprobar → enviar, con **cero filas en `ai_generations`** |
 
 > 🎯 **Hito.** Aquí el producto ya sirve. Todo lo demás lo mejora.
 

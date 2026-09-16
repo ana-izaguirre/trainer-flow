@@ -1,0 +1,30 @@
+/**
+ * Los puertos que el flujo del webhook necesita del mundo exterior.
+ *
+ * Están en `_core` como INTERFACES; quien las implementa vive en `_shared`.
+ * Es el mismo patrón que `AIProvider`: el dominio declara qué necesita, no
+ * cómo se consigue.
+ */
+import type { Identity } from '../domain/identity.ts';
+
+export interface TelegramRepo {
+  /**
+   * Registra el evento. Devuelve `false` si ya se había procesado.
+   *
+   * La idempotencia es el `UNIQUE (source, external_id)` de la base de datos,
+   * no una comprobación previa: dos peticiones simultáneas no pueden pasar
+   * las dos.
+   */
+  claimEvent(externalId: string, payload: unknown, requestId: string): Promise<boolean>;
+
+  markProcessed(externalId: string): Promise<void>;
+
+  /** `null` si no hay perfil: nadie se auto-registra (SPEC-009 regla 1). */
+  findIdentity(telegramUserId: number): Promise<Identity | null>;
+}
+
+export interface TelegramSender {
+  sendMessage(chatId: number, text: string): Promise<void>;
+  /** Telegram deja el botón girando si no se responde pronto. */
+  answerCallback(callbackQueryId: string): Promise<void>;
+}

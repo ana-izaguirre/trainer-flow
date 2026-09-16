@@ -4,6 +4,7 @@
  * Aquí vive el token del bot y el `fetch`. El dominio no sabe que Telegram
  * existe: recibe y devuelve datos.
  */
+import type { TelegramSender } from '../../_core/ports/telegram-ports.ts';
 import type { Logger } from '../logger.ts';
 
 const API_BASE = 'https://api.telegram.org';
@@ -72,5 +73,20 @@ export function createTelegramClient(botToken: string, log: Logger): TelegramCli
         ...(text === undefined ? {} : { text }),
       });
     },
+  };
+}
+
+/**
+ * Adapta el cliente al puerto `TelegramSender` que espera `_core`.
+ *
+ * El puerto devuelve `void`: al dominio no le interesa el `message_id`, solo
+ * que el mensaje salió.
+ */
+export function asSender(client: TelegramClient): TelegramSender {
+  return {
+    sendMessage: async (chatId, text) => {
+      await client.sendMessage(chatId, text);
+    },
+    answerCallback: (callbackQueryId) => client.answerCallbackQuery(callbackQueryId),
   };
 }
