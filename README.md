@@ -231,7 +231,7 @@ la premisa del ADR-001, verificada en cada push.
 🚧 **En desarrollo.** El dominio está construido; falta conectarlo a Telegram.
 
 ```
-268 tests unitarios · 45 de integración · cobertura global del 100%
+360 tests unitarios · 45 de integración · cobertura global del 100%
 typecheck ✅  lint ✅  deno:check ✅  deno:lint ✅
 ```
 
@@ -241,7 +241,7 @@ typecheck ✅  lint ✅  deno:check ✅  deno:lint ✅
 |---|---|---|
 | 1 · Cimientos | S-01 → S-04 | ✅ Esquema, RLS, migraciones |
 | 2 · El dominio | S-05 → S-08 | ✅ Autorización, estados, validación, plantillas |
-| 3 · Producto usable **sin IA** | S-09 → S-11 | 🟡 Bot ✅ · editor y E2E-1 pendientes |
+| 3 · Producto usable **sin IA** | S-09 → S-11 | 🟡 Bot ✅ · editor ✅ · **E2E-1 pendiente** |
 | 4 · Ingesta | S-12 → S-14 | ⬜ |
 | 5 · La IA | S-15 → S-18 | ⬜ |
 | 6 · El cliente | S-19 → S-22 | ⬜ |

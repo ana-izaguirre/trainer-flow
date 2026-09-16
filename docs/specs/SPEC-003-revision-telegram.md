@@ -12,7 +12,7 @@
 | Parsing de updates | S-09 | ✅ 26 tests |
 | `callback_data` con el límite de 64 bytes | S-09 | ✅ 27 tests |
 | Idempotencia por `update_id` | S-09 | ✅ En el handler |
-| Formateo de mensajes y división a 4096 | S-10 | ⏳ |
+| Formateo de mensajes y división a 4096 | S-10 | ✅ 24 tests |
 | Envío con botones al entrenador | S-10 | ⏳ |
 | **Depende de** | SPEC-008, SPEC-009 |
 | **Sesiones** | S-09 |

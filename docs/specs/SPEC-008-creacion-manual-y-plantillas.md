@@ -10,7 +10,7 @@
 |---|---|---|
 | Modelo `Workout` y `validateDraft` | S-07 | ✅ 61 tests, cobertura 100% |
 | Plantillas (`_core/templates.ts`) | S-08 | ✅ 27 tests |
-| Editor por comandos | S-10 | ⏳ |
+| Editor por comandos | S-10 | ✅ 68 tests, cobertura 100% |
 | **E2E-1** (flujo manual completo) | S-11 | ⏳ |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-06, S-07 |
@@ -76,16 +76,26 @@ Manual     → WorkoutDraft { source: 'manual',   raw: unknown }  ─┘        
 
 ### Comandos del editor
 
-| Comando | Efecto |
-|---|---|
-| `/nueva <cliente>` | Crea el plan y muestra: IA · plantilla · desde cero |
-| `/plantillas` | Lista las plantillas aplicables |
-| `/usar <template_id>` | Carga la plantilla en una versión `DRAFT` |
-| `/dia <n> <foco>` | Añade o renombra un día |
-| `/add <n> <ejercicio> <series>x<reps> <descanso>` | Añade ejercicio al día `n` |
-| `/quitar <n> <índice>` | Elimina un ejercicio |
-| `/nota <n> <índice> <texto>` | Edita la nota de un ejercicio |
-| `/ver` | Muestra la versión actual formateada |
+| Comando | Efecto | Estado |
+|---|---|---|
+| `/nueva <cliente>` | Crea el plan y muestra: IA · plantilla · desde cero | ⏳ S-11 |
+| `/plantillas` | Lista las plantillas aplicables | ⏳ S-11 |
+| `/usar <template_id>` | Carga la plantilla en una versión `DRAFT` | ⏳ S-11 |
+| `/dia <n> <foco>` | Añade o renombra un día | ✅ |
+| `/add <n> <nombre> <series>x<reps> [descanso]` | Añade ejercicio al día `n` | ✅ |
+| `/quitar <n> <índice>` | Elimina un ejercicio | ✅ |
+| `/nota <n> <índice> [texto]` | Edita la nota; sin texto, la borra | ✅ |
+| `/ver` | Muestra la versión actual formateada | ⏳ S-11 |
+
+**El parser tolera cómo escribe una persona en el móvil:** espacios de más,
+`X` mayúscula, la `s` de segundos (`90s`), nombres de varias palabras. El
+descanso es opcional y vale 90 segundos por defecto.
+
+Lo que **no** tolera son valores fuera de rango: ahí devuelve un mensaje que
+explica la sintaxis esperada, no un error genérico.
+
+`/add` a un día que no existe **lo crea**, que es lo que espera quien escribe
+`/add 3 ...` sin haber hecho `/dia 3` antes.
 
 > **Limitación reconocida:** reordenar y duplicar días con comandos es incómodo.
 > Se difiere a la fase 2, cuando exista una interfaz visual. Con las plantillas

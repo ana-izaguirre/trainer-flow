@@ -49,7 +49,7 @@ revés, el fallback siempre queda "para después".
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
 | **S-09** ✅ | Bot de Telegram | Webhook, secreto, identidad, idempotencia | 79 tests. Un desconocido recibe respuesta neutra y queda registrado |
-| **S-10** | Editor por comandos | `_core/editor/commands.ts` | Crear, cargar plantilla, añadir y quitar ejercicios |
+| **S-10** ✅ | Editor y formateo | `_core/editor/` + `_core/telegram/format.ts` | 92 tests. Cobertura 100%. MarkdownV2 escapado y división a 4096 |
 | **S-11** | **E2E-1** | Flujo manual completo | **SPEC-008 cerrada.** Crear → editar → aprobar → enviar, **sin una sola llamada a la IA** |
 
 > 🎯 **Hito.** Aquí el producto ya sirve. Todo lo demás lo mejora.
