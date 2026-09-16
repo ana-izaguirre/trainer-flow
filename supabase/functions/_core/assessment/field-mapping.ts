@@ -49,6 +49,19 @@ export interface FieldRule {
    * colarse como si fuera una duración.
    */
   readonly numeric?: boolean;
+  /**
+   * Traduce el texto de la opción al valor que espera el dominio:
+   * `"Principiante (Menos de 6 meses)"` → `"beginner"`.
+   *
+   * La clave se compara como **prefijo**, ignorando mayúsculas y acentos. El
+   * texto de una opción se edita igual que el de una pregunta, y anclar la
+   * traducción al texto completo la haría frágil por nada.
+   *
+   * Un texto que no está en el mapa **pasa tal cual**: omitirlo diría «falta
+   * el nivel» cuando el cliente sí contestó. Dejarlo pasar hace que el error
+   * de validación nombre el problema real.
+   */
+  readonly valueMap?: Readonly<Record<string, string>>;
 }
 
 /** Qué pregunta alimenta cada campo del dominio. */
@@ -107,6 +120,13 @@ function firstInteger(text: string | null): number | null {
   return match === null ? null : Number.parseInt(match[0], 10);
 }
 
+/** El primer valor cuya clave sea prefijo del texto, ya normalizados los dos. */
+function translate(text: string, valueMap: Readonly<Record<string, string>>): string {
+  const normalized = normalize(text);
+  const hit = Object.entries(valueMap).find(([key]) => normalized.startsWith(normalize(key)));
+  return hit?.[1] ?? text;
+}
+
 function isFormField(value: unknown): value is FormField {
   return isRecord(value) && typeof value['label'] === 'string';
 }
@@ -161,6 +181,11 @@ export function mapFormFields(
     // Un valor vacío no pisa uno que ya se había resuelto, y tampoco crea la
     // clave: la ausencia se representa omitiendo el campo.
     if (text === null) continue;
+
+    if (target.rule.valueMap !== undefined) {
+      result[target.domainField] = translate(text, target.rule.valueMap);
+      continue;
+    }
 
     // Todo lo demás sale como texto, incluido un número o un booleano que
     // llegue del formulario. Quien necesite el número lo declara con

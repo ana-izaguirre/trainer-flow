@@ -296,3 +296,46 @@ describe('valores numéricos', () => {
     expect('sessionMinutes' in result).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('traducción al valor del dominio', () => {
+  const NIVEL: FieldMapping = {
+    level: {
+      label: 'Nivel',
+      valueMap: { Principiante: 'beginner', Intermedio: 'intermediate', Avanzado: 'advanced' },
+    },
+  };
+
+  const nivel = (value: unknown, options?: FormField['options']) =>
+    mapFormFields([campo('Nivel', value, { type: 'CHECKBOXES', ...(options ? { options } : {}) })], NIVEL);
+
+  it.each([
+    ['Principiante (Menos de 6 meses)', 'beginner'],
+    ['Intermedio (6 meses - 2 años)', 'intermediate'],
+    ['Avanzado (Más de 2 años)', 'advanced'],
+  ])('%s → %s', (texto, esperado) => {
+    expect(nivel(texto)['level']).toBe(esperado);
+  });
+
+  it('la clave es un prefijo: editar el paréntesis no rompe la ingesta', () => {
+    // El texto de una opción se edita igual que el de una pregunta. Anclar la
+    // traducción al texto completo la haría frágil por nada.
+    expect(nivel('Principiante (menos de un año)')['level']).toBe('beginner');
+  });
+
+  it('ignora mayúsculas y acentos, como el resto del mapeo', () => {
+    expect(nivel('AVANZADO (más de 2 años)')['level']).toBe('advanced');
+  });
+
+  it('resuelve el id de la opción antes de traducir', () => {
+    const r = nivel(['u1'], [{ id: 'u1', text: 'Intermedio (6 meses - 2 años)' }]);
+    expect(r['level']).toBe('intermediate');
+  });
+
+  it('un texto que no está en el mapa pasa tal cual, y la validación lo rechaza', () => {
+    // Omitirlo diría «falta el nivel» cuando el cliente sí contestó. Dejarlo
+    // pasar hace que el error nombre el problema real: no es un nivel válido.
+    expect(nivel('Semiprofesional')['level']).toBe('Semiprofesional');
+  });
+});

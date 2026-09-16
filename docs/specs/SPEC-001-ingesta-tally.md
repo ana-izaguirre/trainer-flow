@@ -19,17 +19,26 @@
 
 ```typescript
 const MAPPING: FieldMapping = {
-  fullName:       { label: 'Nombre completo' },
-  level:          { label: 'Nivel de experiencia' },
-  daysPerWeek:    { label: '¿Cuántos días por semana puedes entrenar?', numeric: true },
-  sessionMinutes: { label: '¿Cuánto tiempo tienes por sesión?',        numeric: true },
-  lifestyle:      { label: '¿Cómo describirías tu día a día?' },
-  hasLimitations: {
-    label: '¿Tienes alguna lesión o limitación?',
-    trueWhen: ['Sí', 'Si', 'Yes'],
-  },
+  fullName:       { label: 'Nombre' },
+  goal:           { label: 'Objetivo' },
+  level:          { label: 'Nivel', valueMap: {
+                      Principiante: 'beginner',
+                      Intermedio:   'intermediate',
+                      Avanzado:     'advanced',
+                    } },
+  daysPerWeek:    { label: '¿Cuántos días a la semana entrenas?', numeric: true },
+  sessionMinutes: { label: 'Tiempo por sesión',                   numeric: true },
+  lifestyle:      { label: 'Estilo de vida' },
+  equipment:      { label: 'Equipamiento disponible' },
+  limitationsDetail: { label: 'Cuéntanos brevemente qué debemos tener en cuenta.' },
+  notes:          { label: '¿Hay algo más que tu entrenador deba saber?' },
 };
 ```
+
+> **Sigue abierto:** `hasLimitations`. La pregunta «Lesiones, dolor o
+> limitaciones» son casillas con `Ninguna` entre las opciones, así que el
+> booleano es *«marcó algo que no sea Ninguna»*. Eso es una regla nueva y
+> necesita decisión antes de escribirse.
 
 Cambiar el texto de una pregunta en el formulario es cambiar una línea aquí,
 no tocar el parser. La comparación ignora mayúsculas, acentos y espacios
@@ -44,6 +53,13 @@ seguro; prometer más produce una rutina que no cabe en su día.
 Si la opción no contiene ningún número, el campo **se omite** y la validación
 falla con un error explícito. Es deliberado: una respuesta que no es un tiempo
 no puede colarse como si lo fuera.
+
+`valueMap` traduce el texto de la opción al valor del dominio: el formulario
+dice `"Principiante (Menos de 6 meses)"` y el dominio espera `"beginner"`.
+**La clave se compara como prefijo**, porque el texto de una opción se edita
+igual que el de una pregunta: anclarla al texto completo la haría frágil por
+nada. Un texto que no esté en el mapa pasa tal cual, y la validación lo
+rechaza nombrando el problema real.
 
 ---
 
@@ -236,7 +252,10 @@ Registra una fila en `plan_events` con `from_state = NULL`,
   CUANDO el cliente responde `"60 minutos"`, ENTONCES `sessionMinutes` vale
   `60`; y CUANDO responde algo sin número, ENTONCES la validación falla en
   `sessionMinutes` en vez de inventarse un valor.
-- **CA-9** — DADO un payload persistido, CUANDO se lee `raw_payload`,
+- **CA-9** — DADA la opción `"Principiante (Menos de 6 meses)"`, CUANDO se
+  mapea, ENTONCES `level` vale `"beginner"`; y CUANDO alguien edita el
+  paréntesis de la opción, ENTONCES **sigue valiendo `"beginner"`**.
+- **CA-10** — DADO un payload persistido, CUANDO se lee `raw_payload`,
   ENTONCES no contiene `submissionPdfUrl` ni `submissionPreviewUrl`.
 
 ## 10. Tests
@@ -245,6 +264,7 @@ Registra una fila en `plan_events` con `from_state = NULL`,
 |---|---|
 | Unit | `validateAssessment` con todos los campos, válidos e inválidos |
 | Unit | `numeric: true` extrae el entero; sin número, omite el campo |
+| Unit | `valueMap` traduce por prefijo; sin coincidencia, pasa tal cual |
 | Unit | `parseTallyEnvelope` contra el fixture real |
 | Unit | Campo desconocido en el payload → se ignora sin romper |
 | Unit | `verifySignature` acepta la firma correcta y rechaza la incorrecta |
