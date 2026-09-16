@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — validación, mapeo y sobre (S-12) |
+| **Estado** | **PARCIAL** — parsing (S-12) y webhook seguro (S-13). Falta la escritura (S-14) |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-12, S-13, S-14 |
 
@@ -13,7 +13,8 @@
 | Validación de valores del dominio | ❌ No | ✅ S-12, cobertura 100% |
 | Mapeo etiqueta → campo | ⚠️ Solo las etiquetas | ✅ S-12, cobertura 100% |
 | Lectura del sobre de Tally | ✅ **Sí** | ✅ S-12, contra un payload real |
-| Webhook, firma, idempotencia | — | ⏳ S-13, S-14 |
+| Webhook, firma, idempotencia | — | ✅ S-13 |
+| Escritura: cliente, evaluación, plan | — | ⏳ S-14 |
 
 ### El mapeo es configuración, no código
 
@@ -247,7 +248,23 @@ Registra una fila en `plan_events` con `from_state = NULL`,
 
 ## 8. Seguridad
 
-- Firma HMAC con comparación de tiempo constante.
+- Firma HMAC-SHA256 sobre el **cuerpo sin parsear**, con comparación en
+  tiempo constante. Parsear y volver a serializar cambiaría espacios y orden
+  de claves, y el HMAC dejaría de cuadrar.
+
+### La codificación de la firma: un desconocido manejado
+
+No se pudo confirmar si Tally manda la firma en hexadecimal o en base64 —
+su documentación no era alcanzable al escribir esto. En vez de suponerlo, se
+**aceptan las dos**.
+
+No debilita nada: son dos representaciones del **mismo** digest, y quien no
+tenga la clave no puede producir ninguna. Lo mismo con la cabecera: se leen
+`tally-signature` y `x-tally-signature`, y en cualquiera de las dos la firma
+tiene que ser válida igual.
+
+La primera entrega real lo despeja: `matchingEncoding` devuelve cuál cuadró.
+Con ese dato se estrecha a una sola.
 - **Las URLs de descarga de Tally se eliminan antes de persistir.**
   `submissionPdfUrl` y `submissionPreviewUrl` contienen un token firmado que
   da acceso a la respuesta completa, con los datos de salud dentro. Guardarlas

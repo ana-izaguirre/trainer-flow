@@ -1,8 +1,10 @@
 /**
- * Verificación del secreto del webhook.
+ * Comparación de secretos en tiempo constante.
  *
- * Es lo PRIMERO que corre en cada petición entrante (SPEC-003 regla 1). Si no
- * coincide, se responde 401 sin tocar la base de datos.
+ * Vive fuera de `telegram/` porque no es de Telegram: el webhook de Telegram
+ * compara un secreto compartido y el de Tally compara un digest HMAC. Las dos
+ * comparaciones tienen el mismo requisito, y duplicar una primitiva de
+ * seguridad es peor que moverla.
  */
 
 /**
@@ -15,7 +17,7 @@
  * Un `expected` vacío devuelve **false siempre**: una configuración a medias
  * no puede convertirse en "todo el mundo pasa".
  */
-export function secretsMatch(received: string | null | undefined, expected: string): boolean {
+export function constantTimeEquals(received: string | null | undefined, expected: string): boolean {
   if (expected.length === 0) return false;
   if (typeof received !== 'string') return false;
 

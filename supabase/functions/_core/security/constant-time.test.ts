@@ -5,13 +5,13 @@
  * sin tocar la base de datos.
  */
 import { describe, expect, it } from 'vitest';
-import { secretsMatch } from './secret.ts';
+import { constantTimeEquals } from './constant-time.ts';
 
 const SECRET = 'un-secreto-de-webhook-suficientemente-largo';
 
-describe('secretsMatch', () => {
+describe('constantTimeEquals', () => {
   it('acepta el secreto correcto', () => {
-    expect(secretsMatch(SECRET, SECRET)).toBe(true);
+    expect(constantTimeEquals(SECRET, SECRET)).toBe(true);
   });
 
   it.each([
@@ -22,7 +22,7 @@ describe('secretsMatch', () => {
     ['que difiere en el último carácter', `${SECRET.slice(0, -1)}X`],
     ['que difiere en el primero', `X${SECRET.slice(1)}`],
   ])('rechaza %s', (_nombre, recibido) => {
-    expect(secretsMatch(recibido, SECRET)).toBe(false);
+    expect(constantTimeEquals(recibido, SECRET)).toBe(false);
   });
 
   it.each([
@@ -30,13 +30,13 @@ describe('secretsMatch', () => {
     ['undefined', undefined],
   ])('rechaza cuando la cabecera es %s', (_nombre, recibido) => {
     // Telegram no envió la cabecera, o no es nuestro Telegram.
-    expect(secretsMatch(recibido, SECRET)).toBe(false);
+    expect(constantTimeEquals(recibido, SECRET)).toBe(false);
   });
 
   it('rechaza siempre si el secreto esperado está vacío', () => {
     // Una configuración a medias no puede convertirse en "todo el mundo pasa".
-    expect(secretsMatch('', '')).toBe(false);
-    expect(secretsMatch('lo-que-sea', '')).toBe(false);
+    expect(constantTimeEquals('', '')).toBe(false);
+    expect(constantTimeEquals('lo-que-sea', '')).toBe(false);
   });
 
   // La comparación es de tiempo constante para no filtrar cuántos caracteres
@@ -44,6 +44,6 @@ describe('secretsMatch', () => {
   // rojos, así que se verifica el comportamiento y se documenta la intención.
   it('compara todo el contenido, no corta en la primera diferencia', () => {
     const casi = `${SECRET.slice(0, -1)}Z`;
-    expect(secretsMatch(casi, SECRET)).toBe(false);
+    expect(constantTimeEquals(casi, SECRET)).toBe(false);
   });
 });
