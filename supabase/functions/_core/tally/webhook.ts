@@ -9,21 +9,45 @@
  *
  *   1. Verificar la firma  → antes de tocar absolutamente nada
  *   2. Parsear el sobre    → dato no confiable
- *   3. Redactar            → las URLs de descarga llevan un JWT dentro
+ *   3. Buscar al entrenador→ sin él no hay dónde colgar el cliente
  *   4. Reclamar el evento  → idempotencia
+ *   5. Mapear y validar    → configuración + reglas del dominio
+ *   6. Escribir, o avisar  → las cuatro filas, o el aviso al entrenador
  *
  * El paso 1 va primero **incluso antes de mirar si el cuerpo es JSON**. Al
  * revés, alguien sin la clave podría distinguir un cuerpo válido de uno
  * inválido por la respuesta que recibe.
+ *
+ * El paso 3 va ANTES del 4 a propósito: si no hay entrenador todavía, no se
+ * reclama el evento. Así Tally reintenta y el envío no se pierde, en vez de
+ * quedar marcado como procesado sin haber creado nada.
  */
+import { mapFormFields } from '../assessment/field-mapping.ts';
+import { TALLY_MAPPING } from '../assessment/mapping.ts';
 import { parseTallyEnvelope, redactCredentialUrls } from '../assessment/tally-envelope.ts';
+import { validateAssessment } from '../assessment/validate-assessment.ts';
 import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
+import type { TelegramSender } from '../ports/telegram-ports.ts';
 
 export type TallyOutcome =
   | { readonly kind: 'unauthorized' }
   | { readonly kind: 'malformed'; readonly reason: string }
   | { readonly kind: 'duplicate'; readonly eventId: string }
-  | { readonly kind: 'claimed'; readonly eventId: string; readonly formId: string }
+  | {
+      readonly kind: 'ingested';
+      readonly eventId: string;
+      readonly clientId: string;
+      readonly planId: string;
+      readonly versionId: string;
+    }
+  /**
+   * El sobre estaba bien pero las respuestas no. El evento queda guardado y
+   * el entrenador recibe un aviso: el dato no se pierde (regla 9).
+   *
+   * `fields` son NOMBRES de campo, nunca sus valores: uno de ellos puede ser
+   * información de salud.
+   */
+  | { readonly kind: 'invalid'; readonly eventId: string; readonly fields: readonly string[] }
   | { readonly kind: 'failed'; readonly message: string };
 
 export interface TallyInput {
@@ -39,6 +63,9 @@ export interface TallyInput {
 export interface TallyDeps {
   readonly repo: TallyRepo;
   readonly verifier: SignatureVerifier;
+  readonly sender: TelegramSender;
+  /** 32 bytes de CSPRNG en base64url. Lo genera `_shared`: `_core` no tiene crypto. */
+  readonly newLinkToken: () => string;
   readonly requestId: string;
 }
 
@@ -83,20 +110,48 @@ export async function handleTallyWebhook(
   const sobre = parseTallyEnvelope(body);
   if (!sobre.ok) return { kind: 'malformed', reason: sobre.error };
 
+  const { eventId } = sobre.value;
+  const rawPayload = redactCredentialUrls(body);
+
   try {
-    // ── 3 y 4. Redactar, y reclamar ──────────────────────────────────────
-    const isNew = await deps.repo.claimEvent(
-      sobre.value.eventId,
-      redactCredentialUrls(body),
-      deps.requestId,
-    );
-    if (!isNew) return { kind: 'duplicate', eventId: sobre.value.eventId };
+    // ── 3. El entrenador, antes de reclamar ──────────────────────────────
+    // Sin él no hay dónde colgar el cliente, y reclamar el evento lo daría
+    // por procesado para siempre. Devolver `failed` hace que Tally reintente.
+    const trainer = await deps.repo.findTrainer();
+    if (trainer === null) {
+      return { kind: 'failed', message: 'Todavía no hay un entrenador registrado.' };
+    }
 
-    // Crear cliente, evaluación y plan es S-14. Hoy el flujo ya verifica,
-    // redacta y registra: lo que falta es qué escribir.
-    await deps.repo.markProcessed(sobre.value.eventId);
+    // ── 4. Idempotencia ──────────────────────────────────────────────────
+    const isNew = await deps.repo.claimEvent(eventId, rawPayload, deps.requestId);
+    if (!isNew) return { kind: 'duplicate', eventId };
 
-    return { kind: 'claimed', eventId: sobre.value.eventId, formId: sobre.value.formId };
+    // ── 5. Del formulario al dominio ─────────────────────────────────────
+    const parsed = validateAssessment(mapFormFields(sobre.value.fields, TALLY_MAPPING));
+
+    if (!parsed.ok) {
+      // Regla 9: el payload ya está guardado. Lo que falta es que alguien se
+      // entere. El aviso lleva los NOMBRES de los campos, nunca sus valores.
+      const fields = parsed.errors.map((e) => e.field);
+      await deps.sender.sendMessage(
+        trainer.chatId,
+        `Llegó una evaluación que no se pudo leer. Campos con problema: ${fields.join(', ')}.`,
+      );
+      await deps.repo.markProcessed(eventId);
+      return { kind: 'invalid', eventId, fields };
+    }
+
+    // ── 6. Las cuatro filas, en una sola operación ───────────────────────
+    const ids = await deps.repo.ingestAssessment({
+      trainerId: trainer.profileId,
+      linkToken: deps.newLinkToken(),
+      rawPayload,
+      ...parsed.value,
+    });
+
+    await deps.repo.markProcessed(eventId);
+
+    return { kind: 'ingested', eventId, ...ids };
   } catch (error) {
     return {
       kind: 'failed',

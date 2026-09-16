@@ -11,29 +11,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { mapFormFields, type FieldMapping } from './field-mapping.ts';
+import { mapFormFields } from './field-mapping.ts';
+import { TALLY_MAPPING as MAPPING } from './mapping.ts';
 import { parseTallyEnvelope } from './tally-envelope.ts';
 import { validateAssessment } from './validate-assessment.ts';
 
-/**
- * El mapeo de producción. Vive aquí hasta que S-13 lo mueva al webhook, y es
- * el mismo que documenta SPEC-001.
- */
-export const MAPPING: FieldMapping = {
-  fullName: { label: 'Nombre' },
-  goal: { label: 'Objetivo' },
-  level: {
-    label: 'Nivel',
-    valueMap: { Principiante: 'beginner', Intermedio: 'intermediate', Avanzado: 'advanced' },
-  },
-  daysPerWeek: { label: '¿Cuántos días a la semana entrenas?', numeric: true },
-  sessionMinutes: { label: 'Tiempo por sesión', numeric: true },
-  lifestyle: { label: 'Estilo de vida' },
-  equipment: { label: 'Equipamiento disponible' },
-  hasLimitations: { label: 'Lesiones, dolor o limitaciones', falseWhen: ['Ninguna'] },
-  limitationsDetail: { label: 'Cuéntanos brevemente qué debemos tener en cuenta.' },
-  notes: { label: '¿Hay algo más que tu entrenador deba saber?' },
-};
 
 const FIXTURE: unknown = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../../../tests/fixtures/tally-form-response.json'), 'utf8'),

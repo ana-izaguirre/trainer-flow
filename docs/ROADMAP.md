@@ -58,13 +58,13 @@ revés, el fallback siempre queda "para después".
 
 > 🎯 **Hito.** Aquí el producto ya sirve. Todo lo demás lo mejora.
 
-## Bloque 4 — Ingesta (S-12 → S-14) 🟡 EN CURSO
+## Bloque 4 — Ingesta (S-12 → S-14) ✅ COMPLETADO
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
 | **S-12** ✅ | Parser de Tally (TDD) | Fixture real + `_core/assessment/` | Payload completo, campos faltantes y tipos incorrectos |
 | **S-13** ✅ | Webhook: seguridad | Firma + idempotencia | El mismo `eventId` dos veces produce **un solo** efecto |
-| **S-14** | Webhook: escritura | Cliente, evaluación, plan, `link_token` | **SPEC-001 cerrada** |
+| **S-14** ✅ | Webhook: escritura | Cliente, evaluación, plan, `link_token` | **SPEC-001 cerrada** |
 
 ## Bloque 5 — La IA como capacidad (S-15 → S-18)
 
