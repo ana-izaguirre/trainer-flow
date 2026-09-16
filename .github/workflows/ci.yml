@@ -6,10 +6,18 @@ on:
   pull_request:
     branches: [main]
 
-# Un push nuevo cancela el CI anterior de la misma rama.
+# Un push nuevo cancela el CI anterior de la misma rama… salvo en `main`.
+#
+# En una rama de trabajo cancelar es lo correcto: el commit viejo ya no
+# importa y se ahorran minutos. En `main` es lo contrario: cancelar deja un
+# commit de la rama principal SIN VERIFICAR PARA SIEMPRE, y nadie se entera
+# porque un run cancelado se parece a uno fallido.
+#
+# Pasó de verdad: seis PR mergeados en noventa segundos dejaron cuatro
+# commits de `main` sin comprobar.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   verify:
@@ -85,6 +93,15 @@ jobs:
 
       - name: Deno — lint
         run: pnpm deno:lint
+
+      # `_shared` y los handlers HTTP no se pueden probar desde Node: usan
+      # Deno.env e imports npm:. Aquí es donde se comprueba que el cableado
+      # está bien —el nombre de una variable, el del header— que es lo único
+      # que los 491 tests de _core no pueden ver (SPEC-011).
+      #
+      # No necesita Docker: un smoke test que a veces no corre no sirve.
+      - name: Deno — tests de _shared y los handlers
+        run: pnpm deno:test
 
       # Falla si la cobertura de authorization.ts, state-machine.ts o
       # validate-draft.ts baja del 100%. Ver vitest.config.ts.

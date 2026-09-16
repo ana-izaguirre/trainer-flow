@@ -2,9 +2,23 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **APROBADA** — pendiente de implementar |
+| **Estado** | **PARCIAL** — `_shared` y handlers hechos. Falta `db.ts` contra PostgREST |
 | **Depende de** | SPEC-003, SPEC-009 |
 | **Sesiones** | S-29 (nueva) |
+
+## Resultado parcial
+
+| Capa | ¿Necesita Docker? | Estado |
+|---|---|---|
+| `env.ts` · `logger.ts` · `telegram/client.ts` | ❌ No | ✅ 15 tests |
+| `telegram-webhook/index.ts` (el cableado) | ❌ No | ✅ 6 tests |
+| El fallo de arranque de §2 | — | ✅ **Arreglado** |
+| `pnpm deno:test` en el CI | ❌ No | ✅ |
+| `db.ts` contra PostgREST (§7.1) | ✅ **Sí** | ⏳ |
+
+**21 tests en Deno.** `pnpm deno:test`
+
+---
 
 ## 1. Objetivo
 
