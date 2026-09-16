@@ -1,46 +1,45 @@
 name: Deploy
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Solo despliega lo que YA pasó el CI.
+# Only deploys what ALREADY passed CI.
 #
-# `workflow_run` espera a que el CI termine en `main` y mira su conclusión.
-# Con `on: push` se desplegaría en paralelo a la verificación, y un commit
-# roto llegaría a producción antes de que nadie se enterara.
+# `workflow_run` waits for CI to finish on `main` and reads its conclusion.
+# With `on: push` the deploy would run in parallel with verification, and a
+# broken commit would reach production before anyone noticed.
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  # Para volver a desplegar sin tocar el código: pestaña Actions → Deploy →
-  # Run workflow.
+  # To redeploy without touching the code: Actions tab → Deploy → Run workflow.
   workflow_dispatch:
 
-# Dos despliegues a la vez dejarían la base a medias. Este NO cancela el que
-# esté corriendo: se encola detrás.
+# Two deploys at once would leave the database half-migrated. This one does NOT
+# cancel a running deploy: it queues behind it.
 concurrency:
   group: deploy
   cancel-in-progress: false
 
 jobs:
-  desplegar:
-    name: Migraciones y Edge Functions
+  deploy:
+    name: Migrations and Edge Functions
     runs-on: ubuntu-latest
 
-    # ┌─ LAS DOS PUERTAS ──────────────────────────────────────────────────┐
-    # │ 1. Para llegar a `main` hay que pasar por un PR con el CI en verde.│
-    # │    Eso se activa en Settings → Branches → Require a pull request.  │
-    # │    Sin esa protección, un `git push` a main se publica solo.       │
-    # │                                                                    │
-    # │ 2. `environment: production` permite exigir una aprobación MANUAL  │
-    # │    antes de desplegar: Settings → Environments → production →      │
-    # │    Required reviewers. Mientras no se configure, no bloquea nada,  │
-    # │    así que tenerlo aquí no cuesta nada y lo habilita cuando quieras│
-    # └────────────────────────────────────────────────────────────────────┘
+    # ┌─ THE TWO GATES ────────────────────────────────────────────────────┐
+    # │ 1. Reaching `main` requires a PR with CI green. Turn that on under  │
+    # │    Settings → Branches → Require a pull request. Without it, a      │
+    # │    `git push` straight to main ships on its own.                    │
+    # │                                                                     │
+    # │ 2. `environment: production` allows requiring a MANUAL approval     │
+    # │    before deploying: Settings → Environments → production →         │
+    # │    Required reviewers. Until it is configured it blocks nothing, so  │
+    # │    declaring it here costs nothing and enables it whenever wanted.   │
+    # └─────────────────────────────────────────────────────────────────────┘
     environment: production
 
-    # `workflow_dispatch` no trae `workflow_run`, así que se acepta cuando no
-    # existe. Lo que nunca pasa es un CI en rojo.
+    # `workflow_dispatch` carries no `workflow_run`, so it is accepted when
+    # absent. What never passes is a red CI.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -48,111 +47,142 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Hacen falta dos commits para poder comparar qué cambió.
+          # Two commits are needed to compare what changed.
           fetch-depth: 2
 
-      # ┌─ POR QUÉ SE COMPARA, Y POR QUÉ ES GRUESO ──────────────────────────┐
-      # │ Un commit que solo toca un .md no tiene nada que desplegar, y      │
-      # │ `functions deploy` crearía una versión nueva de cada función para  │
-      # │ nada.                                                              │
+      # ┌─ WHY IT COMPARES, AND WHY THE COMPARISON IS COARSE ────────────────┐
+      # │ A commit that only touches a .md has nothing to deploy, and        │
+      # │ `functions deploy` would create a new version of every function    │
+      # │ for nothing.                                                       │
       # │                                                                    │
-      # │ Se mira `supabase/` ENTERO, no migraciones y funciones por         │
-      # │ separado. Afinar más traería el fallo clásico: un despliegue falla,│
-      # │ el commit siguiente solo toca una de las dos carpetas, y la otra   │
-      # │ se queda atrás sin que nadie lo note.                              │
+      # │ It looks at `supabase/` AS A WHOLE, not migrations and functions    │
+      # │ separately. Being finer-grained brings the classic failure: a      │
+      # │ deploy fails, the next commit only touches one of the two folders, │
+      # │ and the other silently stays behind.                               │
       # │                                                                    │
-      # │ Si hace falta forzarlo: Actions → Deploy → Run workflow.           │
+      # │ To force one: Actions → Deploy → Run workflow.                     │
       # └────────────────────────────────────────────────────────────────────┘
-      - name: ¿Hay algo que desplegar?
-        id: cambios
+      - name: Is there anything to deploy?
+        id: changes
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "hay=true"                 >> "$GITHUB_OUTPUT"
-            echo "motivo=lanzado a mano"    >> "$GITHUB_OUTPUT"
+            echo "any=true"            >> "$GITHUB_OUTPUT"
+            echo "reason=run manually" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # `HEAD^` es main antes del merge, así que esto es el cambio entero
-          # del PR.
-          tocados=$(git diff --name-only HEAD^ HEAD -- supabase/ || true)
+          # `HEAD^` is main before the merge, so this is the PR's whole change.
+          touched=$(git diff --name-only HEAD^ HEAD -- supabase/ || true)
 
-          if [ -z "$tocados" ]; then
-            echo "hay=false" >> "$GITHUB_OUTPUT"
-            echo "motivo=ningún cambio bajo supabase/" >> "$GITHUB_OUTPUT"
+          if [ -z "$touched" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no changes under supabase/" >> "$GITHUB_OUTPUT"
           else
-            echo "hay=true" >> "$GITHUB_OUTPUT"
-            echo "motivo=$(echo "$tocados" | wc -l) archivo(s) bajo supabase/" >> "$GITHUB_OUTPUT"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "reason=$(echo "$touched" | wc -l) file(s) under supabase/" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: supabase/setup-cli@v1
-        if: steps.cambios.outputs.hay == 'true'
+        if: steps.changes.outputs.any == 'true'
         with:
           version: latest
 
-      # Un token caducado hace fallar `supabase link` con un 401 que no
-      # explica nada. Esto falla antes y dice qué hacer.
-      - name: Comprobar el token antes de tocar nada
-        if: steps.cambios.outputs.hay == 'true'
+      # ┌─ WHY THE PROJECT REF IS READ FROM BOTH PLACES ─────────────────────┐
+      # │ `vars.` only reads Variables and `secrets.` only reads Secrets. The │
+      # │ project ref is not sensitive, so a Variable is the right home — but │
+      # │ putting it under Secrets is the obvious mistake, and the failure it │
+      # │ produces is `--project-ref ""`, which says nothing about why.       │
+      # │                                                                     │
+      # │ Reading both makes either placement work, and the check below turns │
+      # │ "not set anywhere" into a message that names both places.           │
+      # └─────────────────────────────────────────────────────────────────────┘
+      - name: Check the configuration before touching anything
+        id: config
+        if: steps.changes.outputs.any == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_REF }}
         run: |
-          codigo=$(curl -sS -o /dev/null -w '%{http_code}' \
+          missing=0
+
+          if [ -z "${PROJECT_REF}" ]; then
+            echo "::error::SUPABASE_PROJECT_REF is empty. Set it under Settings → Secrets and variables → Actions, in either the Variables tab (preferred, it is not sensitive) or Secrets. It is the id in your dashboard URL: /dashboard/project/<THIS>."
+            missing=1
+          fi
+
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN is empty. Generate one at https://supabase.com/dashboard/account/tokens and add it under Secrets."
+            missing=1
+          fi
+
+          if [ -z "${SUPABASE_DB_PASSWORD:-}" ] && [ -z "${{ secrets.SUPABASE_DB_PASSWORD }}" ]; then
+            echo "::error::SUPABASE_DB_PASSWORD is empty. It is the database password, under Project Settings → Database."
+            missing=1
+          fi
+
+          [ "$missing" = "1" ] && exit 1
+
+          # An expired token makes `supabase link` fail with a 401 that explains
+          # nothing. Failing here says what to do instead.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
             https://api.supabase.com/v1/projects)
 
-          if [ "$codigo" != "200" ]; then
-            echo "::error::SUPABASE_ACCESS_TOKEN no sirve (HTTP $codigo). Renuévalo en https://supabase.com/dashboard/account/tokens y actualiza el secret."
+          if [ "$code" != "200" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN is not valid (HTTP $code). Renew it at https://supabase.com/dashboard/account/tokens and update the secret."
             exit 1
           fi
 
-      # El orden NO es intercambiable: una Edge Function no crea tablas, solo
-      # lee y escribe en las que existen. Al revés, el primer webhook falla
-      # con «relation does not exist».
-      - name: Enlazar el proyecto
-        if: steps.cambios.outputs.hay == 'true'
+          echo "ref=${PROJECT_REF}" >> "$GITHUB_OUTPUT"
+
+      # The order is NOT interchangeable: an Edge Function does not create
+      # tables, it only reads and writes the ones that exist. The other way
+      # round, the first webhook fails with "relation does not exist".
+      - name: Link the project
+        if: steps.changes.outputs.any == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+        run: supabase link --project-ref "${{ steps.config.outputs.ref }}"
 
-      # Las migraciones son inmutables y solo añaden (SPEC-000 regla 8), así
-      # que aplicar las nuevas es seguro. Una que borrara datos no debería
-      # pasar por aquí sin que un humano la mire.
-      - name: Migraciones
-        if: steps.cambios.outputs.hay == 'true'
+      # Migrations are immutable and additive only (SPEC-000 rule 8), so
+      # applying new ones is safe. One that dropped data should not come
+      # through here without a human looking at it.
+      - name: Migrations
+        if: steps.changes.outputs.any == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase db push
 
       - name: Edge Functions
-        if: steps.cambios.outputs.hay == 'true'
+        if: steps.changes.outputs.any == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy
 
-      # Deja en la pestaña Actions qué pasó, sin abrir los logs.
-      - name: Resumen
+      # Leaves what happened on the Actions tab, without opening the logs.
+      - name: Summary
         if: always()
         run: |
-          if [ "${{ steps.cambios.outputs.hay }}" != "true" ]; then
+          if [ "${{ steps.changes.outputs.any }}" != "true" ]; then
             {
-              echo "### Sin desplegar"
+              echo "### Nothing deployed"
               echo
-              echo "${{ steps.cambios.outputs.motivo }}."
+              echo "${{ steps.changes.outputs.reason }}."
               echo
-              echo "Para forzarlo: Actions → Deploy → **Run workflow**."
+              echo "To force one: Actions → Deploy → **Run workflow**."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           {
-            echo "### Desplegado"
+            echo "### Deployed"
             echo
             echo "| | |"
             echo "|---|---|"
             echo "| Commit | \`${GITHUB_SHA::7}\` |"
-            echo "| Motivo | ${{ steps.cambios.outputs.motivo }} |"
-            echo "| Migraciones | $(ls supabase/migrations/*.sql | wc -l) |"
-            echo "| Funciones | $(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name '_*' -printf '%f ') |"
+            echo "| Reason | ${{ steps.changes.outputs.reason }} |"
+            echo "| Migrations | $(ls supabase/migrations/*.sql | wc -l) |"
+            echo "| Functions | $(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name '_*' -printf '%f ') |"
           } >> "$GITHUB_STEP_SUMMARY"
