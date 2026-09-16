@@ -659,81 +659,23 @@ describe('invariantes de clients y checkins', () => {
     ).toBe(PG.CHECK_VIOLATION);
   });
 
-  it('el mismo usuario de Telegram no se repite dentro de un entrenador', async () => {
-    const trainerId = await createProfile(db, 'trainer');
-    await db.query(
-      `INSERT INTO clients (trainer_id, full_name, telegram_handle, link_token)
-       VALUES ($1, 'Carlos', 'carlitos', 'token_de_32_caracteres_exactos_a')`,
-      [trainerId],
-    );
-
-    expect(
-      await errorCodeOf(
-        `INSERT INTO clients (trainer_id, full_name, telegram_handle, link_token)
-         VALUES ($1, 'Carlos B', 'carlitos', 'token_de_32_caracteres_exactos_b')`,
-        [trainerId],
-      ),
-    ).toBe(PG.UNIQUE_VIOLATION);
-  });
-
-  it('dos entrenadores distintos pueden tener el mismo usuario de Telegram', async () => {
-    const trainerA = await createProfile(db, 'trainer', 'Entrenador A');
-    const trainerB = await createProfile(db, 'trainer', 'Entrenador B');
-
-    await db.query(
-      `INSERT INTO clients (trainer_id, full_name, telegram_handle, link_token)
-       VALUES ($1, 'Carlos', 'carlitos', 'token_de_32_caracteres_exactos_c')`,
-      [trainerA],
-    );
-    await db.query(
-      `INSERT INTO clients (trainer_id, full_name, telegram_handle, link_token)
-       VALUES ($1, 'Carlos', 'carlitos', 'token_de_32_caracteres_exactos_d')`,
-      [trainerB],
-    );
-
-    const { rows } = await db.query<{ count: string }>(
-      `SELECT count(*) FROM clients WHERE telegram_handle = 'carlitos'`,
-    );
-    expect(rows[0]!.count).toBe('2');
-  });
-
-  it('varios clientes sin usuario de Telegram conviven', async () => {
-    // El índice es parcial: los NULL no chocan entre sí. Sin eso, el segundo
-    // cliente que no ponga su Telegram sería rechazado.
+  it('dos clientes con el mismo nombre conviven como clientes distintos', async () => {
+    // SPEC-001: el formulario es onboarding. Cada envío crea un cliente nuevo.
+    // Fusionarlos por nombre metería la lesión de un Carlos en la rutina del
+    // otro, y en silencio. Un duplicado que se ve es mejor que eso.
     const trainerId = await createProfile(db, 'trainer');
 
-    for (const token of ['token_de_32_caracteres_exactos_e', 'token_de_32_caracteres_exactos_f']) {
+    for (const token of ['token_de_32_caracteres_exactos_a', 'token_de_32_caracteres_exactos_b']) {
       await db.query(
-        `INSERT INTO clients (trainer_id, full_name, link_token) VALUES ($1, 'Anónimo', $2)`,
+        `INSERT INTO clients (trainer_id, full_name, link_token) VALUES ($1, 'Carlos Pérez', $2)`,
         [trainerId, token],
       );
     }
 
     const { rows } = await db.query<{ count: string }>(
-      `SELECT count(*) FROM clients WHERE telegram_handle IS NULL`,
+      `SELECT count(*) FROM clients WHERE full_name = 'Carlos Pérez'`,
     );
     expect(rows[0]!.count).toBe('2');
-  });
-
-  it.each([
-    ['@carlitos', 'con arroba'],
-    ['Carlitos', 'con mayúscula'],
-    ['abcd', 'demasiado corto'],
-    ['1carlos', 'empieza por dígito'],
-    ['carlos perez', 'con espacio'],
-    ['1234', 'id numérico demasiado corto'],
-  ])('la base rechaza el handle %s (%s)', async (handle) => {
-    // Normalizar es tarea de _core. El CHECK está para que un INSERT desde
-    // otro sitio no meta una variante que el índice único no llegaría a ver.
-    const trainerId = await createProfile(db, 'trainer');
-
-    expect(
-      await errorCodeOf(
-        `INSERT INTO clients (trainer_id, full_name, telegram_handle, link_token)
-         VALUES ($1, 'Carlos', $2, 'token_de_32_caracteres_exactos_g')`,
-        [trainerId, handle],
-      ),
-    ).toBe(PG.CHECK_VIOLATION);
   });
 
   it('correr el cron dos veces no duplica el check-in de la semana', async () => {

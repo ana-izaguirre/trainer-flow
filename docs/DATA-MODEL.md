@@ -64,7 +64,6 @@ webhook de Telegram, verificado server-side.
 | `trainer_id` | `uuid` FK → `profiles` | `ON DELETE RESTRICT` |
 | `profile_id` | `uuid` FK → `profiles` UNIQUE | NULL hasta que se vincule |
 | `full_name` | `text` NOT NULL | |
-| `telegram_handle` | `text` | del formulario, ya normalizado. Puede faltar |
 | `link_token` | `text` UNIQUE NOT NULL | `CHECK length BETWEEN 16 AND 64` |
 | `linked_at` | `timestamptz` | |
 | `created_at` | `timestamptz` | |
@@ -81,26 +80,17 @@ Así es **imposible** asignar el perfil de un cliente como entrenador.
 
 Otras restricciones:
 - La vinculación es atómica: `(profile_id IS NULL) = (linked_at IS NULL)`
-- Índice único parcial `(trainer_id, telegram_handle) WHERE telegram_handle IS NOT NULL`
-- `CHECK` de forma del handle: `^[a-z][a-z0-9_]{4,31}$` o `^[0-9]{5,15}$`
+### No hay identidad declarada en `clients`
 
-### `telegram_handle` no es una credencial
+El formulario es onboarding: **cada envío crea un cliente nuevo**. No se busca
+un cliente existente al que enganchar la evaluación.
 
-Lo escribe el cliente en un formulario público. Sirve para **una** cosa: que
-dos clientes llamados «Carlos» no acaben siendo el mismo cliente.
+Fusionar por nombre metería la lesión de un «Carlos Pérez» en la rutina de
+otro, y en silencio. Un duplicado se ve en la lista y se borra; una fusión
+no se ve nunca.
 
-**No autoriza nada.** La identidad verificada es `profiles.telegram_user_id`,
-y solo se obtiene de un update firmado por Telegram (ADR-006, ADR-009). Poner
-el handle de otra persona en el formulario no da acceso a sus datos: la rutina
-viaja por el `link_token`, que solo recibe quien llenó el formulario.
-
-El índice es **único por entrenador, no global**: dos entrenadores pueden
-compartir cliente. Y es **parcial**: los `NULL` no chocan entre sí, así que
-varios clientes pueden no haber puesto su Telegram.
-
-El `CHECK` repite la forma que `_core` ya normaliza. No es redundancia inútil:
-sin él, un `INSERT` desde otro sitio podría meter `@Carlitos` junto a
-`carlitos` y el índice único no vería el duplicado.
+La identidad verificada vive en `profiles.telegram_user_id`, y solo sale de un
+update firmado por Telegram (ADR-006, ADR-009).
 
 `link_token` es una credencial: CSPRNG, nunca en logs, máximo 64 caracteres
 (límite del `/start` de Telegram).

@@ -20,7 +20,6 @@
 ```typescript
 const MAPPING: FieldMapping = {
   fullName:       { label: 'Nombre completo' },
-  telegramHandle: { label: 'Tu usuario de Telegram' },
   level:          { label: 'Nivel de experiencia' },
   daysPerWeek:    { label: '¿Cuántos días por semana puedes entrenar?', numeric: true },
   sessionMinutes: { label: '¿Cuánto tiempo tienes por sesión?',        numeric: true },
@@ -71,7 +70,6 @@ más; los campos que no estén en el mapeo se ignoran.
 | Pregunta | Tipo en Tally | Alimenta |
 |---|---|---|
 | Nombre completo | Texto | `fullName` |
-| **Tu usuario de Telegram** | Texto | `telegramHandle` |
 | Objetivo principal | Selección única | `goal` |
 | Nivel de experiencia | **Selección única** | `level` |
 | Días por semana | Selección única | `daysPerWeek` |
@@ -95,7 +93,8 @@ más; los campos que no estén en el mapeo se ignoran.
    puede marcar `Principiante` **y** `Avanzado` a la vez, y no existe una
    respuesta correcta a esa contradicción.
 
-3. **Falta el usuario de Telegram.** Ver la sección 4, regla 4.
+3. **«Días a la semana» no debe incluir el `0`.** El dominio acepta de 1 a 7:
+   quien marque 0 pierde el envío entero.
 
 ## 4. Contratos
 
@@ -125,8 +124,6 @@ export type Level = 'beginner' | 'intermediate' | 'advanced';
 
 export interface ParsedAssessment {
   fullName: string;
-  /** Usuario de Telegram declarado por el cliente. Es una PISTA, no identidad. */
-  telegramHandle: string | null;
   goal: string;
   level: Level;
   daysPerWeek: number;      // 1..7
@@ -153,40 +150,36 @@ export type AssessmentResult =
 3. `raw_payload` se guarda **siempre**, incluso si el parsing falla, pero
    **sin las URLs de descarga** (`submissionPdfUrl`, `submissionPreviewUrl`):
    llevan una credencial firmada dentro. Ver sección 8.
-4. **La identidad del cliente se resuelve por `telegram_handle`; si no hay,
-   por nombre completo.** Si existe, se reutiliza; si no, se crea.
-5. **El handle del formulario es una pista, nunca una identidad verificada.**
-   Lo escribe el cliente: puede equivocarse o poner el de otra persona. No
-   otorga acceso a nada. El `telegram_user_id` real solo se obtiene cuando el
-   cliente abre el deep link y Telegram firma el update (ADR-006, ADR-009).
-   Se guarda porque resuelve el problema que el nombre no resuelve: dos
-   clientes llamados «Carlos» dejan de ser el mismo cliente.
-6. Un cliente existente conserva su `link_token` y su vínculo. Una
-   reevaluación no rompe la vinculación.
-7. `link_token`: 32 bytes de CSPRNG en base64url. Máximo 64 caracteres
+4. **El formulario es onboarding. Cada envío crea un cliente nuevo.**
+   No se resuelve identidad contra los clientes existentes. Ver abajo.
+5. **Un cliente que ya está dentro no vuelve al formulario.** Si quiere
+   cambiar de objetivo, se lo dice a su entrenador por Telegram y este crea
+   una versión nueva. El formulario no es un canal de actualización.
+6. `link_token`: 32 bytes de CSPRNG en base64url. Máximo 64 caracteres
    (límite del `/start` de Telegram).
-8. Se crea un `workout_plan` y, con `create_workout_version`, su primera
+7. Se crea un `workout_plan` y, con `create_workout_version`, su primera
    versión en estado `NEW` con `source='ai'` y `content` en NULL.
-9. **La respuesta se envía antes de invocar la generación.** El webhook nunca
+8. **La respuesta se envía antes de invocar la generación.** El webhook nunca
    espera a Gemini.
-10. Si el parsing falla, el evento queda guardado y el entrenador recibe un
+9. Si el parsing falla, el evento queda guardado y el entrenador recibe un
     aviso. No se pierde el dato.
 
-### Normalización del handle
+### Por qué no se resuelve la identidad
 
-Se acepta lo que la gente escribe de verdad y se guarda una sola forma:
+Hay tres formas de tratar un segundo envío, y solo una es segura:
 
-| Lo que escribe el cliente | Se guarda |
-|---|---|
-| `@Carlitos` | `carlitos` |
-| `Carlitos` | `carlitos` |
-| `t.me/carlitos` | `carlitos` |
-| `https://t.me/carlitos` | `carlitos` |
-| `123456789` | `123456789` |
+| Cómo | ¿Duplicados? | ¿Riesgo? |
+|---|---|---|
+| Por un usuario declarado en el formulario | No | Un typo invalida el envío entero |
+| **Por nombre completo** | No | 🔴 **Fusiona a dos personas distintas** |
+| **No resolver nada** | Sí, pero **visibles** | Ninguno |
 
-Reglas de Telegram: de 5 a 32 caracteres, letras, dígitos y `_`, empezando por
-letra. Un ID numérico (5 a 15 dígitos) también se acepta, porque alguna gente
-pega ese. Cualquier otra cosa es un error de campo, no una evaluación perdida.
+Resolver por nombre metería la lesión de un «Carlos Pérez» en la rutina de
+otro, y **sin que nadie se entere**. Un duplicado se ve en la lista y se borra
+en treinta segundos; una fusión silenciosa no se ve nunca.
+
+Con un entrenador y diez clientes, un segundo envío es una anomalía, no un
+flujo. No se optimiza para él.
 
 ## 6. Estados
 
@@ -217,7 +210,6 @@ Registra una fila en `plan_events` con `from_state = NULL`,
   sería meter una credencial viva en la base de datos.
 - `limitations_detail` **nunca** se escribe en logs.
 - El `link_token` nunca aparece en logs ni en mensajes de error.
-- El `telegram_handle` no autoriza nada. Ver regla 5.
 - Límite de tamaño del cuerpo: 1 MB.
 - Longitud máxima de todo campo de texto libre: 2000 caracteres, truncado.
 
@@ -230,9 +222,9 @@ Registra una fila en `plan_events` con `from_state = NULL`,
   ENTONCES la respuesta es `200` y **no** se crea ninguna fila nueva.
 - **CA-3** — DADO un payload con firma inválida, CUANDO llega, ENTONCES la
   respuesta es `401` y no hay ninguna escritura en base de datos.
-- **CA-4** — DADO un cliente que ya existe con `telegram_handle = 'carlitos'`,
-  CUANDO llega una segunda evaluación con `@Carlitos`, ENTONCES se crea un
-  `assessment` nuevo y el `client` conserva su `link_token` y su vínculo.
+- **CA-4** — DADOS dos envíos del formulario con el mismo `full_name`, CUANDO
+  se procesan, ENTONCES existen **dos clientes distintos**, cada uno con su
+  `link_token`. Ninguno pisa al otro.
 - **CA-5** — DADO un payload al que le falta `days_per_week`, CUANDO llega,
   ENTONCES `raw_payload` se guarda, no se crea plan y el entrenador recibe
   un aviso.
@@ -252,8 +244,6 @@ Registra una fila en `plan_events` con `from_state = NULL`,
 | Nivel | Caso |
 |---|---|
 | Unit | `validateAssessment` con todos los campos, válidos e inválidos |
-| Unit | Handle en sus cinco formas → misma forma normalizada |
-| Unit | Handle inválido → error de campo, no excepción |
 | Unit | `numeric: true` extrae el entero; sin número, omite el campo |
 | Unit | `parseTallyEnvelope` contra el fixture real |
 | Unit | Campo desconocido en el payload → se ignora sin romper |
@@ -272,6 +262,6 @@ supabase/functions/_core/link-token.ts
 supabase/functions/_shared/signature.ts
 supabase/functions/_shared/db.ts
 supabase/functions/tally-webhook/index.ts
-supabase/migrations/0004_client_telegram_handle.sql
+supabase/migrations/0005_drop_client_telegram_handle.sql
 tests/fixtures/tally-form-response.json
 ```

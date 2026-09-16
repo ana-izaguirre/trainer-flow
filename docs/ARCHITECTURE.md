@@ -153,20 +153,12 @@ abre `t.me/<bot>?start=<token>`, el bot resuelve el cliente y guarda su perfil.
 **Consecuencia.** Una versión aprobada cuyo cliente aún no se vinculó queda en
 `APPROVED` (no `SENT`) y se envía automáticamente al vincularse.
 
-**Por qué el formulario pregunta igualmente el usuario de Telegram.** Son dos
-cosas distintas y las dos hacen falta:
+**El formulario no pregunta ningún identificador de Telegram.** Sería un dato
+que el cliente escribe, y por tanto falsificable y sujeto a typos, para
+resolver algo que este deep link ya resuelve sin que nadie teclee nada.
 
-| | `clients.telegram_handle` | `profiles.telegram_user_id` |
-|---|---|---|
-| De dónde sale | lo escribe el cliente en Tally | update firmado por Telegram |
-| Para qué sirve | distinguir a dos clientes llamados «Carlos» | identidad y autorización |
-| ¿Se puede falsear? | sí | no |
-| ¿Autoriza algo? | **no** | sí |
-
-El handle resuelve el problema del **momento de la evaluación**, cuando el
-cliente todavía no abrió el deep link y lo único que hay es un nombre. El
-`telegram_user_id` resuelve el de **todo lo demás**. Confundirlos sería
-convertir un campo de formulario público en una credencial.
+La identidad es siempre `profiles.telegram_user_id`, verificada por Telegram.
+No hay una segunda identidad «declarada» que pueda contradecirla.
 
 ---
 
