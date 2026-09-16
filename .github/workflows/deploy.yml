@@ -1,0 +1,89 @@
+name: Deploy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Solo despliega lo que YA pasó el CI.
+#
+# `workflow_run` espera a que el CI termine en `main` y mira su conclusión.
+# Con `on: push` se desplegaría en paralelo a la verificación, y un commit
+# roto llegaría a producción antes de que nadie se enterara.
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # Para volver a desplegar sin tocar el código: pestaña Actions → Deploy →
+  # Run workflow.
+  workflow_dispatch:
+
+# Dos despliegues a la vez dejarían la base a medias. Este NO cancela el que
+# esté corriendo: se encola detrás.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    name: Migraciones y Edge Functions
+    runs-on: ubuntu-latest
+
+    # ┌─ LAS DOS PUERTAS ──────────────────────────────────────────────────┐
+    # │ 1. Para llegar a `main` hay que pasar por un PR con el CI en verde.│
+    # │    Eso se activa en Settings → Branches → Require a pull request.  │
+    # │    Sin esa protección, un `git push` a main se publica solo.       │
+    # │                                                                    │
+    # │ 2. `environment: production` permite exigir una aprobación MANUAL  │
+    # │    antes de desplegar: Settings → Environments → production →      │
+    # │    Required reviewers. Mientras no se configure, no bloquea nada,  │
+    # │    así que tenerlo aquí no cuesta nada y lo habilita cuando quieras│
+    # └────────────────────────────────────────────────────────────────────┘
+    environment: production
+
+    # `workflow_dispatch` no trae `workflow_run`, así que se acepta cuando no
+    # existe. Lo que nunca pasa es un CI en rojo.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # El orden NO es intercambiable: una Edge Function no crea tablas, solo
+      # lee y escribe en las que existen. Al revés, el primer webhook falla
+      # con «relation does not exist».
+      - name: Enlazar el proyecto
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+
+      # Las migraciones son inmutables y solo añaden (SPEC-000 regla 8), así
+      # que aplicar las nuevas es seguro. Una que borrara datos no debería
+      # pasar por aquí sin que un humano la mire.
+      - name: Migraciones
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push
+
+      - name: Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy
+
+      # Deja en la pestaña Actions qué se desplegó, sin abrir los logs.
+      - name: Resumen
+        run: |
+          {
+            echo "### Desplegado"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo "| Migraciones | $(ls supabase/migrations/*.sql | wc -l) |"
+            echo "| Funciones | $(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name '_*' -printf '%f ' ) |"
+          } >> "$GITHUB_STEP_SUMMARY"
