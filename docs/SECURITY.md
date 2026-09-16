@@ -16,13 +16,37 @@ llamado `GEMINI_API_KEY=` es una invitación a pegarla ahí, y de ahí a un
 
 ### Qué secretos necesita el sistema
 
-| Secreto | Uso |
-|---|---|
-| Clave de la API del proveedor de IA | Solo en `_shared/ai/`. **Nunca en `_core`** |
-| Token del bot de Telegram | API de Telegram |
-| Secreto del webhook de Telegram | Verificación de updates entrantes |
-| Secreto del webhook de Tally | Verificación de firma |
-| `service_role` de Supabase | Acceso de las Edge Functions |
+Los nombres son **exactos**: es lo que `requireEnv()` pide, carácter por
+carácter. Un nombre distinto en `supabase secrets set` hace que la función
+falle al arrancar diciendo cuál falta.
+
+| Nombre | Uso | Quién lo pone |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | API de Telegram | Tú, desde BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | Verifica que el update viene de Telegram | **Tú lo inventas** (ver abajo) |
+| `TALLY_SIGNING_SECRET` | Verifica la firma del webhook de Tally | Tú, desde el panel de Tally |
+| `GEMINI_API_KEY` | Solo en `_shared/ai/`. **Nunca en `_core`** | Tú, desde Google AI Studio |
+| `SUPABASE_URL` | Acceso de las Edge Functions | **Supabase, automático** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Igual | **Supabase, automático** |
+
+Los dos últimos **no se configuran**: Supabase los inyecta en toda Edge
+Function. Ponerlos a mano no hace daño, pero tampoco hace nada.
+
+### `TELEGRAM_WEBHOOK_SECRET` no sale de ningún panel
+
+Es el único que no te dan hecho: **lo eliges tú** y luego se lo dices a
+Telegram al registrar el webhook. A partir de ahí Telegram lo devuelve en cada
+petición, en la cabecera `x-telegram-bot-api-secret-token`, y el código lo
+compara en tiempo constante.
+
+```bash
+openssl rand -hex 32
+```
+
+Tiene que ser **el mismo valor** en los dos sitios: en `supabase secrets set` y
+en el `setWebhook`. Si no coinciden, el bot responde `401` a todo.
+
+Telegram solo acepta `A-Z a-z 0-9 _ -`; `openssl rand -hex` cumple.
 
 ### Configuración que NO es secreta
 
