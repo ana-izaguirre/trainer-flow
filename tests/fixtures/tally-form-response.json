@@ -1,29 +1,29 @@
 {
-  "eventId": "71804ed2-dfd5-4242-9477-e2651f072c80",
+  "eventId": "b693cb5a-e605-43ff-86de-369efaf6e04d",
   "eventType": "FORM_RESPONSE",
-  "createdAt": "2026-09-16T09:51:21.972Z",
+  "createdAt": "2026-09-16T17:45:11.585Z",
   "data": {
-    "responseId": "Nqgd4rl",
-    "submissionId": "Nqgd4rl",
+    "responseId": "jepgppE",
+    "submissionId": "jepgppE",
     "respondentId": "VL7B1Mv",
     "formId": "GxAKrk",
     "formName": "Carlitos 4 Training ",
-    "createdAt": "2026-09-16T09:51:21.000Z",
-    "submissionPdfUrl": "https://api.tally.so/forms/GxAKrk/submissions/Nqgd4rl/pdf?accessToken=REDACTADO-EN-EL-FIXTURE&signature=REDACTADO-EN-EL-FIXTURE",
-    "submissionPreviewUrl": "https://tally.so/forms/GxAKrk/submissions/Nqgd4rl/preview?accessToken=REDACTADO-EN-EL-FIXTURE&signature=REDACTADO-EN-EL-FIXTURE",
+    "createdAt": "2026-09-16T17:45:11.000Z",
+    "submissionPdfUrl": "https://api.tally.so/forms/GxAKrk/submissions/jepgppE/pdf?accessToken=REDACTADO-EN-EL-FIXTURE&signature=REDACTADO-EN-EL-FIXTURE",
+    "submissionPreviewUrl": "https://tally.so/forms/GxAKrk/submissions/jepgppE/preview?accessToken=REDACTADO-EN-EL-FIXTURE&signature=REDACTADO-EN-EL-FIXTURE",
     "fields": [
       {
         "key": "question_dD9obK",
         "label": "Nombre",
         "type": "INPUT_TEXT",
-        "value": "ana"
+        "value": "Test"
       },
       {
         "key": "question_rdo9a2",
         "label": "Objetivo",
         "type": "MULTIPLE_CHOICE",
         "value": [
-          "7f847e84-a9df-4e3e-ad60-44fcc66bbc4d"
+          "65cf61b3-da85-4208-9dbf-0cfff3f6ecb1"
         ],
         "options": [
           {
@@ -53,75 +53,41 @@
         ]
       },
       {
-        "key": "question_DJ7oqZ",
+        "key": "question_2xBRLV",
         "label": "Nivel",
-        "type": "CHECKBOXES",
+        "type": "MULTIPLE_CHOICE",
         "value": [
-          "db510b9d-7849-4afa-a733-63db221635fb"
+          "ed3326d9-84b5-43cc-8be7-d8fb4cd9ab43"
         ],
         "options": [
           {
-            "id": "db510b9d-7849-4afa-a733-63db221635fb",
+            "id": "ed3326d9-84b5-43cc-8be7-d8fb4cd9ab43",
             "text": "Principiante (Menos de 6 meses)"
           },
           {
-            "id": "be333184-1e64-435e-ada7-14e4db4c0b8d",
+            "id": "00a79e94-07ba-4a33-b71f-c0af3e919ece",
             "text": "Intermedio (6 meses - 2 años)"
           },
           {
-            "id": "dd41105d-7cba-43cc-a649-f904d23f086a",
+            "id": "9dba6816-f8da-468f-afb9-d2166c1b08b4",
             "text": "Avanzado (Más de 2 años)"
           }
         ]
       },
       {
-        "key": "question_DJ7oqZ_db510b9d-7849-4afa-a733-63db221635fb",
-        "label": "Nivel (Principiante (Menos de 6 meses))",
-        "type": "CHECKBOXES",
-        "value": true
-      },
-      {
-        "key": "question_DJ7oqZ_be333184-1e64-435e-ada7-14e4db4c0b8d",
-        "label": "Nivel (Intermedio (6 meses - 2 años))",
-        "type": "CHECKBOXES",
-        "value": false
-      },
-      {
-        "key": "question_DJ7oqZ_dd41105d-7cba-43cc-a649-f904d23f086a",
-        "label": "Nivel (Avanzado (Más de 2 años))",
-        "type": "CHECKBOXES",
-        "value": false
-      },
-      {
-        "key": "question_l76jav",
+        "key": "question_oVDz4M",
         "label": "¿Cuántos días a la semana entrenas?",
-        "type": "INPUT_TEXT",
-        "value": "4"
+        "type": "LINEAR_SCALE",
+        "value": 3
       },
       {
         "key": "question_OJ7ZQg",
         "label": "Tiempo por sesión",
         "type": "MULTIPLE_CHOICE",
         "value": [
-          "0d3113a4-a890-4d25-ac70-de41c23be4a9"
+          "42564504-c505-4539-8a97-17cdac4cd110"
         ],
         "options": [
-          {
-            "id": "0d3113a4-a890-4d25-ac70-de41c23be4a9",
-            "text": "Sedentario (Trabajo de oficina, poco movimiento)"
-          },
-          {
-            "id": "f3665d44-a4b6-4304-90e9-776cfd91c447",
-            "text": "Ligero (Caminatas diarias, tareas del hogar)"
-          },
-          {
-            "id": "59265e6d-e4d6-49cc-98be-6d52408b5527",
-            "text": "Moderado (Activo, entreno regular)"
-          },
-          {
-            "id": "a3941fe0-2f91-4dc8-bf19-288dd23619ec",
-            "text": "Muy activo (Trabajo físico o alta exigencia)"
-          },
           {
             "id": "42564504-c505-4539-8a97-17cdac4cd110",
             "text": "20–30 minutos"
@@ -141,11 +107,39 @@
         ]
       },
       {
+        "key": "question_GBKb2z",
+        "label": "Estilo de vida",
+        "type": "MULTIPLE_CHOICE",
+        "value": [
+          "5a7a3f10-88c2-4947-808e-c2b25450c76a"
+        ],
+        "options": [
+          {
+            "id": "5a7a3f10-88c2-4947-808e-c2b25450c76a",
+            "text": "Sedentario (Trabajo de oficina, poco movimiento)"
+          },
+          {
+            "id": "0755edb2-23dd-4eaf-93a7-c772e7f32764",
+            "text": "Ligero (Caminatas diarias, tareas del hogar)"
+          },
+          {
+            "id": "ff285f9a-ed60-4895-8a73-9b67a7f304f1",
+            "text": "Moderado (Activo, entreno regular)"
+          },
+          {
+            "id": "25bb8b40-afff-4d99-b382-a767fbb86f51",
+            "text": "Muy activo (Trabajo físico o alta exigencia)"
+          }
+        ]
+      },
+      {
         "key": "question_4oK0JA",
         "label": "Equipamiento disponible",
         "type": "CHECKBOXES",
         "value": [
-          "1ee1c473-d6d0-4a2a-bea3-0d33ab3f2b25"
+          "1ee1c473-d6d0-4a2a-bea3-0d33ab3f2b25",
+          "d62809e7-bcbb-4a90-a055-50c2a42fe28a",
+          "9ffc5e38-6086-43d4-9f8f-55d8f4dea0a8"
         ],
         "options": [
           {
@@ -193,11 +187,31 @@
         "value": true
       },
       {
+        "key": "question_4oK0JA_dd962c26-5a9e-4a2d-91f2-e5059a1b7a32",
+        "label": "Equipamiento disponible (Mancuernas)",
+        "type": "CHECKBOXES",
+        "value": false
+      },
+      {
+        "key": "question_4oK0JA_d62809e7-bcbb-4a90-a055-50c2a42fe28a",
+        "label": "Equipamiento disponible (Banco)",
+        "type": "CHECKBOXES",
+        "value": true
+      },
+      {
+        "key": "question_4oK0JA_9ffc5e38-6086-43d4-9f8f-55d8f4dea0a8",
+        "label": "Equipamiento disponible (Cardio (cinta, bicicleta, elíptica, etc.))",
+        "type": "CHECKBOXES",
+        "value": true
+      },
+      {
         "key": "question_j7l46J",
         "label": "Lesiones, dolor o limitaciones",
         "type": "CHECKBOXES",
         "value": [
-          "0a4d77e0-b135-4fef-9a5f-07727898873f"
+          "866add61-8da6-4bea-8b5c-e21984930e3a",
+          "0a4d77e0-b135-4fef-9a5f-07727898873f",
+          "076c2a62-dc9b-434e-b132-44d61ac2b567"
         ],
         "options": [
           {
@@ -249,16 +263,28 @@
         "value": true
       },
       {
+        "key": "question_j7l46J_866add61-8da6-4bea-8b5c-e21984930e3a",
+        "label": "Lesiones, dolor o limitaciones (Espalda baja)",
+        "type": "CHECKBOXES",
+        "value": true
+      },
+      {
+        "key": "question_j7l46J_076c2a62-dc9b-434e-b132-44d61ac2b567",
+        "label": "Lesiones, dolor o limitaciones (Otra)",
+        "type": "CHECKBOXES",
+        "value": true
+      },
+      {
         "key": "question_2JKdaD",
         "label": "Cuéntanos brevemente qué debemos tener en cuenta.",
         "type": "TEXTAREA",
-        "value": "ninguna"
+        "value": "Nada"
       },
       {
         "key": "question_xPJbMv",
         "label": "¿Hay algo más que tu entrenador deba saber?",
         "type": "TEXTAREA",
-        "value": "n"
+        "value": "No"
       }
     ]
   }
