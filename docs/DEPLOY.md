@@ -139,14 +139,15 @@ arranque, así que hay que volver a registrar el webhook de Telegram. Pero eso
 **es una llamada a la API**, no un paso manual:
 
 ```bash
-# scripts/dev-tunnel.sh  (se escribirá en S-09)
-cloudflared tunnel --url http://localhost:54321 > tunnel.log 2>&1 &
-URL=$(grep -oE 'https://[a-z-]+\.trycloudflare\.com' tunnel.log | head -1)
-
-curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-  -d "url=${URL}/functions/v1/telegram-webhook" \
-  -d "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
+pnpm dev:tunnel
 ```
+
+`scripts/dev-tunnel.sh` abre el túnel, saca la URL del log, y registra el
+webhook contra ella. **Al salir con Ctrl-C borra el webhook**: si no, Telegram
+seguiría llamando a un túnel muerto y acumulando errores.
+
+Lee los dos secretos de `supabase/functions/.env`, que está en `.gitignore`.
+Si falta el archivo o una variable, lo dice por su nombre y no arranca.
 
 Un script, dos comandos. **La fricción desaparece.**
 
@@ -154,7 +155,7 @@ Un script, dos comandos. **La fricción desaparece.**
 
 | Cuándo | Qué |
 |---|---|
-| **S-09**, al crear el bot | Quick Tunnel + el script de arriba + **un bot de pruebas aparte del real** |
+| Al crear el bot | `pnpm dev:tunnel` + **un bot de pruebas aparte del real** |
 | Si la URL cambiante molesta | Named Tunnel con un dominio propio |
 | Producción | Nada de esto: las Edge Functions ya tienen URL pública |
 
