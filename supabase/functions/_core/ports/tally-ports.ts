@@ -5,6 +5,30 @@
  * se consigue. Quien las implementa vive en `_shared`.
  */
 
+/** Lo que `ingest_assessment` necesita para crear las cuatro filas. */
+export interface AssessmentToIngest {
+  readonly trainerId: string;
+  readonly fullName: string;
+  readonly linkToken: string;
+  /** El payload ya redactado: sin las URLs con credencial. */
+  readonly rawPayload: unknown;
+  readonly goal: string;
+  readonly level: string;
+  readonly daysPerWeek: number;
+  readonly sessionMinutes: number;
+  readonly equipment: string;
+  readonly hasLimitations: boolean;
+  readonly limitationsDetail: string | null;
+  readonly lifestyle: string | null;
+  readonly notes: string | null;
+}
+
+export interface IngestedIds {
+  readonly clientId: string;
+  readonly planId: string;
+  readonly versionId: string;
+}
+
 export interface TallyRepo {
   /**
    * Registra el evento. Devuelve `false` si ya se había procesado.
@@ -16,6 +40,17 @@ export interface TallyRepo {
   claimEvent(externalId: string, payload: unknown, requestId: string): Promise<boolean>;
 
   markProcessed(externalId: string): Promise<void>;
+
+  /**
+   * El entrenador. En V1 hay exactamente uno.
+   *
+   * `null` si todavía no tiene perfil, y entonces no se puede crear ningún
+   * cliente: `clients.trainer_id` es NOT NULL.
+   */
+  findTrainer(): Promise<{ readonly profileId: string; readonly chatId: number } | null>;
+
+  /** Crea cliente, evaluación, plan y primera versión. Todo o nada. */
+  ingestAssessment(input: AssessmentToIngest): Promise<IngestedIds>;
 }
 
 /**

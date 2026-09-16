@@ -7,6 +7,7 @@
  */
 import { assertEquals, assertStringIncludes, assertThrows } from 'jsr:@std/assert@1';
 import type { SignatureVerifier, TallyRepo } from '../_core/ports/tally-ports.ts';
+import type { TelegramSender } from '../_core/ports/telegram-ports.ts';
 import { createHandler, readDeps, type HandlerDeps } from './index.ts';
 
 const CUERPO = JSON.stringify({
@@ -38,9 +39,17 @@ function espia(firmaValida = true): Espia {
       return Promise.resolve(true);
     },
     markProcessed: () => Promise.resolve(),
+    findTrainer: () => Promise.resolve({ profileId: 'perfil-1', chatId: 99 }),
+    ingestAssessment: () =>
+      Promise.resolve({ clientId: 'c1', planId: 'p1', versionId: 'v1' }),
   };
 
-  return { deps: { verifier, repo: () => repo }, firmados, reclamados };
+  const sender: TelegramSender = {
+    sendMessage: () => Promise.resolve(),
+    answerCallback: () => Promise.resolve(),
+  };
+
+  return { deps: { verifier, repo: () => repo, sender: () => sender }, firmados, reclamados };
 }
 
 async function pedir(deps: HandlerDeps, request: Request): Promise<Response> {
@@ -122,7 +131,7 @@ Deno.test('un cuerpo vacío no lanza', async () => {
 });
 
 Deno.test('readDeps lanza nombrando la variable que falta', () => {
-  const previos = ['TALLY_SIGNING_SECRET', 'SUPABASE_URL'].map(
+  const previos = ['TALLY_SIGNING_SECRET', 'TELEGRAM_BOT_TOKEN', 'SUPABASE_URL'].map(
     (nombre) => [nombre, Deno.env.get(nombre)] as const,
   );
   for (const [nombre] of previos) Deno.env.delete(nombre);

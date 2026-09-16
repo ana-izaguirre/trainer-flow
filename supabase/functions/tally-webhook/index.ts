@@ -12,15 +12,20 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { SignatureVerifier, TallyRepo } from '../_core/ports/tally-ports.ts';
+import type { TelegramSender } from '../_core/ports/telegram-ports.ts';
 import { handleTallyWebhook, outcomeToStatus } from '../_core/tally/webhook.ts';
 import { createDb, createTallyRepo } from '../_shared/db.ts';
 import { requireEnv } from '../_shared/env.ts';
+import { newLinkToken } from '../_shared/link-token.ts';
 import { createLogger } from '../_shared/logger.ts';
+import { asSender, createTelegramClient } from '../_shared/telegram/client.ts';
 import { createSignatureVerifier, readSignatureHeader } from '../_shared/tally/signature.ts';
 
 export interface HandlerDeps {
   readonly verifier: SignatureVerifier;
   readonly repo: (requestId: string) => TallyRepo;
+  /** Para avisar al entrenador cuando una evaluación no se puede leer. */
+  readonly sender: (log: ReturnType<typeof createLogger>) => TelegramSender;
 }
 
 /**
@@ -31,9 +36,16 @@ export interface HandlerDeps {
  */
 export function readDeps(): HandlerDeps {
   const verifier = createSignatureVerifier(requireEnv('TALLY_SIGNING_SECRET'));
+  // El aviso de la regla 9 sale por Telegram, así que este webhook también
+  // necesita el bot.
+  const botToken = requireEnv('TELEGRAM_BOT_TOKEN');
   const db = createDb();
 
-  return { verifier, repo: (requestId) => createTallyRepo(db, requestId) };
+  return {
+    verifier,
+    repo: (requestId) => createTallyRepo(db, requestId),
+    sender: (log) => asSender(createTelegramClient(botToken, log)),
+  };
 }
 
 export function createHandler(deps: HandlerDeps): (request: Request) => Promise<Response> {
@@ -46,7 +58,13 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
 
     const outcome = await handleTallyWebhook(
       { rawBody, signature: readSignatureHeader(request.headers) },
-      { repo: deps.repo(requestId), verifier: deps.verifier, requestId },
+      {
+        repo: deps.repo(requestId),
+        verifier: deps.verifier,
+        sender: deps.sender(log),
+        newLinkToken,
+        requestId,
+      },
     );
 
     const durationMs = Date.now() - startedAt;

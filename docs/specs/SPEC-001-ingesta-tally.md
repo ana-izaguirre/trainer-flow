@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — parsing (S-12) y webhook seguro (S-13). Falta la escritura (S-14) |
+| **Estado** | **IMPLEMENTADA** (S-12, S-13, S-14) |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-12, S-13, S-14 |
 
@@ -14,7 +14,7 @@
 | Mapeo etiqueta → campo | ⚠️ Solo las etiquetas | ✅ S-12, cobertura 100% |
 | Lectura del sobre de Tally | ✅ **Sí** | ✅ S-12, contra un payload real |
 | Webhook, firma, idempotencia | — | ✅ S-13 |
-| Escritura: cliente, evaluación, plan | — | ⏳ S-14 |
+| Escritura: cliente, evaluación, plan | — | ✅ S-14 |
 
 ### El mapeo es configuración, no código
 

@@ -6,7 +6,7 @@
  */
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { Identity } from '../_core/domain/identity.ts';
-import type { TallyRepo } from '../_core/ports/tally-ports.ts';
+import type { AssessmentToIngest, IngestedIds, TallyRepo } from '../_core/ports/tally-ports.ts';
 import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
 import { requireEnv } from './env.ts';
 
@@ -103,5 +103,73 @@ export function createTallyRepo(db: Db, requestId: string): TallyRepo {
     claimEvent: (externalId, payload) =>
       claimWebhookEvent(db, 'tally', externalId, payload, requestId),
     markProcessed: (externalId) => markWebhookProcessed(db, 'tally', externalId),
+    findTrainer: () => findTrainer(db),
+    ingestAssessment: (input) => ingestAssessment(db, input, requestId),
   };
+}
+
+/**
+ * El entrenador. En V1 hay exactamente uno, así que se toma el más antiguo:
+ * si algún día hubiera dos, esto deja de servir y hay que pasar el
+ * `trainer_id` explícito.
+ */
+async function findTrainer(db: Db): Promise<{ profileId: string; chatId: number } | null> {
+  const { data } = await db
+    .from('profiles')
+    .select('id, telegram_user_id, telegram_chat_id')
+    .eq('role', 'trainer')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (data === null) return null;
+
+  return {
+    profileId: data.id as string,
+    // En un chat privado coinciden, pero son conceptos distintos: uno es
+    // quién eres y el otro dónde te escribo (ADR-009).
+    chatId: (data.telegram_chat_id as number | null) ?? (data.telegram_user_id as number),
+  };
+}
+
+/**
+ * Invoca `ingest_assessment`: cliente, evaluación, plan y primera versión, en
+ * una sola operación atómica.
+ *
+ * Los cuatro INSERT no se pueden hacer desde aquí uno a uno: supabase-js no
+ * abre transacciones de varias sentencias, y un fallo a mitad dejaría un
+ * cliente sin plan sin que nadie se entere.
+ */
+async function ingestAssessment(
+  db: Db,
+  input: AssessmentToIngest,
+  requestId: string,
+): Promise<IngestedIds> {
+  const { data, error } = await db
+    .rpc('ingest_assessment', {
+      p_trainer_id: input.trainerId,
+      p_full_name: input.fullName,
+      p_link_token: input.linkToken,
+      p_raw_payload: input.rawPayload,
+      p_goal: input.goal,
+      p_level: input.level,
+      p_days_per_week: input.daysPerWeek,
+      p_session_minutes: input.sessionMinutes,
+      p_equipment: input.equipment,
+      p_has_limitations: input.hasLimitations,
+      p_limitations_detail: input.limitationsDetail,
+      p_lifestyle: input.lifestyle,
+      p_notes: input.notes,
+      p_request_id: requestId,
+    })
+    .single();
+
+  // El mensaje NO lleva el detalle del error de Postgres: podría citar el
+  // valor de una columna, y una de ellas es información de salud.
+  if (error !== null || data === null) {
+    throw new Error(`No se pudo guardar la evaluación: ${error?.code ?? 'sin datos'}`);
+  }
+
+  const fila = data as { client_id: string; plan_id: string; version_id: string };
+  return { clientId: fila.client_id, planId: fila.plan_id, versionId: fila.version_id };
 }
