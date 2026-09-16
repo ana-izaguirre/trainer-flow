@@ -140,6 +140,27 @@ El assert sobre v1 es lo que prueba el punto §7.
 5. Un test que falla de forma intermitente se arregla o se borra.
    Nunca se ignora.
 
+## La capa Deno
+
+`_core` se prueba con Vitest en Node. `_shared` y los handlers **no pueden**:
+usan `Deno.env`, `fetch` e imports `npm:`. Son dos runners porque son dos
+runtimes, y eso sale del ADR-001, no de una preferencia.
+
+| Capa | Runner | Comando |
+|---|---|---|
+| `_core/` | Vitest (Node) | `pnpm test:run` |
+| `_shared/` · handlers | `deno test` | `pnpm deno:test` |
+
+Lo que prueba la capa Deno no es lógica —esa ya está al 100% en `_core`— sino
+que esté **bien enchufada**: que el nombre de la variable de entorno sea el
+correcto, que el del header sea el correcto, que un secreto que falta se note
+al arrancar y no con el primer mensaje real.
+
+`_shared` **no lleva umbral de cobertura**. Es I/O: parte de su código solo
+corre cuando la red falla de una forma concreta, y perseguir el 100% ahí
+produce tests que simulan el mundo en vez de probar el código. El umbral
+obligatorio sigue siendo el de `_core`.
+
 ## Comandos
 
 ```bash
