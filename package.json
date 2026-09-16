@@ -1,7 +1,7 @@
 {
   "name": "trainer-flow",
   "version": "0.1.0",
-  "description": "Automatizaci\u00f3n de rutinas para entrenadores personales, con revisi\u00f3n humana obligatoria",
+  "description": "Automatización de rutinas para entrenadores personales, con revisión humana obligatoria",
   "license": "ISC",
   "type": "module",
   "private": true,
@@ -18,7 +18,9 @@
     "db:reset": "supabase db reset",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
-    "lint:fix": "oxlint --fix"
+    "lint:fix": "oxlint --fix",
+    "deno:check": "deno check --config supabase/functions/deno.json $(find supabase/functions -name \"*.ts\" -not -name \"*.test.ts\")",
+    "deno:lint": "deno lint --config supabase/functions/deno.json supabase/functions"
   },
   "devEngines": {
     "packageManager": {
@@ -28,9 +30,11 @@
     }
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^2.1.8",
+    "deno": "^2.9.6",
     "oxlint": "^1.83.0",
     "pg": "^8.23.0",
     "supabase": "^2.117.0",
@@ -39,7 +43,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "deno"
     ]
   }
 }

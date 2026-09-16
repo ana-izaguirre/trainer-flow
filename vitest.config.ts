@@ -20,6 +20,11 @@ export default defineConfig({
     passWithNoTests: true,
     coverage: {
       provider: 'v8',
+      // `json-summary` lo exige la acción que comenta la cobertura en el PR.
+      // `json` añade el detalle por archivo con las líneas sin cubrir.
+      reporter: ['text', 'json-summary', 'json'],
+      // Se reporta siempre, también cuando no se ejecutó ningún test del archivo.
+      reportOnFailure: true,
       include: ['supabase/functions/_core/**/*.ts'],
       exclude: [
         'supabase/functions/_core/**/*.test.ts',
@@ -33,6 +38,8 @@ export default defineConfig({
         //                       separa a un cliente de los datos de otro.
         //   state-machine.ts  → hace imposible que una rutina llegue al
         //                       cliente sin aprobación humana.
+        //   validate-draft.ts → la frontera con la IA: nada entra al dominio
+        //                       sin pasar por aquí.
         'supabase/functions/_core/authorization.ts': {
           statements: 100,
           branches: 100,
@@ -40,6 +47,13 @@ export default defineConfig({
           lines: 100,
         },
         'supabase/functions/_core/domain/state-machine.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        // Frontera con la IA: todo lo que entra aquí es dato no confiable.
+        'supabase/functions/_core/domain/validate-draft.ts': {
           statements: 100,
           branches: 100,
           functions: 100,

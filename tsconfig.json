@@ -28,10 +28,14 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
+  // Node comprueba SOLO el dominio y los tests. `_shared/` y los handlers
+  // corren en Deno, usan `Deno.env`, `fetch` e imports `npm:`, y los verifica
+  // `pnpm deno:check` con el compilador de Deno.
   "include": [
-    "supabase/functions/**/*.ts",
+    "supabase/functions/_core/**/*.ts",
     "tests/**/*.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "vitest.integration.config.ts"
   ],
   "exclude": ["node_modules", "dist", "coverage"]
 }

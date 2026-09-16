@@ -2,17 +2,42 @@
 
 ## Secretos
 
-Nunca van a git. Se gestionan con `supabase secrets set`.
+### La regla: un solo sitio
+
+```
+Producción →  supabase secrets set NOMBRE=valor
+Local      →  supabase/functions/.env     (gitignored, sin plantilla)
+```
+
+**Ningún archivo versionado contiene un secreto, ni siquiera vacío.**
+`.env.example` no lleva los nombres de las claves a propósito: un hueco
+llamado `GEMINI_API_KEY=` es una invitación a pegarla ahí, y de ahí a un
+`git add -A` hay un paso.
+
+### Qué secretos necesita el sistema
 
 | Secreto | Uso |
 |---|---|
-| `GEMINI_API_KEY` | Solo en `_shared/ai/gemini-provider.ts`. Nunca en `_core` |
-| `TELEGRAM_BOT_TOKEN` | API de Telegram |
-| `TELEGRAM_WEBHOOK_SECRET` | Verificación de updates entrantes |
-| `TALLY_WEBHOOK_SECRET` | Verificación de firma de Tally |
-| `SUPABASE_SERVICE_ROLE_KEY` | Acceso de las Edge Functions |
+| Clave de la API del proveedor de IA | Solo en `_shared/ai/`. **Nunca en `_core`** |
+| Token del bot de Telegram | API de Telegram |
+| Secreto del webhook de Telegram | Verificación de updates entrantes |
+| Secreto del webhook de Tally | Verificación de firma |
+| `service_role` de Supabase | Acceso de las Edge Functions |
 
-`.env*` en `.gitignore`. Se versiona solo `.env.example`, con nombres y sin valores.
+### Configuración que NO es secreta
+
+El modelo del proveedor y los límites de la ventana de rate limit son
+configuración, no secretos. Pero viajan por el mismo mecanismo
+(`supabase secrets set`), porque es así como una Edge Function recibe
+variables de entorno. **Tampoco van a un `.env` del repositorio.**
+
+### Qué lo hace cumplir
+
+| Capa | Qué |
+|---|---|
+| `.gitignore` | `.env` y `.env.*` en **cualquier** directorio. Solo `.env.example` se versiona |
+| CI | Escanea el historial buscando secretos, y falla si hay un `.env` versionado |
+| Revisión | Un secreto en un archivo que va a commitearse es un bloqueante |
 
 ---
 

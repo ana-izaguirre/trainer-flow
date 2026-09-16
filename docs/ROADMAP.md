@@ -31,7 +31,7 @@ revés, el fallback siempre queda "para después".
 | **S-03** | Esquema, parte 2 | Planes, versiones, solicitudes, eventos, funciones |
 | **S-04** | RLS y tests | **SPEC-000 cerrada** — 44 tests en verde |
 
-## Bloque 2 — El dominio (S-05 → S-08)
+## Bloque 2 — El dominio (S-05 → S-08) ✅ COMPLETADO
 
 *Sin esto, nada de lo demás es seguro.*
 
@@ -39,8 +39,8 @@ revés, el fallback siempre queda "para después".
 |---|---|---|---|
 | **S-05** ✅ | Identidad y autorización (TDD) | `_core/authorization.ts` | **Cobertura 100%** verificada, 22 tests. **SPEC-009 parcial** |
 | **S-06** ✅ | Máquina de estados (TDD) | `_core/domain/state-machine.ts` | **Cobertura 100%**, 70 tests: 11 válidas + las 43 inválidas |
-| **S-07** | Modelo Workout y Draft (TDD) | `_core/domain/` + `validateDraft` | JSON roto, días incorrectos y sets fuera de rango, rechazados |
-| **S-08** | Plantillas | `_core/templates.ts` | Las 4 plantillas pasan `validateDraft`. Cero consultas a la base |
+| **S-07** ✅ | Modelo Workout y Draft (TDD) | `_core/domain/` + `validateDraft` | **Cobertura 100%**, 60 tests. Manual e IA se validan igual |
+| **S-08** ✅ | Plantillas | `_core/templates.ts` | 27 tests. Las 4 pasan `validateDraft`. Cero consultas a la base |
 
 ## Bloque 3 — Producto usable SIN IA (S-09 → S-11)
 
@@ -48,8 +48,8 @@ revés, el fallback siempre queda "para después".
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-09** | Bot de Telegram | Webhook, secreto, autorización por `chat_id` | Un `chat_id` desconocido es rechazado y registrado |
-| **S-10** | Editor por comandos | `_core/editor/commands.ts` | Crear, cargar plantilla, añadir y quitar ejercicios |
+| **S-09** ✅ | Bot de Telegram | Webhook, secreto, identidad, idempotencia | 79 tests. Un desconocido recibe respuesta neutra y queda registrado |
+| **S-10** ✅ | Editor y formateo | `_core/editor/` + `_core/telegram/format.ts` | 92 tests. Cobertura 100%. MarkdownV2 escapado y división a 4096 |
 | **S-11** | **E2E-1** | Flujo manual completo | **SPEC-008 cerrada.** Crear → editar → aprobar → enviar, **sin una sola llamada a la IA** |
 
 > 🎯 **Hito.** Aquí el producto ya sirve. Todo lo demás lo mejora.

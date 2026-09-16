@@ -2,7 +2,16 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — plantillas y validación implementadas (S-07, S-08) |
+
+## Resultado parcial
+
+| Pieza | Sesión | Estado |
+|---|---|---|
+| Modelo `Workout` y `validateDraft` | S-07 | ✅ 61 tests, cobertura 100% |
+| Plantillas (`_core/templates.ts`) | S-08 | ✅ 27 tests |
+| Editor por comandos | S-10 | ✅ 68 tests, cobertura 100% |
+| **E2E-1** (flujo manual completo) | S-11 | ⏳ |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-06, S-07 |
 
@@ -67,16 +76,26 @@ Manual     → WorkoutDraft { source: 'manual',   raw: unknown }  ─┘        
 
 ### Comandos del editor
 
-| Comando | Efecto |
-|---|---|
-| `/nueva <cliente>` | Crea el plan y muestra: IA · plantilla · desde cero |
-| `/plantillas` | Lista las plantillas aplicables |
-| `/usar <template_id>` | Carga la plantilla en una versión `DRAFT` |
-| `/dia <n> <foco>` | Añade o renombra un día |
-| `/add <n> <ejercicio> <series>x<reps> <descanso>` | Añade ejercicio al día `n` |
-| `/quitar <n> <índice>` | Elimina un ejercicio |
-| `/nota <n> <índice> <texto>` | Edita la nota de un ejercicio |
-| `/ver` | Muestra la versión actual formateada |
+| Comando | Efecto | Estado |
+|---|---|---|
+| `/nueva <cliente>` | Crea el plan y muestra: IA · plantilla · desde cero | ⏳ S-11 |
+| `/plantillas` | Lista las plantillas aplicables | ⏳ S-11 |
+| `/usar <template_id>` | Carga la plantilla en una versión `DRAFT` | ⏳ S-11 |
+| `/dia <n> <foco>` | Añade o renombra un día | ✅ |
+| `/add <n> <nombre> <series>x<reps> [descanso]` | Añade ejercicio al día `n` | ✅ |
+| `/quitar <n> <índice>` | Elimina un ejercicio | ✅ |
+| `/nota <n> <índice> [texto]` | Edita la nota; sin texto, la borra | ✅ |
+| `/ver` | Muestra la versión actual formateada | ⏳ S-11 |
+
+**El parser tolera cómo escribe una persona en el móvil:** espacios de más,
+`X` mayúscula, la `s` de segundos (`90s`), nombres de varias palabras. El
+descanso es opcional y vale 90 segundos por defecto.
+
+Lo que **no** tolera son valores fuera de rango: ahí devuelve un mensaje que
+explica la sintaxis esperada, no un error genérico.
+
+`/add` a un día que no existe **lo crea**, que es lo que espera quien escribe
+`/add 3 ...` sin haber hecho `/dia 3` antes.
 
 > **Limitación reconocida:** reordenar y duplicar días con comandos es incómodo.
 > Se difiere a la fase 2, cuando exista una interfaz visual. Con las plantillas
@@ -95,10 +114,19 @@ Manual     → WorkoutDraft { source: 'manual',   raw: unknown }  ─┘        
 5. Editar una versión en `DRAFT` la modifica **in-place**: no crea versión ni
    cambia estado.
 6. Editar una versión en `SENT` **no está permitido**: se crea `version + 1`.
-7. Las plantillas se filtran por días, nivel y equipamiento de la evaluación,
-   si existe. Sin evaluación, se listan todas.
+7. Las plantillas se **ordenan** por días, nivel y equipamiento — **no se
+   filtran**. Si se filtraran, un cliente con criterios poco comunes se
+   quedaría sin ninguna opción justo cuando la IA acaba de fallar, que es
+   exactamente el momento en que las plantillas tienen que estar ahí.
+   `templatesFor` nunca devuelve una lista vacía.
 8. **Nunca se selecciona una plantilla automáticamente** (§6). El entrenador
    elige siempre.
+9. **Si el cliente declaró limitaciones, `applyTemplate` inyecta un aviso.**
+   Una plantilla no sabe nada del hombro de nadie. Sin el aviso, el borrador
+   fallaría `validateDraft` con `LIMITATIONS_NOT_ACKNOWLEDGED` y el entrenador
+   no podría ni cargarlo. Con él, pasa la misma validación que exigimos a la
+   IA y el recordatorio queda a la vista. **Qué ajustar sigue siendo criterio
+   del entrenador.**
 
 ## 5. Estados
 
@@ -145,6 +173,10 @@ DRAFT ── EDIT ──► DRAFT   (in-place)
   ENTONCES no se ejecuta ninguna consulta a PostgreSQL.
 - **CA-8** — DADO una evaluación de 4 días nivel intermedio, CUANDO se listan
   las plantillas, ENTONCES `upper-lower-4d` aparece primero.
+- **CA-9** — DADO criterios que no encajan con ninguna plantilla, CUANDO se
+  listan, ENTONCES se devuelven **todas**, nunca una lista vacía.
+- **CA-10** — DADO un cliente con limitaciones, CUANDO se carga una plantilla,
+  ENTONCES el borrador incluye un aviso y pasa `validateDraft`.
 
 ## 9. Tests
 
@@ -163,9 +195,10 @@ DRAFT ── EDIT ──► DRAFT   (in-place)
 ```
 supabase/functions/_core/templates.ts
 supabase/functions/_core/templates.test.ts
-supabase/functions/_core/domain/draft.ts
-supabase/functions/_core/domain/validate-draft.ts
-supabase/functions/_core/domain/validate-draft.test.ts
+supabase/functions/_core/domain/workout.ts          ✅ S-07
+supabase/functions/_core/domain/draft.ts            ✅ S-07
+supabase/functions/_core/domain/validate-draft.ts   ✅ S-07
+supabase/functions/_core/domain/validate-draft.test.ts ✅ S-07
 supabase/functions/_core/editor/commands.ts
 supabase/functions/_core/editor/commands.test.ts
 supabase/functions/telegram-webhook/handlers/editor.ts

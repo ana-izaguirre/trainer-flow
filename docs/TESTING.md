@@ -36,7 +36,7 @@ nada. Es el motivo de la regla del ADR-001.
 | `authorization.ts` | Cada regla: permitido **y cada caso denegado**. Cliente no ve `DRAFT`. Cambiar un ID no da acceso. |
 | `state-machine.ts` | Las 11 transiciones válidas. **Todas las inválidas rechazadas.** Que `DRAFT → SENT` sea imposible. |
 | `validate-draft.ts` | Draft válido. JSON roto. Campos faltantes. Días ≠ los pedidos. `sets` fuera de rango. **Manual inválido se rechaza igual que IA inválida.** |
-| `templates.ts` | Las 4 plantillas pasan `validateDraft`. Filtrado por criterios. |
+| `templates.ts` | Las 4 plantillas pasan `validateDraft`. Ordenación por criterios. **Nunca devuelve lista vacía.** |
 | `editor/commands.ts` | Cada comando del editor. Comando sobre versión `SENT` rechazado. |
 | `ai/rate-limit.ts` | Bajo el límite. En el límite exacto. Sobre el límite. Ventana expirada. |
 | `ai/prompt-builder.ts` | Incluye las limitaciones del cliente siempre. |

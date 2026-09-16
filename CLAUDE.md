@@ -122,11 +122,17 @@ Ver ADR-010.
 
 ## Secretos
 
-Nunca van a git. Se gestionan con `supabase secrets set`:
-`GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
-`TALLY_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`.
+**Un solo sitio:** `supabase secrets set` en producción,
+`supabase/functions/.env` (gitignored, sin plantilla) en local.
 
-Un secreto en un archivo que va a commitearse es un bloqueante.
+**Ningún archivo versionado los contiene, ni siquiera vacíos.** `.env.example`
+no lleva los nombres de las claves: un hueco llamado `GEMINI_API_KEY=` es una
+invitación a pegarla ahí.
+
+La lista de qué secretos necesita el sistema está en `docs/SECURITY.md`.
+
+Un secreto en un archivo que va a commitearse es un bloqueante. El CI lo busca
+en el historial y falla si lo encuentra.
 
 ## Definition of Done
 
