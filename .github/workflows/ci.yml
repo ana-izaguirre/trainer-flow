@@ -6,33 +6,33 @@ on:
   pull_request:
     branches: [main]
 
-# Un push nuevo cancela el CI anterior de la misma rama… salvo en `main`.
+# A new push cancels the previous run on the same branch… except on `main`.
 #
-# En una rama de trabajo cancelar es lo correcto: el commit viejo ya no
-# importa y se ahorran minutos. En `main` es lo contrario: cancelar deja un
-# commit de la rama principal SIN VERIFICAR PARA SIEMPRE, y nadie se entera
-# porque un run cancelado se parece a uno fallido.
+# On a working branch cancelling is right: the old commit no longer matters and
+# it saves minutes. On `main` it is the opposite — cancelling leaves a commit on
+# the main branch UNVERIFIED FOREVER, and nobody notices because a cancelled run
+# looks a lot like a failed one.
 #
-# Pasó de verdad: seis PR mergeados en noventa segundos dejaron cuatro
-# commits de `main` sin comprobar.
+# This actually happened: six PRs merged in ninety seconds left four commits on
+# `main` unchecked.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Por qué TRES jobs y no uno
+# Why THREE jobs and not one
 #
-# GitHub muestra una fila por JOB, no por paso. Con todo dentro de «Verificar»,
-# un fallo se ve como «Verificar ✗» y hay que abrirlo para saber si fue un
-# tipo, el linter o un test.
+# GitHub shows one row per JOB, not per step. With everything inside a single
+# "Verify" job, a failure reads as "Verify ✗" and you have to open it to find
+# out whether it was a type, the linter or a test.
 #
-# Tres es el punto de equilibrio: cada uno dice en su nombre qué protege, y no
-# se paga la instalación de dependencias seis veces.
+# Three is the sweet spot: each name says what it guards, without paying for
+# dependency installation six times over.
 # ─────────────────────────────────────────────────────────────────────────────
 
 jobs:
-  tipos-y-lint:
-    name: Tipos y lint
+  types-and-lint:
+    name: Types and lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,43 +45,44 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: Tipos · tsc sobre _core y tests
+      - name: Types · tsc over _core and tests
         run: pnpm typecheck
 
-      # Comprueba que el MISMO _core compila también bajo Deno, que es la
-      # premisa del ADR-001 y sin esto sería una suposición.
-      - name: Tipos · Deno sobre las Edge Functions (ADR-001)
+      # Proves the SAME `_core` also compiles under Deno, which is the premise
+      # of ADR-001 and would otherwise be an assumption.
+      - name: Types · Deno over the Edge Functions (ADR-001)
         run: pnpm deno:check
 
-      # oxlint hace cumplir el aislamiento de _core: sin Deno, sin process,
-      # sin fetch, sin imports npm:/jsr:/https: ni de _shared.
-      - name: Lint · oxlint, con el aislamiento de _core
+      # oxlint enforces the isolation of `_core`: no Deno, no process, no fetch,
+      # no npm:/jsr:/https: imports and nothing from `_shared`.
+      - name: Lint · oxlint, including the _core isolation rules
         run: pnpm lint
 
       - name: Lint · Deno
         run: pnpm deno:lint
 
   tests:
-    name: Tests y cobertura
+    name: Tests and coverage
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
       pull-requests: write
 
-    # PostgreSQL pelado, no Supabase: tests/sql/00-supabase-roles.sql reproduce
-    # los roles que un proyecto de Supabase trae de fábrica.
+    # Bare PostgreSQL, not Supabase: tests/sql/00-supabase-roles.sql recreates
+    # the roles a Supabase project ships with.
     #
-    # ┌─ `postgres:postgres` DE ABAJO NO ES UN SECRETO ────────────────────────┐
-    # │ Es un contenedor que GitHub crea y destruye dentro del runner. Escucha │
-    # │ en localhost de esa VM efímera: no hay nada que alcanzar desde fuera,  │
-    # │ y la base se crea vacía, se llena con las migraciones y se tira.       │
+    # ┌─ THE `postgres:postgres` BELOW IS NOT A SECRET ────────────────────────┐
+    # │ It is a container GitHub creates and destroys inside the runner. It    │
+    # │ listens on localhost of that ephemeral VM: there is nothing reachable  │
+    # │ from outside, and the database is created empty, filled by the         │
+    # │ migrations and thrown away.                                            │
     # │                                                                        │
-    # │ La prueba de si algo es un secreto es si conocerlo da acceso a algo.   │
-    # │ Aquí no hay a qué.                                                     │
+    # │ The test for whether something is a secret is whether knowing it gives │
+    # │ access to anything. Here there is nothing to access.                   │
     # │                                                                        │
-    # │ Las credenciales de Supabase de verdad NO viven aquí ni en ningún      │
-    # │ archivo del repositorio: van por `supabase secrets set`. Ver           │
+    # │ The real Supabase credentials do NOT live here or in any file in the   │
+    # │ repository: they go through `supabase secrets set`. See                │
     # │ docs/SECURITY.md.                                                      │
     # └────────────────────────────────────────────────────────────────────────┘
     services:
@@ -111,80 +112,80 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # Falla si la cobertura global, o la de authorization.ts,
-      # state-machine.ts o validate-draft.ts, baja del 100%.
-      - name: Unit · _core, con cobertura del 100% obligatoria
+      # Fails if global coverage, or that of authorization.ts, state-machine.ts
+      # or validate-draft.ts, drops below 100%.
+      - name: Unit · _core, with mandatory 100% coverage
         run: pnpm test:coverage
 
-      # `_shared` y los handlers usan Deno.env e imports npm:, así que desde
-      # Node no se pueden probar. Aquí se comprueba el CABLEADO: el nombre de
-      # una variable, el del header, que un secreto que falta se note al
-      # arrancar (SPEC-011).
-      - name: Deno · _shared y los handlers (el cableado)
+      # `_shared` and the handlers use Deno.env and npm: imports, so they cannot
+      # be tested from Node. This is where the WIRING is checked: the name of an
+      # environment variable, the name of a header, that a missing secret is
+      # noticed at startup (SPEC-011).
+      - name: Deno · _shared and the handlers (the wiring)
         run: pnpm deno:test
 
-      - name: Integración y E2E · contra PostgreSQL
+      - name: Integration and E2E · against PostgreSQL
         run: pnpm test:integration
 
-      # `always()` para que la tabla aparezca también cuando un umbral falla:
-      # ahí es cuando más falta hace verla.
-      - name: Comentar la cobertura en el PR
+      # `always()` so the table also shows up when a threshold fails: that is
+      # exactly when it is most useful.
+      - name: Comment coverage on the PR
         if: always()
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           comment-on: pr
 
-  secretos:
-    name: Buscar secretos
+  secrets:
+    name: Secret scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Un secreto commiteado es un bloqueante (CLAUDE.md).
-      - name: Escanear el historial
+      # A committed secret is a blocker (CLAUDE.md).
+      - name: Scan the history
         run: |
-          patron='(gemini|telegram|tally|supabase)[_a-z]*(key|token|secret)[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_-]{16,}'
-          # Se escanea TAMBIÉN .github/workflows. Un secreto pegado en el CI
-          # es tan secreto como uno pegado en el código, y es un sitio donde
-          # es fácil que aparezca "solo para probar".
-          if git grep -rniE "$patron" -- ':!pnpm-lock.yaml'; then
-            echo "::error::Posible secreto en el repositorio"
+          pattern='(gemini|telegram|tally|supabase)[_a-z]*(key|token|secret)[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_-]{16,}'
+          # .github/workflows IS scanned too. A secret pasted into CI is just as
+          # much a secret as one pasted into the code, and CI is a place where
+          # one easily shows up "just to test something".
+          if git grep -rniE "$pattern" -- ':!pnpm-lock.yaml'; then
+            echo "::error::Possible secret in the repository"
             exit 1
           fi
-          echo "Sin secretos aparentes."
+          echo "No secrets found."
 
-      # Las URLs de descarga de Tally llevan un JWT dentro. Ni en un fixture.
-      - name: Comprobar que ningún JWT quedó en el repositorio
+      # Tally's download URLs carry a JWT inside. Not even in a fixture.
+      - name: Check no JWT was left in the repository
         run: |
           if git grep -rnE 'eyJ[A-Za-z0-9_-]{10,}\.' -- ':!pnpm-lock.yaml'; then
-            echo "::error::Hay un JWT en el repositorio"
+            echo "::error::There is a JWT in the repository"
             exit 1
           fi
-          echo "Ningún JWT."
+          echo "No JWTs."
 
-      # Cualquier .env en cualquier directorio, no solo en la raíz.
-      # Único permitido: .env.example, que no contiene secretos ni sus nombres.
-      - name: Comprobar que ningún .env está versionado
+      # Any .env in any directory, not just the root. The only one allowed is
+      # .env.example, which contains no secrets and not even their names.
+      - name: Check no .env is tracked
         run: |
           tracked=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '^\.env\.example$' || true)
           if [ -n "$tracked" ]; then
-            echo "::error::Hay archivos .env versionados:"
+            echo "::error::Tracked .env files:"
             echo "$tracked"
             exit 1
           fi
-          echo "Ningún .env versionado."
+          echo "No tracked .env files."
 
-      # .env.example nunca debe llevar el nombre de una clave: un hueco vacío
-      # llamado GEMINI_API_KEY= es una invitación a pegarla ahí.
-      - name: Comprobar que .env.example no declara secretos
+      # .env.example must never carry the name of a key: an empty slot called
+      # GEMINI_API_KEY= is an invitation to paste one there.
+      - name: Check .env.example declares no secrets
         run: |
-          declarados=$(grep -vE '^[[:space:]]*#' .env.example \
+          declared=$(grep -vE '^[[:space:]]*#' .env.example \
             | grep -iE '^[[:space:]]*[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD)[A-Z_]*=' || true)
-          if [ -n "$declarados" ]; then
-            echo "::error::.env.example declara variables de secreto:"
-            echo "$declarados"
+          if [ -n "$declared" ]; then
+            echo "::error::.env.example declares secret variables:"
+            echo "$declared"
             exit 1
           fi
-          echo ".env.example limpio."
+          echo ".env.example is clean."

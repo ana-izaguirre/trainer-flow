@@ -220,3 +220,56 @@ describe('ingest_assessment', () => {
     expect(code).toBe(PG.INSUFFICIENT_PRIVILEGE);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('trazabilidad de extremo a extremo', () => {
+  it('un request_id cruza el webhook y el evento del plan', async () => {
+    // Es el criterio de S-26: poder seguir UNA petición desde que entra hasta
+    // lo que dejó escrito. Sin esto, «llegó una evaluación y algo pasó» no se
+    // puede reconstruir.
+    const trainerId = await createProfile(db, 'trainer');
+    const requestId = '11111111-2222-3333-4444-555555555555';
+
+    await db.query(
+      `INSERT INTO webhook_events (source, external_id, payload, request_id)
+       VALUES ('tally', 'evt-1', '{}'::jsonb, $1)`,
+      [requestId],
+    );
+
+    const { rows } = await db.query<Ids>(
+      // Los tipos van explícitos: con catorce argumentos posicionales
+      // Postgres no puede resolver la sobrecarga solo.
+      `SELECT * FROM ingest_assessment(
+         $1::uuid, 'Carlos'::text, 'token_de_32_caracteres_exactos_a'::text, '{}'::jsonb,
+         'Fuerza'::text, 'beginner'::text, 4::smallint, 60::smallint, 'Mancuernas'::text,
+         false, null::text, null::text, null::text, $2::uuid
+       )`,
+      [trainerId, requestId],
+    );
+
+    const { rows: rastro } = await db.query<{ tabla: string }>(
+      `SELECT 'webhook_events' AS tabla FROM webhook_events WHERE request_id = $1
+       UNION ALL
+       SELECT 'plan_events' FROM plan_events WHERE request_id = $1`,
+      [requestId],
+    );
+
+    expect(rastro.map((r) => r.tabla).toSorted()).toEqual(['plan_events', 'webhook_events']);
+    expect(rows[0]!.plan_id).toBeTruthy();
+  });
+
+  it('el detalle de salud NO viaja al evento del plan', async () => {
+    // plan_events.metadata es lo que más se mira al depurar. Si el detalle de
+    // una lesión acabara ahí, estaría en todas partes.
+    const trainerId = await createProfile(db, 'trainer');
+
+    await ingest(trainerId, { limitaciones: true, detalle: 'molestia de rodilla derecha' });
+
+    const { rows } = await db.query<{ todo: string }>(
+      `SELECT coalesce(string_agg(metadata::text, ' '), '') AS todo FROM plan_events`,
+    );
+
+    expect(rows[0]!.todo).not.toContain('rodilla');
+  });
+});
