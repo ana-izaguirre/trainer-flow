@@ -24,6 +24,19 @@ jobs:
     # Los tests de integración corren contra PostgreSQL pelado, no contra
     # Supabase: tests/sql/00-supabase-roles.sql reproduce los roles que un
     # proyecto de Supabase trae de fábrica. Por eso basta un contenedor.
+    #
+    # ┌─ `postgres:postgres` DE ABAJO NO ES UN SECRETO ────────────────────────┐
+    # │ Es un contenedor que GitHub crea y destruye dentro del runner. Escucha │
+    # │ en localhost de esa VM efímera: no hay nada que alcanzar desde fuera,  │
+    # │ y la base se crea vacía, se llena con las migraciones y se tira.       │
+    # │                                                                        │
+    # │ La prueba de si algo es un secreto es si conocerlo da acceso a algo.   │
+    # │ Aquí no hay a qué.                                                     │
+    # │                                                                        │
+    # │ Las credenciales de Supabase de verdad NO viven aquí ni en ningún      │
+    # │ archivo del repositorio: van por `supabase secrets set`. Ver           │
+    # │ docs/SECURITY.md.                                                      │
+    # └────────────────────────────────────────────────────────────────────────┘
     services:
       postgres:
         image: postgres:16-alpine
@@ -103,7 +116,10 @@ jobs:
       - name: Escanear el historial
         run: |
           patron='(gemini|telegram|tally|supabase)[_a-z]*(key|token|secret)[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_-]{16,}'
-          if git grep -rniE "$patron" -- ':!pnpm-lock.yaml' ':!.github/workflows'; then
+          # Se escanea TAMBIÉN .github/workflows. Un secreto pegado en el CI
+          # es tan secreto como uno pegado en el código, y es un sitio donde
+          # es fácil que aparezca "solo para probar".
+          if git grep -rniE "$patron" -- ':!pnpm-lock.yaml'; then
             echo "::error::Posible secreto en el repositorio"
             exit 1
           fi

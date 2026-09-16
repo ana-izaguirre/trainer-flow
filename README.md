@@ -1,8 +1,20 @@
 # 🏋️ TrainerFlow
 
+[![CI](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml)
+[![Cobertura](https://img.shields.io/badge/cobertura-100%25-brightgreen)](docs/TESTING.md)
+[![Tests](https://img.shields.io/badge/tests-513%20unit%20%2B%2056%20integraci%C3%B3n-blue)](docs/TESTING.md)
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-estricto-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Deno](https://img.shields.io/badge/Deno-Edge%20Functions-70FFAF?logo=deno&logoColor=black)](supabase/functions/deno.json)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](docs/DATA-MODEL.md)
+[![SDD](https://img.shields.io/badge/m%C3%A9todo-Spec%20Driven%20Development-8A63D2)](docs/specs/)
+
 Herramienta que ayuda a un entrenador personal a crear y hacer seguimiento de
 rutinas — **manualmente, con plantillas o con IA**, sin quitarle nunca la
 decisión final.
+
+> El badge de cobertura no es decorativo: si baja del 100%, **el CI se pone
+> rojo**. El umbral está en `vitest.config.ts`.
 
 ---
 
@@ -246,7 +258,7 @@ filas**.
 | 1 · Cimientos | S-01 → S-04 | ✅ Esquema, RLS, migraciones |
 | 2 · El dominio | S-05 → S-08 | ✅ Autorización, estados, validación, plantillas |
 | 3 · Producto usable **sin IA** | S-09 → S-11 | ✅ **Hito alcanzado** |
-| 4 · Ingesta | S-12 → S-14 | ⬜ |
+| 4 · Ingesta | S-12 → S-14 | 🟡 S-12 hecha. Falta el webhook (S-13, S-14) |
 | 5 · La IA | S-15 → S-18 | ⬜ |
 | 6 · El cliente | S-19 → S-22 | ⬜ |
 | 7 · Ciclo completo | S-23 → S-25 | ⬜ |
@@ -271,9 +283,11 @@ Si la cobertura de cualquiera baja del 100%, **el CI se pone rojo**.
 | Spec | Estado |
 |---|---|
 | SPEC-000 · Esquema | ✅ Implementada |
-| SPEC-008 · Manual y plantillas | 🟡 Parcial (validación y plantillas) |
-| SPEC-009 · Identidad y autorización | 🟡 Parcial (el core) |
-| SPEC-001 a 007, 010 | 📝 Borrador |
+| SPEC-001 · Ingesta de Tally | 🟡 Parcial (validación, mapeo y sobre) |
+| SPEC-003 · Revisión en Telegram | 🟡 Parcial (webhook y parsing) |
+| SPEC-008 · Manual y plantillas | 🟡 Parcial (dominio completo y E2E-1) |
+| SPEC-009 · Identidad y autorización | 🟡 Parcial (core + webhook) |
+| SPEC-002, 004 a 007, 010 | 📝 Borrador |
 
 Una spec toca varias capas, así que se cierra en varias sesiones. `SPEC-009`
 define las reglas de autorización **y** cómo el webhook resuelve la identidad:

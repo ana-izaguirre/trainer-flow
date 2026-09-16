@@ -1,0 +1,265 @@
+{
+  "eventId": "71804ed2-dfd5-4242-9477-e2651f072c80",
+  "eventType": "FORM_RESPONSE",
+  "createdAt": "2026-09-16T09:51:21.972Z",
+  "data": {
+    "responseId": "Nqgd4rl",
+    "submissionId": "Nqgd4rl",
+    "respondentId": "VL7B1Mv",
+    "formId": "GxAKrk",
+    "formName": "Carlitos 4 Training ",
+    "createdAt": "2026-09-16T09:51:21.000Z",
+    "submissionPdfUrl": "https://api.tally.so/forms/GxAKrk/submissions/Nqgd4rl/pdf?accessToken=REDACTADO-EN-EL-FIXTURE&signature=REDACTADO-EN-EL-FIXTURE",
+    "submissionPreviewUrl": "https://tally.so/forms/GxAKrk/submissions/Nqgd4rl/preview?accessToken=REDACTADO-EN-EL-FIXTURE&signature=REDACTADO-EN-EL-FIXTURE",
+    "fields": [
+      {
+        "key": "question_dD9obK",
+        "label": "Nombre",
+        "type": "INPUT_TEXT",
+        "value": "ana"
+      },
+      {
+        "key": "question_rdo9a2",
+        "label": "Objetivo",
+        "type": "MULTIPLE_CHOICE",
+        "value": [
+          "7f847e84-a9df-4e3e-ad60-44fcc66bbc4d"
+        ],
+        "options": [
+          {
+            "id": "7f847e84-a9df-4e3e-ad60-44fcc66bbc4d",
+            "text": "Pérdida de grasa"
+          },
+          {
+            "id": "c79f25a3-1dc2-404c-be37-937f62d3981f",
+            "text": "Ganancia muscular"
+          },
+          {
+            "id": "65cf61b3-da85-4208-9dbf-0cfff3f6ecb1",
+            "text": "Fuerza"
+          },
+          {
+            "id": "ba4bfd26-9025-43de-8261-27887db50c5f",
+            "text": "Recomposición corporal"
+          },
+          {
+            "id": "cd6977fc-980a-42e6-b1a3-e5613c519638",
+            "text": "Resistencia/condición física"
+          },
+          {
+            "id": "3e9ea50e-66db-4596-83e5-75beb65d3c64",
+            "text": "Otro"
+          }
+        ]
+      },
+      {
+        "key": "question_DJ7oqZ",
+        "label": "Nivel",
+        "type": "CHECKBOXES",
+        "value": [
+          "db510b9d-7849-4afa-a733-63db221635fb"
+        ],
+        "options": [
+          {
+            "id": "db510b9d-7849-4afa-a733-63db221635fb",
+            "text": "Principiante (Menos de 6 meses)"
+          },
+          {
+            "id": "be333184-1e64-435e-ada7-14e4db4c0b8d",
+            "text": "Intermedio (6 meses - 2 años)"
+          },
+          {
+            "id": "dd41105d-7cba-43cc-a649-f904d23f086a",
+            "text": "Avanzado (Más de 2 años)"
+          }
+        ]
+      },
+      {
+        "key": "question_DJ7oqZ_db510b9d-7849-4afa-a733-63db221635fb",
+        "label": "Nivel (Principiante (Menos de 6 meses))",
+        "type": "CHECKBOXES",
+        "value": true
+      },
+      {
+        "key": "question_DJ7oqZ_be333184-1e64-435e-ada7-14e4db4c0b8d",
+        "label": "Nivel (Intermedio (6 meses - 2 años))",
+        "type": "CHECKBOXES",
+        "value": false
+      },
+      {
+        "key": "question_DJ7oqZ_dd41105d-7cba-43cc-a649-f904d23f086a",
+        "label": "Nivel (Avanzado (Más de 2 años))",
+        "type": "CHECKBOXES",
+        "value": false
+      },
+      {
+        "key": "question_l76jav",
+        "label": "¿Cuántos días a la semana entrenas?",
+        "type": "INPUT_TEXT",
+        "value": "4"
+      },
+      {
+        "key": "question_OJ7ZQg",
+        "label": "Tiempo por sesión",
+        "type": "MULTIPLE_CHOICE",
+        "value": [
+          "0d3113a4-a890-4d25-ac70-de41c23be4a9"
+        ],
+        "options": [
+          {
+            "id": "0d3113a4-a890-4d25-ac70-de41c23be4a9",
+            "text": "Sedentario (Trabajo de oficina, poco movimiento)"
+          },
+          {
+            "id": "f3665d44-a4b6-4304-90e9-776cfd91c447",
+            "text": "Ligero (Caminatas diarias, tareas del hogar)"
+          },
+          {
+            "id": "59265e6d-e4d6-49cc-98be-6d52408b5527",
+            "text": "Moderado (Activo, entreno regular)"
+          },
+          {
+            "id": "a3941fe0-2f91-4dc8-bf19-288dd23619ec",
+            "text": "Muy activo (Trabajo físico o alta exigencia)"
+          },
+          {
+            "id": "42564504-c505-4539-8a97-17cdac4cd110",
+            "text": "20–30 minutos"
+          },
+          {
+            "id": "1fbe6d23-69d5-4d5c-ab41-e3864bd78c91",
+            "text": "30–45 minutos"
+          },
+          {
+            "id": "73eb9c4a-2fb4-4ae5-9d19-9c12ad16921e",
+            "text": "45–60 minutos"
+          },
+          {
+            "id": "b8c1aa06-8298-4a46-be88-2ebefd694b02",
+            "text": "Más de 60 minutos"
+          }
+        ]
+      },
+      {
+        "key": "question_4oK0JA",
+        "label": "Equipamiento disponible",
+        "type": "CHECKBOXES",
+        "value": [
+          "1ee1c473-d6d0-4a2a-bea3-0d33ab3f2b25"
+        ],
+        "options": [
+          {
+            "id": "1ee1c473-d6d0-4a2a-bea3-0d33ab3f2b25",
+            "text": "Sin equipamiento"
+          },
+          {
+            "id": "dd962c26-5a9e-4a2d-91f2-e5059a1b7a32",
+            "text": "Mancuernas"
+          },
+          {
+            "id": "9b26b7d7-6db2-4d13-a72e-e36c5e2ad2e6",
+            "text": "Barra y discos"
+          },
+          {
+            "id": "f3aa738c-d797-406e-aa42-4bb014fd0f0a",
+            "text": "Bandas elásticas"
+          },
+          {
+            "id": "d62809e7-bcbb-4a90-a055-50c2a42fe28a",
+            "text": "Banco"
+          },
+          {
+            "id": "1ce7f34d-eb4b-4219-a840-c5431fe81dc5",
+            "text": "Kettlebell"
+          },
+          {
+            "id": "e53f662e-ea11-451b-bde4-fd9b1e827f0c",
+            "text": "Máquinas de gimnasio"
+          },
+          {
+            "id": "9ffc5e38-6086-43d4-9f8f-55d8f4dea0a8",
+            "text": "Cardio (cinta, bicicleta, elíptica, etc.)"
+          },
+          {
+            "id": "e90d4fdf-e359-4927-9312-41e74532a9d6",
+            "text": "Otro"
+          }
+        ]
+      },
+      {
+        "key": "question_4oK0JA_1ee1c473-d6d0-4a2a-bea3-0d33ab3f2b25",
+        "label": "Equipamiento disponible (Sin equipamiento)",
+        "type": "CHECKBOXES",
+        "value": true
+      },
+      {
+        "key": "question_j7l46J",
+        "label": "Lesiones, dolor o limitaciones",
+        "type": "CHECKBOXES",
+        "value": [
+          "0a4d77e0-b135-4fef-9a5f-07727898873f"
+        ],
+        "options": [
+          {
+            "id": "0a4d77e0-b135-4fef-9a5f-07727898873f",
+            "text": "Ninguna"
+          },
+          {
+            "id": "866add61-8da6-4bea-8b5c-e21984930e3a",
+            "text": "Espalda baja"
+          },
+          {
+            "id": "d0706200-ea0b-40dc-ab88-edc7209cc2c1",
+            "text": "Cuello"
+          },
+          {
+            "id": "92938702-8b72-4f11-9700-69096e7a49ad",
+            "text": "Hombro"
+          },
+          {
+            "id": "ce874c94-ef57-476f-8992-c0e9544d09b3",
+            "text": "Codo"
+          },
+          {
+            "id": "37ac2a90-dfbd-4aff-9f9e-e312b115b2df",
+            "text": "Muñeca/mano"
+          },
+          {
+            "id": "461d8749-6954-461d-aeea-456f15f59338",
+            "text": "Cadera"
+          },
+          {
+            "id": "96be9f91-0502-4923-ac1d-987449bf052d",
+            "text": "Rodilla"
+          },
+          {
+            "id": "ba2e3165-15ae-456c-a1b0-9977cc2eaa21",
+            "text": "Tobillo/pie"
+          },
+          {
+            "id": "076c2a62-dc9b-434e-b132-44d61ac2b567",
+            "text": "Otra"
+          }
+        ]
+      },
+      {
+        "key": "question_j7l46J_0a4d77e0-b135-4fef-9a5f-07727898873f",
+        "label": "Lesiones, dolor o limitaciones (Ninguna)",
+        "type": "CHECKBOXES",
+        "value": true
+      },
+      {
+        "key": "question_2JKdaD",
+        "label": "Cuéntanos brevemente qué debemos tener en cuenta.",
+        "type": "TEXTAREA",
+        "value": "ninguna"
+      },
+      {
+        "key": "question_xPJbMv",
+        "label": "¿Hay algo más que tu entrenador deba saber?",
+        "type": "TEXTAREA",
+        "value": "n"
+      }
+    ]
+  }
+}
