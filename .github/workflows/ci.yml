@@ -19,19 +19,58 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Por qué TRES jobs y no uno
+#
+# GitHub muestra una fila por JOB, no por paso. Con todo dentro de «Verificar»,
+# un fallo se ve como «Verificar ✗» y hay que abrirlo para saber si fue un
+# tipo, el linter o un test.
+#
+# Tres es el punto de equilibrio: cada uno dice en su nombre qué protege, y no
+# se paga la instalación de dependencias seis veces.
+# ─────────────────────────────────────────────────────────────────────────────
+
 jobs:
-  verify:
-    name: Verificar
+  tipos-y-lint:
+    name: Tipos y lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Tipos · tsc sobre _core y tests
+        run: pnpm typecheck
+
+      # Comprueba que el MISMO _core compila también bajo Deno, que es la
+      # premisa del ADR-001 y sin esto sería una suposición.
+      - name: Tipos · Deno sobre las Edge Functions (ADR-001)
+        run: pnpm deno:check
+
+      # oxlint hace cumplir el aislamiento de _core: sin Deno, sin process,
+      # sin fetch, sin imports npm:/jsr:/https: ni de _shared.
+      - name: Lint · oxlint, con el aislamiento de _core
+        run: pnpm lint
+
+      - name: Lint · Deno
+        run: pnpm deno:lint
+
+  tests:
+    name: Tests y cobertura
     runs-on: ubuntu-latest
 
-    # `pull-requests: write` para comentar la cobertura en el PR.
     permissions:
       contents: read
       pull-requests: write
 
-    # Los tests de integración corren contra PostgreSQL pelado, no contra
-    # Supabase: tests/sql/00-supabase-roles.sql reproduce los roles que un
-    # proyecto de Supabase trae de fábrica. Por eso basta un contenedor.
+    # PostgreSQL pelado, no Supabase: tests/sql/00-supabase-roles.sql reproduce
+    # los roles que un proyecto de Supabase trae de fábrica.
     #
     # ┌─ `postgres:postgres` DE ABAJO NO ES UN SECRETO ────────────────────────┐
     # │ Es un contenedor que GitHub crea y destruye dentro del runner. Escucha │
@@ -63,65 +102,39 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
 
-      - name: Instalar dependencias
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      # El código de las Edge Functions corre en Deno, no en Node. Esto
-      # comprueba que el MISMO `_core` compila en los dos runtimes, que es la
-      # premisa del ADR-001 y hasta ahora era una suposición.
-      #
-      # Deno viene como devDependency, así que la versión la fija el lockfile
-      # y no hace falta una action aparte.
-      - name: Deno — typecheck de las Edge Functions
-        run: pnpm deno:check
-
-      - name: Deno — lint
-        run: pnpm deno:lint
-
-      # `_shared` y los handlers HTTP no se pueden probar desde Node: usan
-      # Deno.env e imports npm:. Aquí es donde se comprueba que el cableado
-      # está bien —el nombre de una variable, el del header— que es lo único
-      # que los 491 tests de _core no pueden ver (SPEC-011).
-      #
-      # No necesita Docker: un smoke test que a veces no corre no sirve.
-      - name: Deno — tests de _shared y los handlers
-        run: pnpm deno:test
-
-      # Falla si la cobertura de authorization.ts, state-machine.ts o
-      # validate-draft.ts baja del 100%. Ver vitest.config.ts.
-      - name: Tests unitarios y cobertura
+      # Falla si la cobertura global, o la de authorization.ts,
+      # state-machine.ts o validate-draft.ts, baja del 100%.
+      - name: Unit · _core, con cobertura del 100% obligatoria
         run: pnpm test:coverage
 
-      # Incluye los E2E: comparten el requisito de PostgreSQL.
-      - name: Tests de integración y E2E
+      # `_shared` y los handlers usan Deno.env e imports npm:, así que desde
+      # Node no se pueden probar. Aquí se comprueba el CABLEADO: el nombre de
+      # una variable, el del header, que un secreto que falta se note al
+      # arrancar (SPEC-011).
+      - name: Deno · _shared y los handlers (el cableado)
+        run: pnpm deno:test
+
+      - name: Integración y E2E · contra PostgreSQL
         run: pnpm test:integration
 
-      # Comenta la tabla de cobertura en el PR. `always()` para que el comentario
-      # aparezca también cuando algún umbral del 100% falla: ahí es cuando más
-      # falta hace verlo.
-      - name: Comentar cobertura en el PR
+      # `always()` para que la tabla aparezca también cuando un umbral falla:
+      # ahí es cuando más falta hace verla.
+      - name: Comentar la cobertura en el PR
         if: always()
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           comment-on: pr
 
-  secrets:
+  secretos:
     name: Buscar secretos
     runs-on: ubuntu-latest
     steps:
@@ -141,6 +154,15 @@ jobs:
             exit 1
           fi
           echo "Sin secretos aparentes."
+
+      # Las URLs de descarga de Tally llevan un JWT dentro. Ni en un fixture.
+      - name: Comprobar que ningún JWT quedó en el repositorio
+        run: |
+          if git grep -rnE 'eyJ[A-Za-z0-9_-]{10,}\.' -- ':!pnpm-lock.yaml'; then
+            echo "::error::Hay un JWT en el repositorio"
+            exit 1
+          fi
+          echo "Ningún JWT."
 
       # Cualquier .env en cualquier directorio, no solo en la raíz.
       # Único permitido: .env.example, que no contiene secretos ni sus nombres.
