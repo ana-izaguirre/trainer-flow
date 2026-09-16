@@ -186,6 +186,36 @@ declara `environment: production`, así que activarla es solo marcar la casilla.
 **Sin la primera, un `git push` directo a main se publica solo.** Es la que de
 verdad importa.
 
+### Cuándo NO despliega
+
+Si el commit no tocó nada bajo `supabase/`, se salta todo y lo dice en el
+resumen del run. Un cambio en un `.md` no tiene nada que desplegar, y
+`functions deploy` crearía una versión nueva de cada función para nada.
+
+La comparación es **gruesa a propósito**: mira `supabase/` entero, no
+migraciones y funciones por separado. Afinar más traería el fallo clásico —
+un despliegue falla, el commit siguiente solo toca una de las dos carpetas, y
+la otra se queda atrás sin que nadie lo note.
+
+Para forzarlo: **Actions → Deploy → Run workflow**.
+
+### El token caduca, y hay dos avisos
+
+El access token de Supabase vence. Cuando pasa, el despliegue falla con un
+401 que no explica nada.
+
+| Aviso | Cuándo |
+|---|---|
+| **Canario semanal** | Lunes 9:00 UTC. Si el token no sirve, el workflow falla y GitHub manda un correo |
+| **Preflight del deploy** | Antes de tocar la base. Falla diciendo qué hacer, no a mitad de las migraciones |
+
+No se puede avisar *antes* de que caduque: la API de Supabase no expone la
+fecha de vencimiento de un token. Lo que sí se consigue es enterarse un lunes
+tranquilo en vez de en mitad de un despliegue.
+
+**Renovarlo son tres pasos:** account/tokens → *Generate new token* →
+actualizar el secret en GitHub.
+
 ### Qué hace, y en qué orden
 
 ```

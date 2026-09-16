@@ -47,17 +47,52 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Hacen falta dos commits para poder comparar qué cambió.
+          fetch-depth: 2
+
+      # ┌─ POR QUÉ SE COMPARA, Y POR QUÉ ES GRUESO ──────────────────────────┐
+      # │ Un commit que solo toca un .md no tiene nada que desplegar, y      │
+      # │ `functions deploy` crearía una versión nueva de cada función para  │
+      # │ nada.                                                              │
+      # │                                                                    │
+      # │ Se mira `supabase/` ENTERO, no migraciones y funciones por         │
+      # │ separado. Afinar más traería el fallo clásico: un despliegue falla,│
+      # │ el commit siguiente solo toca una de las dos carpetas, y la otra   │
+      # │ se queda atrás sin que nadie lo note.                              │
+      # │                                                                    │
+      # │ Si hace falta forzarlo: Actions → Deploy → Run workflow.           │
+      # └────────────────────────────────────────────────────────────────────┘
+      - name: ¿Hay algo que desplegar?
+        id: cambios
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "hay=true"                 >> "$GITHUB_OUTPUT"
+            echo "motivo=lanzado a mano"    >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # `HEAD^` es main antes del merge, así que esto es el cambio entero
+          # del PR.
+          tocados=$(git diff --name-only HEAD^ HEAD -- supabase/ || true)
+
+          if [ -z "$tocados" ]; then
+            echo "hay=false" >> "$GITHUB_OUTPUT"
+            echo "motivo=ningún cambio bajo supabase/" >> "$GITHUB_OUTPUT"
+          else
+            echo "hay=true" >> "$GITHUB_OUTPUT"
+            echo "motivo=$(echo "$tocados" | wc -l) archivo(s) bajo supabase/" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: supabase/setup-cli@v1
+        if: steps.cambios.outputs.hay == 'true'
         with:
           version: latest
 
-      # El orden NO es intercambiable: una Edge Function no crea tablas, solo
-      # lee y escribe en las que existen. Al revés, el primer webhook falla
-      # con «relation does not exist».
       # Un token caducado hace fallar `supabase link` con un 401 que no
       # explica nada. Esto falla antes y dice qué hacer.
       - name: Comprobar el token antes de tocar nada
+        if: steps.cambios.outputs.hay == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -70,7 +105,11 @@ jobs:
             exit 1
           fi
 
+      # El orden NO es intercambiable: una Edge Function no crea tablas, solo
+      # lee y escribe en las que existen. Al revés, el primer webhook falla
+      # con «relation does not exist».
       - name: Enlazar el proyecto
+        if: steps.cambios.outputs.hay == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -80,25 +119,40 @@ jobs:
       # que aplicar las nuevas es seguro. Una que borrara datos no debería
       # pasar por aquí sin que un humano la mire.
       - name: Migraciones
+        if: steps.cambios.outputs.hay == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase db push
 
       - name: Edge Functions
+        if: steps.cambios.outputs.hay == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy
 
-      # Deja en la pestaña Actions qué se desplegó, sin abrir los logs.
+      # Deja en la pestaña Actions qué pasó, sin abrir los logs.
       - name: Resumen
+        if: always()
         run: |
+          if [ "${{ steps.cambios.outputs.hay }}" != "true" ]; then
+            {
+              echo "### Sin desplegar"
+              echo
+              echo "${{ steps.cambios.outputs.motivo }}."
+              echo
+              echo "Para forzarlo: Actions → Deploy → **Run workflow**."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           {
             echo "### Desplegado"
             echo
             echo "| | |"
             echo "|---|---|"
             echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo "| Motivo | ${{ steps.cambios.outputs.motivo }} |"
             echo "| Migraciones | $(ls supabase/migrations/*.sql | wc -l) |"
-            echo "| Funciones | $(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name '_*' -printf '%f ' ) |"
+            echo "| Funciones | $(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name '_*' -printf '%f ') |"
           } >> "$GITHUB_STEP_SUMMARY"
