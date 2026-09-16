@@ -2,7 +2,50 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — validación del dominio (S-12) |
+
+## Resultado parcial
+
+| Capa | ¿Depende del formato de Tally? | Estado |
+|---|---|---|
+| Validación de valores del dominio | ❌ No | ✅ S-12, 60 tests, cobertura 100% |
+| Mapeo etiqueta → campo | ⚠️ Solo las etiquetas | ✅ S-12, 30 tests. Faltan las etiquetas reales |
+| Lectura del sobre de Tally | ✅ **Sí** | ⏸️ **Espera un payload real** |
+| Webhook, firma, idempotencia | — | ⏳ S-13, S-14 |
+
+> **Por qué las dos capas de abajo están paradas.** Para las preguntas de
+> selección, Tally puede enviar el **ID de la opción** en `value` y las
+> etiquetas en otro campo. Escribir el parser suponiendo que `value` trae el
+> texto produciría código que compila, pasa los tests y falla con el primer
+> cliente real. Es el riesgo **R-08**, y la sección 3 de esta spec ya lo dice:
+> *"antes de codificar el parser hay que capturar un payload real"*.
+>
+> `validateAssessment` no depende de eso, así que se implementó igual.
+>
+> **El mapeo también se implementó**, manejando el desconocido en vez de
+> suponerlo: si el valor de una selección coincide con el `id` de una opción,
+> se resuelve a su texto; si no, se usa tal cual. Los dos casos tienen test.
+> Lo único que falta ahí es rellenar las etiquetas reales del formulario, que
+> es configuración de dos minutos.
+
+### El mapeo es configuración, no código
+
+```typescript
+const MAPPING: FieldMapping = {
+  fullName: { label: 'Nombre completo' },
+  level:    { label: 'Nivel de experiencia' },
+  hasLimitations: {
+    label: '¿Tienes alguna lesión o limitación?',
+    trueWhen: ['Sí', 'Si', 'Yes'],
+  },
+  // ...
+};
+```
+
+Cambiar el texto de una pregunta en el formulario es cambiar una línea aquí,
+no tocar el parser. La comparación ignora mayúsculas, acentos y espacios
+sobrantes, porque el texto de una pregunta se edita y eso no puede romper la
+ingesta de todos los clientes.
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-12, S-13, S-14 |
 
