@@ -164,6 +164,59 @@ que usa tu esposo evita que una prueba tuya le llegue a un cliente real.
 
 ---
 
+## Despliegue automático
+
+`\.github/workflows/deploy.yml` publica lo que hay en `main`, y **solo si el
+CI quedó en verde**.
+
+```
+PR  →  CI verde  →  merge a main  →  CI en main  →  Deploy
+```
+
+### Las dos puertas
+
+| Puerta | Qué exige | Dónde se activa |
+|---|---|---|
+| **1 · Pull request** | Que nada llegue a `main` sin PR y sin CI verde | Settings → Branches → *Require a pull request* + *Require status checks* |
+| **2 · Aprobación manual** | Un clic tuyo antes de publicar | Settings → Environments → `production` → *Required reviewers* |
+
+La segunda es opcional: mientras no se configure, no bloquea. El workflow ya
+declara `environment: production`, así que activarla es solo marcar la casilla.
+
+**Sin la primera, un `git push` directo a main se publica solo.** Es la que de
+verdad importa.
+
+### Qué hace, y en qué orden
+
+```
+1. supabase link      ← enlaza el proyecto
+2. supabase db push   ← migraciones: CREA LAS TABLAS
+3. supabase functions deploy
+```
+
+El orden no es intercambiable. **Una Edge Function no crea tablas**, solo lee
+y escribe en las que existen. Al revés, el primer webhook falla con
+`relation "webhook_events" does not exist`.
+
+### Lo que hay que configurar una vez
+
+Settings → Secrets and variables → Actions:
+
+| | Tipo | De dónde sale |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | **Secret** | supabase.com/dashboard/account/tokens |
+| `SUPABASE_DB_PASSWORD` | **Secret** | La contraseña de la base, al crear el proyecto |
+| `SUPABASE_PROJECT_REF` | **Variable** | El ID del proyecto. No es sensible |
+
+Estos tres **sí** van en GitHub, y no contradicen la regla de
+`docs/SECURITY.md`: no son secretos del producto, son credenciales de
+despliegue. `GEMINI_API_KEY` y los de Telegram siguen viviendo solo en
+`supabase secrets set`.
+
+### Volver a desplegar sin tocar el código
+
+Actions → Deploy → *Run workflow*.
+
 ## Comandos
 
 ```bash
