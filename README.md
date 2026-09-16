@@ -212,7 +212,7 @@ la premisa del ADR-001, verificada en cada push.
 | Documento | Contenido |
 |---|---|
 | [`PRODUCT.md`](docs/PRODUCT.md) | Qué se construye y qué queda fuera |
-| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Las 10 decisiones (ADRs) y su razón |
+| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Las 11 decisiones (ADRs) y su razón |
 | [`DATA-MODEL.md`](docs/DATA-MODEL.md) | Las 10 tablas, constraints, RLS |
 | [`STATE-MACHINE.md`](docs/STATE-MACHINE.md) | Estados, transiciones, por qué no XState |
 | [`TESTING.md`](docs/TESTING.md) | TDD, pirámide, qué se prueba siempre |
@@ -231,7 +231,7 @@ la premisa del ADR-001, verificada en cada push.
 🚧 **En desarrollo.** El dominio está construido; falta conectarlo a Telegram.
 
 ```
-360 tests unitarios · 48 de integración y E2E · cobertura global del 100%
+375 tests unitarios · 48 de integración y E2E · cobertura global del 100%
 typecheck ✅  lint ✅  deno:check ✅  deno:lint ✅
 ```
 

@@ -6,6 +6,7 @@
  */
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { Identity } from '../_core/domain/identity.ts';
+import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
 import { requireEnv } from './env.ts';
 
 export type Db = SupabaseClient;
@@ -71,5 +72,20 @@ export async function findIdentity(db: Db, telegramUserId: number): Promise<Iden
     role: data.role as Identity['role'],
     telegramUserId: data.telegram_user_id as number,
     telegramChatId: (data.telegram_chat_id as number | null) ?? telegramUserId,
+  };
+}
+
+/**
+ * Implementa el puerto `TelegramRepo` con supabase-js.
+ *
+ * El flujo del webhook vive en `_core` y solo conoce la interfaz; esto es el
+ * adaptador que la cumple.
+ */
+export function createTelegramRepo(db: Db, requestId: string): TelegramRepo {
+  return {
+    claimEvent: (externalId, payload) =>
+      claimWebhookEvent(db, 'telegram', externalId, payload, requestId),
+    markProcessed: (externalId) => markWebhookProcessed(db, 'telegram', externalId),
+    findIdentity: (telegramUserId) => findIdentity(db, telegramUserId),
   };
 }

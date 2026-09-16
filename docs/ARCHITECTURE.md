@@ -271,6 +271,42 @@ segunda capa real.
 
 ---
 
+### ADR-011 — El flujo vive en el core; el HTTP, en la frontera
+
+**Contexto.** El punto §11 dice que `_core` no depende de HTTP. Pero el orden
+de los pasos de un webhook —secreto, parseo, idempotencia, identidad— **es
+lógica de negocio**, y dejarlo en el handler lo volvía imposible de probar sin
+levantar PostgREST y el stack de Supabase.
+
+**Decisión.** El flujo devuelve un `WebhookOutcome`, no una `Response`:
+
+```typescript
+// _core/telegram/webhook.ts — sin HTTP, sin Supabase, sin Telegram
+export async function handleTelegramWebhook(
+  input: WebhookInput,
+  deps: WebhookDeps,
+): Promise<WebhookOutcome>;
+
+export function outcomeToStatus(outcome: WebhookOutcome): number;
+```
+
+Las dependencias entran por puertos declarados en `_core/ports/`
+(`TelegramRepo`, `TelegramSender`), igual que `AIProvider`. La Edge Function
+los construye y traduce el resultado a un código de estado.
+
+**Consecuencia.** El handler baja a ~58 líneas de pegamento. Todo el flujo se
+prueba con Vitest y dobles de prueba, sin servidor y sin base de datos.
+
+**El test que lo justifica** no comprueba que devuelve 401 — comprueba que un
+secreto inválido **no produce ni una sola llamada al repositorio**. Si alguien
+mueve la verificación después de tocar la base, el test falla aunque el 401 se
+siga devolviendo igual.
+
+**Lo que sigue sin cubrirse:** que PostgREST y la API de Telegram respondan de
+verdad. Eso exige `supabase start` con Docker, y va en S-28.
+
+---
+
 ## Capas
 
 ```
