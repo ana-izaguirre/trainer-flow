@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PROPUESTA** — pendiente de que Ana apruebe |
+| **Estado** | **APROBADA** — pendiente de implementar |
 | **Depende de** | SPEC-003, SPEC-009 |
 | **Sesiones** | S-29 (nueva) |
 
