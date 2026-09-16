@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml)
 [![Cobertura](https://img.shields.io/badge/cobertura-100%25-brightgreen)](docs/TESTING.md)
-[![Tests](https://img.shields.io/badge/tests-504%20core%20%C2%B7%2021%20deno%20%C2%B7%2051%20integraci%C3%B3n-blue)](docs/TESTING.md)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-estricto-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Deno](https://img.shields.io/badge/Deno-Edge%20Functions-70FFAF?logo=deno&logoColor=black)](supabase/functions/deno.json)
@@ -83,190 +82,29 @@ nunca. Un cambio produce `version + 1`; la anterior queda intacta.
 **4. Degradación controlada.** Sin margen de cuota o con la API caída, la versión
 vuelve a `NEW` y el entrenador continúa por plantilla o manual.
 
-### Estados de una versión
+### Estado
 
-```
-NEW → GENERATING → DRAFT ──┬──► APPROVED ──► SENT
-                           └──► REJECTED
-```
-
-6 estados, 11 transiciones. Detalle completo en
-[`docs/STATE-MACHINE.md`](docs/STATE-MACHINE.md).
-
-Cada transición queda en `plan_events`, lo que permite responder
-*"¿por qué Carlos no recibió su rutina?"*:
-
-```
-10:32  ∅      → NEW         system
-10:33  NEW    → GENERATING  trainer
-10:33  GENERATING → DRAFT   ai
-10:41  DRAFT  → APPROVED    trainer
-10:41  APPROVED → SENT      system
-```
-
----
-
-## Stack
-
-| Capa | Tecnología |
-|---|---|
-| Formulario | Tally (webhook, plan gratuito) |
-| Base de datos | Supabase PostgreSQL |
-| Backend | Supabase Edge Functions (Deno) |
-| IA | Gemini, tras la interfaz `AIProvider` |
-| Interfaz | Telegram Bot |
-| Tests | Vitest (Node) |
-| Lenguaje | TypeScript estricto, sin `any` |
-
-**Costo objetivo: ~$0/mes.** Sin ORM: `supabase-js` con tipos generados desde
-el esquema.
-
----
-
-## Estructura
-
-```
-trainer-flow/
-├── CLAUDE.md              reglas de trabajo
-├── docs/                  producto, arquitectura, specs
-├── supabase/
-│   ├── migrations/        SQL versionado
-│   └── functions/
-│       ├── _core/         ◄── dominio puro, CERO dependencias
-│       ├── _shared/       ◄── adaptadores (Supabase, Gemini, Telegram)
-│       └── <función>/     handlers HTTP
-└── tests/                 Vitest, importa desde _core/
-```
-
-### La regla que hace funcionar el híbrido
-
-| Carpeta | Runtime | Puede importar |
-|---|---|---|
-| `_core/` | ambos | **nada externo** |
-| `_shared/` | Deno | Deno, npm, fetch |
-| `tests/` | Node | `_core` |
-
-**Nada en `_core/` usa `Deno.*`, `process.*`, `fetch`, `npm:` ni librerías.**
-Si necesita entrada/salida, no pertenece ahí.
-
-El beneficio: el dominio —máquina de estados, validaciones, autorización— se
-prueba en milisegundos sin levantar Supabase ni llamar a ninguna API.
-
----
-
-## Cómo trabajamos: Spec Driven Development
-
-> **No se escribe código sin una spec aprobada.**
-
-```
-ESCRIBIR → REVISAR → IMPLEMENTAR → VERIFICAR → CERRAR
-```
-
-Cada spec termina con criterios de aceptación en formato Given/When/Then:
-
-```
-CA-2 — DADO un payload ya procesado,
-       CUANDO llega por segunda vez,
-       ENTONCES la respuesta es 200 y no se crea ninguna fila.
-```
-
-**Eso ya es un test.** Se copia y se implementa hasta que pase.
-
-Y sobre todo lo que vive en `_core/`, **TDD**: primero el test rojo.
-
----
-
-## Puesta en marcha
-
-**Requisitos:** Node 20+, pnpm, Supabase CLI, Docker.
-
-```bash
-pnpm install
-cp .env.example .env.local     # rellena los valores
-supabase link --project-ref <tu-ref>
-supabase start
-supabase db reset
-```
-
-Secretos en producción — **nunca van a git**:
-
-```bash
-supabase secrets set GEMINI_API_KEY=...
-supabase secrets set TELEGRAM_BOT_TOKEN=...
-supabase secrets set TELEGRAM_WEBHOOK_SECRET=...
-supabase secrets set TALLY_WEBHOOK_SECRET=...
-```
-
----
-
-## Comandos
-
-```bash
-pnpm test             # unit (_core), en watch
-pnpm test:run         # unit, una pasada
-pnpm test:integration # integración, contra PostgreSQL real
-pnpm test:all         # todo
-pnpm typecheck        # TypeScript / Node — _core y tests
-pnpm lint             # oxlint
-pnpm deno:check       # TypeScript / Deno — todas las Edge Functions
-pnpm deno:lint        # linter de Deno
-pnpm types:local      # regenerar database.types.ts
-```
-
-**Dos typecheckers a propósito.** Node comprueba el dominio; Deno comprueba
-todo, incluidos `_shared/` y los handlers. Que el mismo `_core` pase los dos es
-la premisa del ADR-001, verificada en cada push.
-
----
-
-## Documentación
-
-| Documento | Contenido |
-|---|---|
-| [`PRODUCT.md`](docs/PRODUCT.md) | Qué se construye y qué queda fuera |
-| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Las 11 decisiones (ADRs) y su razón |
-| [`DATA-MODEL.md`](docs/DATA-MODEL.md) | Las 10 tablas, constraints, RLS |
-| [`STATE-MACHINE.md`](docs/STATE-MACHINE.md) | Estados, transiciones, por qué no XState |
-| [`TESTING.md`](docs/TESTING.md) | TDD, pirámide, qué se prueba siempre |
-| [`SECURITY.md`](docs/SECURITY.md) | Secretos, autorización, datos de salud |
-| [`RISKS.md`](docs/RISKS.md) | Riesgos con su mitigación |
-| [`ROADMAP.md`](docs/ROADMAP.md) | El MVP dividido en sesiones |
-| [`DEPLOY.md`](docs/DEPLOY.md) | CI, despliegue y desarrollo local |
-| [`specs/`](docs/specs/) | Las specs con sus criterios de aceptación |
-
-**Antes de tocar código:** `CLAUDE.md`, la spec correspondiente y `ARCHITECTURE.md`.
-
----
-
-## Estado
-
-🚧 **En desarrollo.** El dominio está construido; falta conectarlo a Telegram.
-
-```
-375 tests unitarios · 48 de integración y E2E · cobertura global del 100%
-typecheck ✅  lint ✅  deno:check ✅  deno:lint ✅
-```
+🚧 **En desarrollo.**
 
 **El producto ya funciona sin IA.** `E2E-1` recorre el camino completo — crear,
 editar, aprobar, enviar — y asevera que `ai_generations` queda con **cero
-filas**.
+filas**. Ese hito no se deshace: lo que viene mejora el producto, no lo
+habilita.
 
-### Progreso
-
-| Bloque | Sesiones | Estado |
-|---|---|---|
-| 1 · Cimientos | S-01 → S-04 | ✅ Esquema, RLS, migraciones |
-| 2 · El dominio | S-05 → S-08 | ✅ Autorización, estados, validación, plantillas |
-| 3 · Producto usable **sin IA** | S-09 → S-11 | ✅ **Hito alcanzado** |
-| 4 · Ingesta | S-12 → S-14 | 🟡 S-12 hecha. Falta el webhook (S-13, S-14) |
-| 5 · La IA | S-15 → S-18 | ⬜ |
-| 6 · El cliente | S-19 → S-22 | ⬜ |
-| 7 · Ciclo completo | S-23 → S-25 | ⬜ |
-| 8 · Cierre | S-26 → S-28 | ⬜ |
-
-**Hito alcanzado en la sesión 11.** El producto ya sirve: crear una rutina,
-aprobarla y enviarla, **sin una sola llamada a la IA**. Lo que viene la mejora,
-no la habilita.
+> ### Aquí no hay números ni tablas de progreso, a propósito
+>
+> Los tenía, y mentían. Decían «375 tests» cuando había 504, y listaban specs
+> como borrador cuando ya tenían código. Un dato que hay que actualizar a mano
+> en cada commit es un dato que va a estar mal.
+>
+> | Qué quieres saber | Dónde está, de verdad |
+> |---|---|
+> | Si todo pasa ahora mismo | El badge de CI, arriba |
+> | En qué va cada spec | El campo **Estado** de cada [`spec`](docs/specs/) |
+> | Qué sesión toca | [`ROADMAP.md`](docs/ROADMAP.md) |
+> | Cuántos tests hay | `pnpm test:run` |
+>
+> Cada uno se actualiza solo, o vive junto a lo que describe.
 
 ### Los tres módulos con cobertura obligatoria del 100%
 
@@ -276,22 +114,8 @@ no la habilita.
 | `domain/state-machine.ts` | Hace imposible que una rutina llegue al cliente sin aprobación |
 | `domain/validate-draft.ts` | La frontera con la IA: nada entra al dominio sin pasar por aquí |
 
-Si la cobertura de cualquiera baja del 100%, **el CI se pone rojo**.
-
-### Specs
-
-| Spec | Estado |
-|---|---|
-| SPEC-000 · Esquema | ✅ Implementada |
-| SPEC-001 · Ingesta de Tally | 🟡 Parcial (validación, mapeo y sobre) |
-| SPEC-003 · Revisión en Telegram | 🟡 Parcial (webhook y parsing) |
-| SPEC-008 · Manual y plantillas | 🟡 Parcial (dominio completo y E2E-1) |
-| SPEC-009 · Identidad y autorización | 🟡 Parcial (core + webhook) |
-| SPEC-002, 004 a 007, 010 | 📝 Borrador |
-
-Una spec toca varias capas, así que se cierra en varias sesiones. `SPEC-009`
-define las reglas de autorización **y** cómo el webhook resuelve la identidad:
-las reglas son S-05, el webhook es S-09.
+Si la cobertura de cualquiera baja del 100%, **el CI se pone rojo**. Eso no hay
+que mantenerlo a mano: está en `vitest.config.ts`.
 
 ### Fuera de alcance en V1
 

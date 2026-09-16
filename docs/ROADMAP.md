@@ -5,6 +5,10 @@ criterio de cierre. No se avanza con una sesión a medias.
 
 **28 sesiones ≈ 21 horas ≈ 5–6 semanas a 45 min/día.**
 
+> Este archivo es **el único sitio** donde se lleva el progreso. El README no
+> lo duplica: una tabla en dos sitios es una tabla que va a estar mal en uno
+> de los dos.
+
 ---
 
 ## El orden y su razón
@@ -54,11 +58,11 @@ revés, el fallback siempre queda "para después".
 
 > 🎯 **Hito.** Aquí el producto ya sirve. Todo lo demás lo mejora.
 
-## Bloque 4 — Ingesta (S-12 → S-14)
+## Bloque 4 — Ingesta (S-12 → S-14) 🟡 EN CURSO
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-12** | Parser de Tally (TDD) | Fixture real + `_core/tally-parser.ts` | Payload completo, campos faltantes y tipos incorrectos |
+| **S-12** ✅ | Parser de Tally (TDD) | Fixture real + `_core/assessment/` | Payload completo, campos faltantes y tipos incorrectos |
 | **S-13** | Webhook: seguridad | Firma + idempotencia | El mismo `eventId` dos veces produce **un solo** efecto |
 | **S-14** | Webhook: escritura | Cliente, evaluación, plan, `link_token` | **SPEC-001 cerrada** |
 
