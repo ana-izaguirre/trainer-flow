@@ -13,7 +13,15 @@ max_rows = 1000
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 16
+# TIENE QUE COINCIDIR CON EL PROYECTO ALOJADO.
+#
+# Supabase se saltó PostgreSQL 16: sus proyectos corren 15 o 17, y la CLI
+# rechaza cualquier otro valor al leer este archivo — antes de intentar nada,
+# así que el error no dice que sea esto.
+#
+# Los proyectos nuevos se crean en 17. Si el tuyo es más viejo y usa 15,
+# cámbialo aquí: Project Settings → Infrastructure lo dice.
+major_version = 17
 
 [db.migrations]
 enabled = true

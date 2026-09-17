@@ -87,7 +87,10 @@ jobs:
     # └────────────────────────────────────────────────────────────────────────┘
     services:
       postgres:
-        image: postgres:16-alpine
+        # La misma major que el proyecto alojado. Probar sobre una versión
+        # distinta de la que corre en producción es una diferencia pequeña
+        # hasta el día que no lo es.
+        image: postgres:17-alpine
         env:
           POSTGRES_PASSWORD: postgres
         ports:
