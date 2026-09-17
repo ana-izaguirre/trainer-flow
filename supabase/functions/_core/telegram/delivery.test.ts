@@ -35,8 +35,13 @@ const CLIENTE: ClientForLink = {
   clientId: 'c1',
   fullName: 'Carlos',
   linkedProfileId: null,
+  linkedTelegramUserId: null,
   trainerChatId: 10,
 };
+
+/** Quien abre el enlace. En un chat privado `from.id` y `chat.id` coinciden. */
+const USUARIO = { telegramUserId: 500, chatId: 500 };
+const PERFIL = { profileId: 'perfil-cliente', chatId: 500 };
 
 function version(state: VersionForDelivery['state'] = 'APPROVED'): VersionForDelivery {
   return {
@@ -46,9 +51,7 @@ function version(state: VersionForDelivery['state'] = 'APPROVED'): VersionForDel
     clientName: 'Carlos',
     clientChatId: 500,
     trainerChatId: 10,
-    goal: 'Fuerza',
-    daysPerWeek: 3,
-    sessionMinutes: 60,
+    plan: { goal: 'Fuerza', daysPerWeek: 3, sessionMinutes: 60 },
   };
 }
 
@@ -66,6 +69,8 @@ function espia(
     vincularFalla?: boolean;
     transicionFalla?: boolean;
     envioFalla?: boolean;
+    perfil?: { profileId: string; chatId: number } | null;
+    nombreDelPerfil?: string[];
   } = {},
 ): Espia {
   const pasos: string[] = [];
@@ -75,6 +80,11 @@ function espia(
     findClientByToken: () => {
       pasos.push('findClientByToken');
       return Promise.resolve(opciones.cliente === undefined ? CLIENTE : opciones.cliente);
+    },
+    ensureClientProfile: (_id, _chat, fullName) => {
+      pasos.push('ensureClientProfile');
+      opciones.nombreDelPerfil?.push(fullName);
+      return Promise.resolve(opciones.perfil === undefined ? PERFIL : opciones.perfil);
     },
     linkClient: () => {
       pasos.push('linkClient');
@@ -114,7 +124,6 @@ function espia(
   };
 }
 
-const identidad = { profileId: 'perfil-cliente', chatId: 500 };
 
 // ---------------------------------------------------------------------------
 
@@ -123,7 +132,7 @@ describe('vincular', () => {
     // CA-1.
     const { deps, pasos, mensajes } = espia();
 
-    const outcome = await linkClient('un-token', identidad, deps);
+    const outcome = await linkClient('un-token', USUARIO, deps);
 
     expect(outcome).toEqual({ kind: 'linked', clientId: 'c1', delivered: false });
     expect(pasos).toContain('linkClient');
@@ -133,7 +142,7 @@ describe('vincular', () => {
   it('sin rutina aprobada, solo saluda', async () => {
     const { deps, pasos } = espia({ aprobada: null });
 
-    await linkClient('un-token', identidad, deps);
+    await linkClient('un-token', USUARIO, deps);
 
     expect(pasos.some((p) => p.startsWith('transition'))).toBe(false);
   });
@@ -143,7 +152,7 @@ describe('vincular', () => {
     // un borrador sin revisar al cliente. La guarda vuelve a preguntar.
     const { deps, pasos } = espia({ aprobada: version('DRAFT') });
 
-    const outcome = await linkClient('un-token', identidad, deps);
+    const outcome = await linkClient('un-token', USUARIO, deps);
 
     expect(outcome).toEqual({ kind: 'linked', clientId: 'c1', delivered: false });
     expect(pasos.some((p) => p.includes('->SENT'))).toBe(false);
@@ -153,7 +162,7 @@ describe('vincular', () => {
     // CA-4: la entrega diferida. Nadie tiene que acordarse de nada.
     const { deps, pasos } = espia({ aprobada: version() });
 
-    const outcome = await linkClient('un-token', identidad, deps);
+    const outcome = await linkClient('un-token', USUARIO, deps);
 
     expect(outcome).toEqual({ kind: 'linked', clientId: 'c1', delivered: true });
     expect(pasos).toContain('transition:APPROVED->SENT');
@@ -165,7 +174,7 @@ describe('un token que no sirve', () => {
     // CA-5. No se puede enumerar clientes probando tokens.
     const { deps, mensajes } = espia({ cliente: null });
 
-    const outcome = await linkClient('inventado', identidad, deps);
+    const outcome = await linkClient('inventado', USUARIO, deps);
 
     expect(outcome).toEqual({ kind: 'invalid_token' });
     expect(mensajes).toHaveLength(1);
@@ -174,10 +183,10 @@ describe('un token que no sirve', () => {
   it('uno ya usado por OTRO da la MISMA respuesta al que lo intenta', async () => {
     // CA-6. Si se distinguieran, un token filtrado diría si es válido.
     const { deps, mensajes } = espia({
-      cliente: { ...CLIENTE, linkedProfileId: 'otro-perfil' },
+      cliente: { ...CLIENTE, linkedProfileId: 'otro-perfil', linkedTelegramUserId: 999 },
     });
 
-    const outcome = await linkClient('un-token', identidad, deps);
+    const outcome = await linkClient('un-token', USUARIO, deps);
 
     expect(outcome.kind).toBe('already_linked_elsewhere');
     expect(mensajes.some((m) => m.chatId === 500)).toBe(true);
@@ -187,20 +196,113 @@ describe('un token que no sirve', () => {
     // Al cliente se le responde neutro; al entrenador se le cuenta, porque
     // puede ser un enlace reenviado por error o algo peor.
     const { deps, mensajes } = espia({
-      cliente: { ...CLIENTE, linkedProfileId: 'otro-perfil' },
+      cliente: { ...CLIENTE, linkedProfileId: 'otro-perfil', linkedTelegramUserId: 999 },
     });
 
-    await linkClient('un-token', identidad, deps);
+    await linkClient('un-token', USUARIO, deps);
 
     expect(mensajes.some((m) => m.chatId === 10)).toBe(true);
   });
 
   it('volver a abrir el enlace propio no rompe nada', async () => {
-    const { deps } = espia({ cliente: { ...CLIENTE, linkedProfileId: 'perfil-cliente' } });
+    const { deps } = espia({
+      cliente: { ...CLIENTE, linkedProfileId: 'perfil-cliente', linkedTelegramUserId: 500 },
+    });
 
-    const outcome = await linkClient('un-token', identidad, deps);
+    const outcome = await linkClient('un-token', USUARIO, deps);
 
     expect(outcome.kind).not.toBe('already_linked_elsewhere');
+  });
+});
+
+describe('solo en privado', () => {
+  it('un /start en un GRUPO no vincula nada', async () => {
+    // CA-12, regla 12. En privado `chat.id` y `from.id` coinciden; en un
+    // grupo no. Sin esta guarda la rutina se publicaría ahí.
+    const { deps, pasos } = espia();
+
+    const outcome = await linkClient('un-token', { telegramUserId: 500, chatId: -100 }, deps);
+
+    expect(outcome).toEqual({ kind: 'not_private' });
+    expect(pasos, 'ni siquiera se consulta el token').toEqual([]);
+  });
+
+  it('y no se responde en el grupo', async () => {
+    // Responder ahí confirmaría que el token existe.
+    const { deps, mensajes } = espia();
+
+    await linkClient('un-token', { telegramUserId: 500, chatId: -100 }, deps);
+
+    expect(mensajes).toEqual([]);
+  });
+});
+
+describe('el perfil nace aquí', () => {
+  it('el nombre sale de la FICHA, no del Telegram de quien escribe', async () => {
+    // SPEC-009 regla 1b. El `first_name` lo elige quien escribe: con él, un
+    // cliente podría aparecer ante el entrenador con el nombre de otro.
+    const nombreDelPerfil: string[] = [];
+    const { deps } = espia({ nombreDelPerfil });
+
+    await linkClient('un-token', USUARIO, deps);
+
+    expect(nombreDelPerfil).toEqual(['Carlos']);
+  });
+
+  it('un token ajeno NO llega a crear perfil', async () => {
+    // Por eso la comprobación de «ya vinculado» va antes de resolver el
+    // perfil: un intento fallido no puede dejar rastro en `profiles`.
+    const { deps, pasos } = espia({
+      cliente: { ...CLIENTE, linkedProfileId: 'otro-perfil', linkedTelegramUserId: 999 },
+    });
+
+    await linkClient('un-token', USUARIO, deps);
+
+    expect(pasos).not.toContain('ensureClientProfile');
+    expect(pasos).not.toContain('linkClient');
+  });
+
+  it('un token inexistente tampoco', async () => {
+    const { deps, pasos } = espia({ cliente: null });
+
+    await linkClient('inventado', USUARIO, deps);
+
+    expect(pasos).toEqual(['findClientByToken', 'sendMessage:500']);
+  });
+
+  it('un ENTRENADOR no se convierte en cliente por pulsar un enlace', async () => {
+    // CA-10. Un `telegram_user_id` tiene un perfil y un rol; el enlace no lo
+    // cambia. Y la respuesta es la misma neutra: no se confirma nada.
+    const { deps, pasos, mensajes } = espia({ perfil: null });
+
+    const outcome = await linkClient('un-token', USUARIO, deps);
+
+    expect(outcome).toEqual({ kind: 'not_a_client' });
+    expect(pasos).not.toContain('linkClient');
+    expect(mensajes[0]?.text).toContain('no sirve');
+  });
+});
+
+describe('si el enlace no se guarda', () => {
+  it('NO se da la bienvenida', async () => {
+    // CA-11, regla 11. El `UNIQUE` de `clients.profile_id` rechaza a quien ya
+    // está vinculado a otra ficha. Decirle «ya estás conectado» lo dejaría
+    // esperando una rutina que no va a llegar.
+    const { deps, mensajes } = espia({ vincularFalla: true });
+
+    const outcome = await linkClient('un-token', USUARIO, deps);
+
+    expect(outcome).toEqual({ kind: 'link_failed' });
+    expect(mensajes.some((m) => m.text.includes('ya estás conectado'))).toBe(false);
+  });
+
+  it('y no se entrega ninguna rutina', async () => {
+    const { deps, pasos } = espia({ vincularFalla: true, aprobada: version() });
+
+    await linkClient('un-token', USUARIO, deps);
+
+    expect(pasos).not.toContain('findApprovedVersion');
+    expect(pasos.some((p) => p.includes('->SENT'))).toBe(false);
   });
 });
 
@@ -270,6 +372,30 @@ describe('entregar', () => {
       expect(pasos.some((p) => p.startsWith('sendMessage'))).toBe(false);
     },
   );
+
+  it('si el cliente NO abrió su enlace, la rutina espera', async () => {
+    // CA-3. No hay dónde escribirle: la versión sigue en APPROVED y el
+    // entrenador se entera de por qué.
+    const { deps, pasos, mensajes } = espia({ version: { ...version(), clientChatId: null } });
+
+    const outcome = await deliverVersion('v1', deps);
+
+    expect(outcome).toEqual({ kind: 'undelivered' });
+    expect(pasos.some((p) => p.includes('->SENT'))).toBe(false);
+    expect(mensajes.some((m) => m.chatId === 10 && m.text.includes('enlace'))).toBe(true);
+  });
+
+  it('una rutina sin evaluación se entrega igual, sin la línea de objetivo', async () => {
+    // CA-13, regla 13. Una manual o de plantilla no tiene formulario detrás.
+    const { deps, mensajes } = espia({ version: { ...version(), plan: null } });
+
+    const outcome = await deliverVersion('v1', deps);
+
+    expect(outcome.kind).toBe('delivered');
+    const alCliente = mensajes.find((m) => m.chatId === 500)!;
+    expect(alCliente.text).toContain('tu rutina está lista');
+    expect(alCliente.text).not.toContain('🎯');
+  });
 
   it('una versión que no existe no revienta', async () => {
     const { deps } = espia({ version: null });

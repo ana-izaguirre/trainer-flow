@@ -16,21 +16,41 @@
 import type { Workout } from '../domain/workout.ts';
 import { escapeMarkdownV2 } from './format.ts';
 
-export interface ClientContext {
-  readonly clientName: string;
+/** Lo que viene de la evaluación de Tally. Los tres o ninguno. */
+export interface PlanSummary {
   readonly goal: string;
   readonly daysPerWeek: number;
   readonly sessionMinutes: number;
 }
 
+export interface ClientContext {
+  readonly clientName: string;
+  /**
+   * `null` en una rutina manual o de plantilla: no hubo formulario.
+   *
+   * Van los tres juntos porque vienen de la misma fila. Sueltos, haría falta
+   * un `if` por campo y existiría el estado «hay objetivo pero no días», que
+   * la base no puede producir.
+   */
+  readonly plan: PlanSummary | null;
+}
+
 export function formatForClient(workout: Workout, context: ClientContext): string {
   const lines: string[] = [
     `👋 Hola ${escapeMarkdownV2(context.clientName)}, tu rutina está lista\\.`,
-    '',
-    `🎯 ${escapeMarkdownV2(context.goal)} · ${context.daysPerWeek} días · ${context.sessionMinutes} min`,
-    '',
-    escapeMarkdownV2(workout.summary),
   ];
+
+  // Sin evaluación no hay objetivo que mostrar. Se omite la línea: inventarla
+  // sería mentir, y no enviarla dejaría al cliente sin rutina (regla 13).
+  if (context.plan !== null) {
+    lines.push(
+      '',
+      `🎯 ${escapeMarkdownV2(context.plan.goal)} · ${context.plan.daysPerWeek} días · ` +
+        `${context.plan.sessionMinutes} min`,
+    );
+  }
+
+  lines.push('', escapeMarkdownV2(workout.summary));
 
   for (const day of workout.days) {
     lines.push('');

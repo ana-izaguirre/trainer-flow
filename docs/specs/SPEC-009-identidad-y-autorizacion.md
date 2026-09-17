@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — núcleo (S-05) + webhook e identidad (S-09) |
+| **Estado** | **PARCIAL** — núcleo (S-05), webhook (S-09) y alta de clientes (S-23) |
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-05 (core) · S-09 (webhook) · S-26 (logs) |
 
@@ -47,17 +47,32 @@ Telegram → POST /telegram-webhook
              ├─ si no coincide → 401, cero escrituras
              └─ update.message.from.id ES CONFIABLE
                      ▼
-             profiles WHERE telegram_user_id = ...
-                     ▼
-             ┌───────┴────────┐
-          existe          no existe
-             │                │
-         Identity        rechazar
-                    (nadie se auto-registra)
+        ┌──── ¿es `/start <token>`? ────┐
+       SÍ                               NO
+        │                                │
+  canjear el token            profiles WHERE telegram_user_id = ...
+  (SPEC-005): crea el                    ▼
+  perfil de cliente si            ┌──────┴───────┐
+  el token es válido           existe        no existe
+                                  │              │
+                              Identity       rechazar
 ```
 
 **El `telegram_user_id` nunca viene del usuario.** Viene dentro del update, y el
 update está autenticado por el secreto de cabecera.
+
+### Por qué `/start <token>` va ANTES de resolver identidad
+
+Es el único update que **crea** identidad, así que no puede exigirla. Un cliente
+que abre su deep link por primera vez todavía no tiene perfil: si se resolviera
+la identidad primero, recibiría "no te tengo registrado" y el enlace no
+funcionaría nunca.
+
+Esto **no** contradice la regla 1. Canjear un `link_token` no es
+auto-registrarse: el entrenador creó la ficha del cliente y emitió esa
+credencial. **El token es la autorización previa, concedida antes de que la
+persona escribiera al bot.** Lo que la regla prohíbe es que un desconocido se
+dé de alta escribiéndole al bot sin nada, y eso sigue prohibido.
 
 ### Tipos
 
@@ -104,7 +119,11 @@ visibilidad, no de transición.
 ## 4. Reglas de negocio
 
 1. **Nadie se auto-registra.** Los perfiles de entrenador se crean a mano; los
-   de cliente, al canjear un `link_token` (SPEC-005).
+   de cliente, **solo** al canjear un `link_token` válido (SPEC-005). No hay
+   ningún otro camino a un perfil nuevo.
+   1b. **El nombre de un perfil de cliente sale de `clients.full_name`**, que
+   escribió el entrenador o llegó por Tally. Nunca del `first_name` del update:
+   ese lo elige el usuario y podría suplantar a otro en los avisos.
 2. Un `telegram_user_id` pertenece a un solo perfil.
 3. **Toda operación llama a una función de autorización antes de tocar datos.**
 4. Un entrenador solo accede a clientes donde `trainer_id = su profileId`.
@@ -144,8 +163,9 @@ Por eso: **cobertura del 100% obligatoria**, incluidos todos los casos denegados
 
 - **CA-1** — DADO un update con secreto inválido, CUANDO llega, ENTONCES `401`
   y ninguna escritura.
-- **CA-2** — DADO un `telegram_user_id` sin perfil, CUANDO escribe al bot,
-  ENTONCES recibe un mensaje neutro y no se crea ningún perfil.
+- **CA-2** — DADO un `telegram_user_id` sin perfil, CUANDO escribe al bot
+  **cualquier cosa que no sea un `/start <token>` válido**, ENTONCES recibe un
+  mensaje neutro y no se crea ningún perfil.
 - **CA-3** — DADO el entrenador A, CUANDO pide un cliente del entrenador B,
   ENTONCES se deniega con el mismo mensaje que si no existiera.
 - **CA-4** — DADO el cliente A, CUANDO pide la rutina del cliente B, ENTONCES

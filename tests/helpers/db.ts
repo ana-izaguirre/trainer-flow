@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Client } from 'pg';
 
@@ -19,17 +19,26 @@ export const TEST_DATABASE_URL = ADMIN_URL.replace(/\/postgres$/, `/${TEST_DB}`)
  * proyecto de Supabase trae de fábrica, para poder verificar RLS igual que en
  * producción.
  */
-const SETUP_FILES = [
+const SETUP_FILES: readonly string[] = [
   'tests/sql/00-supabase-roles.sql',
-  'supabase/migrations/0001_initial_schema.sql',
-  'supabase/migrations/0002_rls_policies.sql',
-  'supabase/migrations/0003_functions.sql',
-  'supabase/migrations/0004_client_telegram_handle.sql',
-  'supabase/migrations/0005_drop_client_telegram_handle.sql',
-  'supabase/migrations/0006_ingest_assessment.sql',
-  'supabase/migrations/0007_version_for_generation.sql',
-  'supabase/migrations/0008_version_for_generation_client.sql',
-] as const;
+  ...migrations(),
+];
+
+/**
+ * Las migraciones, en orden, LEÍDAS DEL DISCO.
+ *
+ * Antes eran una lista escrita a mano, y una lista a mano se desincroniza:
+ * añadir una migración y olvidarse de apuntarla dejaba los tests corriendo
+ * contra un esquema viejo **sin fallar**, que es la peor forma de fallar.
+ *
+ * El orden es el del nombre, que es el mismo que usa la CLI de Supabase.
+ */
+function migrations(): string[] {
+  return readdirSync(resolve(ROOT, 'supabase/migrations'))
+    .filter((name) => name.endsWith('.sql'))
+    .toSorted()
+    .map((name) => `supabase/migrations/${name}`);
+}
 
 /**
  * Ejecuta sentencias sobre una conexión nueva.

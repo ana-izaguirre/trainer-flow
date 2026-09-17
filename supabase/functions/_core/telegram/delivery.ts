@@ -16,7 +16,11 @@
  */
 import { nextState } from '../domain/state-machine.ts';
 import type { VersionState } from '../domain/version.ts';
-import type { DeliveryRepo, VersionForDelivery } from '../ports/delivery-ports.ts';
+import type {
+  DeliveryRepo,
+  TelegramUser,
+  VersionForDelivery,
+} from '../ports/delivery-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { formatForClient } from './client-format.ts';
 
@@ -25,14 +29,15 @@ export interface DeliveryDeps {
   readonly sender: TelegramSender;
 }
 
-export interface ClientIdentity {
-  readonly profileId: string;
-  readonly chatId: number;
-}
-
 export type LinkOutcome =
   | { readonly kind: 'linked'; readonly clientId: string; readonly delivered: boolean }
   | { readonly kind: 'already_linked_elsewhere' }
+  /** Ya tiene perfil, y no es de cliente: un entrenador no canjea tokens. */
+  | { readonly kind: 'not_a_client' }
+  /** El canje llegó desde un grupo. Ahí no se entrega nada. */
+  | { readonly kind: 'not_private' }
+  /** El token valía, pero el enlace no se pudo guardar. */
+  | { readonly kind: 'link_failed' }
   | { readonly kind: 'invalid_token' };
 
 export type DeliverOutcome =
@@ -51,22 +56,42 @@ export type DeliverOutcome =
 const RESPUESTA_NEUTRA =
   'Ese enlace no sirve\\. Pídele uno nuevo a tu entrenador\\.';
 
+/**
+ * Canjear el `link_token`: el único camino a un perfil de cliente.
+ *
+ * Recibe al usuario de Telegram, no una identidad ya resuelta, porque la
+ * primera vez **no existe todavía**: es esta función la que la crea
+ * (SPEC-009 §3).
+ */
 export async function linkClient(
   token: string,
-  identity: ClientIdentity,
+  user: TelegramUser,
   deps: DeliveryDeps,
 ): Promise<LinkOutcome> {
+  // ── Solo en privado ────────────────────────────────────────────────────
+  // En un chat privado `chat.id` y `from.id` coinciden; en un grupo no. Sin
+  // esta guarda, un `/start` escrito en un grupo publicaría ahí la rutina y
+  // todos los avisos siguientes (regla 12).
+  //
+  // Se calla: responder en el grupo confirmaría que el token existe.
+  if (user.chatId !== user.telegramUserId) return { kind: 'not_private' };
+
   const client = await deps.repo.findClientByToken(token);
 
   if (client === null) {
-    await deps.sender.sendMessage(identity.chatId, RESPUESTA_NEUTRA);
+    await deps.sender.sendMessage(user.chatId, RESPUESTA_NEUTRA);
     return { kind: 'invalid_token' };
   }
 
-  // Ya vinculado, pero a OTRO perfil. Puede ser un enlace reenviado por error
-  // o algo peor: al cliente se le responde neutro, al entrenador se le cuenta.
-  if (client.linkedProfileId !== null && client.linkedProfileId !== identity.profileId) {
-    await deps.sender.sendMessage(identity.chatId, RESPUESTA_NEUTRA);
+  // Ya canjeado por OTRA persona. Puede ser un enlace reenviado por error o
+  // algo peor: al que lo intenta se le responde neutro, al entrenador se le
+  // cuenta.
+  //
+  // Se comprueba ANTES de resolver el perfil, y por eso `ClientForLink` trae
+  // el `telegram_user_id` de quien lo canjeó: así un intento con un token
+  // ajeno no llega a crear nada.
+  if (client.linkedProfileId !== null && client.linkedTelegramUserId !== user.telegramUserId) {
+    await deps.sender.sendMessage(user.chatId, RESPUESTA_NEUTRA);
     await deps.sender.sendMessage(
       client.trainerChatId,
       `⚠️ Alguien intentó usar el enlace de ${client.fullName}, que ya estaba vinculado\\.`,
@@ -74,9 +99,31 @@ export async function linkClient(
     return { kind: 'already_linked_elsewhere' };
   }
 
-  await deps.repo.linkClient(client.clientId, identity.profileId, identity.chatId);
+  // El nombre sale de la ficha del cliente, NUNCA del update: el `first_name`
+  // lo elige quien escribe (SPEC-009 regla 1b).
+  const profile = await deps.repo.ensureClientProfile(
+    user.telegramUserId,
+    user.chatId,
+    client.fullName,
+  );
+
+  // Ya es entrenador. No se le cambia el rol por haber pulsado un enlace.
+  if (profile === null) {
+    await deps.sender.sendMessage(user.chatId, RESPUESTA_NEUTRA);
+    return { kind: 'not_a_client' };
+  }
+
+  // El `UNIQUE` de `clients.profile_id` es lo que impide que una persona se
+  // vincule a dos fichas. Si dice que no, NO se da la bienvenida: decirle «ya
+  // estás conectado» a quien no lo está lo deja esperando una rutina que no
+  // va a llegar (regla 11).
+  if (!(await deps.repo.linkClient(client.clientId, profile.profileId))) {
+    await deps.sender.sendMessage(user.chatId, RESPUESTA_NEUTRA);
+    return { kind: 'link_failed' };
+  }
+
   await deps.sender.sendMessage(
-    identity.chatId,
+    user.chatId,
     `👋 Hola ${client.fullName}, ya estás conectado con tu entrenador\\.`,
   );
 
@@ -111,15 +158,23 @@ async function enviar(
   const destino = nextState(version.state, 'SEND');
   if (destino === null) return { kind: 'not_deliverable', state: version.state };
 
+  // Aprobada, pero el cliente aún no abrió su enlace. La rutina NO se marca
+  // enviada: espera en APPROVED y saldrá sola al vincularse (CA-3).
+  if (version.clientChatId === null) {
+    await deps.sender.sendMessage(
+      version.trainerChatId,
+      `⏳ ${version.clientName} todavía no abrió su enlace\\. La rutina le llegará en cuanto lo haga\\.`,
+    );
+    return { kind: 'undelivered' };
+  }
+
   // ── 1. Mandar PRIMERO ──────────────────────────────────────────────────
   try {
     await deps.sender.sendMessage(
       version.clientChatId,
       formatForClient(version.content, {
         clientName: version.clientName,
-        goal: version.goal,
-        daysPerWeek: version.daysPerWeek,
-        sessionMinutes: version.sessionMinutes,
+        plan: version.plan,
       }),
     );
   } catch {

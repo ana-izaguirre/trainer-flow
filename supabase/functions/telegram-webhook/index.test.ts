@@ -13,6 +13,8 @@
 import { assertEquals, assertStringIncludes, assertThrows } from 'jsr:@std/assert@1';
 import type { Identity } from '../_core/domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
+import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
 import { createHandler, readDeps, type HandlerDeps } from './index.ts';
 
 const SECRETO = 'secreto-de-prueba';
@@ -51,8 +53,33 @@ function espia(identity: Identity | null = null): Espia {
     answerCallback: () => Promise.resolve(),
   };
 
+  // Los dos repos que el flujo necesita para botones y canje. Aquí se prueba
+  // el pegamento HTTP, así que ninguno encuentra nada: basta con que estén.
+  const actionRepo: ActionRepo = {
+    findVersion: () => Promise.resolve(null),
+    transition: () => Promise.resolve(false),
+  };
+
+  const deliveryRepo: DeliveryRepo = {
+    findClientByToken: (token) => {
+      usosDelRepo.push(`findClientByToken:${token.length}`);
+      return Promise.resolve(null);
+    },
+    ensureClientProfile: () => Promise.resolve(null),
+    linkClient: () => Promise.resolve(false),
+    findApprovedVersion: () => Promise.resolve(null),
+    findVersion: () => Promise.resolve(null),
+    transition: () => Promise.resolve(false),
+  };
+
   return {
-    deps: { expectedSecret: SECRETO, repo: () => repo, sender: () => sender },
+    deps: {
+      expectedSecret: SECRETO,
+      repo: () => repo,
+      sender: () => sender,
+      actionRepo: () => actionRepo,
+      deliveryRepo: () => deliveryRepo,
+    },
     usosDelRepo,
     enviados,
   };
@@ -152,4 +179,47 @@ Deno.test('CA-1 · readDeps lanza nombrando la variable que falta', () => {
       if (valor !== undefined) Deno.env.set(nombre, valor);
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+
+Deno.test('el deep link llega hasta la base: /start <token> consulta el enlace', async () => {
+  // La prueba del CABLEADO, no del dominio. Sin ella, `_core` podía estar
+  // perfecto y el bot seguir sin vincular a nadie: era exactamente el bug.
+  const { deps, usosDelRepo } = espia();
+
+  const response = await pedir(
+    deps,
+    update({
+      update_id: 1,
+      message: {
+        message_id: 9,
+        from: { id: 500 },
+        chat: { id: 500 },
+        text: `/start ${'t'.repeat(32)}`,
+      },
+    }),
+  );
+
+  assertEquals(response.status, 200);
+  // Se consultó el token, y NO se pidió identidad: el canje va antes.
+  assertEquals(usosDelRepo.includes('findClientByToken:32'), true);
+  assertEquals(
+    usosDelRepo.some((uso) => uso.startsWith('findIdentity')),
+    false,
+  );
+});
+
+Deno.test('un mensaje normal sigue resolviendo identidad', async () => {
+  const { deps, usosDelRepo } = espia();
+
+  await pedir(
+    deps,
+    update({
+      update_id: 2,
+      message: { message_id: 9, from: { id: 500 }, chat: { id: 500 }, text: '/clientes' },
+    }),
+  );
+
+  assertEquals(usosDelRepo.includes('findIdentity:500'), true);
 });

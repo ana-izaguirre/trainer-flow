@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — aprobar y rechazar. Falta el flujo de edición |
+| **Estado** | **PARCIAL** — aprobar y rechazar, cableados. Falta el flujo de edición |
 | **Depende de** | SPEC-003, SPEC-009 |
 | **Sesiones** | S-10, S-11 |
 

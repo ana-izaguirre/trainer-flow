@@ -34,7 +34,8 @@ const RUTINA: Workout = {
   warnings: ['Se evitó press militar por la molestia de hombro derecho'],
 };
 
-const CONTEXTO = { clientName: 'Carlos', goal: 'Ganancia muscular', daysPerWeek: 4, sessionMinutes: 60 };
+const PLAN = { goal: 'Ganancia muscular', daysPerWeek: 4, sessionMinutes: 60 };
+const CONTEXTO = { clientName: 'Carlos', plan: PLAN };
 
 // ---------------------------------------------------------------------------
 
@@ -123,5 +124,17 @@ describe('el formato no se rompe', () => {
     );
 
     expect(texto).toContain('Descanso');
+  });
+});
+
+describe('una rutina sin evaluación detrás', () => {
+  it('omite la línea de objetivo en vez de inventarla', () => {
+    // Regla 13: una rutina manual o de plantilla no tiene formulario de Tally.
+    const texto = formatForClient(RUTINA, { clientName: 'Carlos', plan: null });
+
+    expect(texto).toContain('Hola Carlos');
+    expect(texto).not.toContain('🎯');
+    // Y los ejercicios siguen ahí: es una rutina completa.
+    expect(texto).toContain('Remo');
   });
 });

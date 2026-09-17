@@ -19,12 +19,19 @@
  * │ sin red y sin Supabase.                                                │
  * └────────────────────────────────────────────────────────────────────────┘
  */
+import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
 import { handleTelegramWebhook, outcomeToStatus } from '../_core/telegram/webhook.ts';
 import type { Logger } from '../_shared/logger.ts';
 import { createLogger } from '../_shared/logger.ts';
 import { asSender, createTelegramClient } from '../_shared/telegram/client.ts';
-import { createDb, createTelegramRepo } from '../_shared/db.ts';
+import {
+  createActionRepo,
+  createDb,
+  createDeliveryRepo,
+  createTelegramRepo,
+} from '../_shared/db.ts';
 import { requireEnv } from '../_shared/env.ts';
 
 const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
@@ -39,6 +46,8 @@ export interface HandlerDeps {
   readonly expectedSecret: string;
   readonly repo: (requestId: string) => TelegramRepo;
   readonly sender: (log: Logger) => TelegramSender;
+  readonly actionRepo: (requestId: string) => ActionRepo;
+  readonly deliveryRepo: () => DeliveryRepo;
 }
 
 /**
@@ -56,6 +65,8 @@ export function readDeps(): HandlerDeps {
     expectedSecret,
     repo: (requestId) => createTelegramRepo(db, requestId),
     sender: (log) => asSender(createTelegramClient(botToken, log)),
+    actionRepo: (requestId) => createActionRepo(db, requestId),
+    deliveryRepo: () => createDeliveryRepo(db),
   };
 }
 
@@ -74,13 +85,20 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
       body = null;
     }
 
+    // El sender se construye una vez y lo comparten los tres flujos: así un
+    // mensaje del canje y uno de un botón salen por el mismo sitio y quedan
+    // bajo el mismo `request_id`.
+    const sender = deps.sender(log);
+
     const outcome = await handleTelegramWebhook(
       { secretHeader: request.headers.get(SECRET_HEADER), body },
       {
         repo: deps.repo(requestId),
-        sender: deps.sender(log),
+        sender,
         expectedSecret: deps.expectedSecret,
         requestId,
+        actions: { repo: deps.actionRepo(requestId), sender },
+        delivery: { repo: deps.deliveryRepo(), sender },
       },
     );
 
