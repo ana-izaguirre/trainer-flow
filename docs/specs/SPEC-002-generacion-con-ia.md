@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — interfaz, cuota, prompt y proveedor (S-15, S-16) |
 | **Depende de** | SPEC-000, SPEC-008 |
-| **Sesiones** | S-12, S-13, S-14 |
+| **Sesiones** | S-15, S-16, S-17, S-18 |
 
 > **Depende de SPEC-008 a propósito.** El camino manual se construye **antes**
 > que la IA. Así el producto ya funciona cuando se añade la IA, y no al revés.
