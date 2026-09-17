@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — todo salvo los E2E (S-15, S-16, S-17). Falta S-18 |
+| **Estado** | **IMPLEMENTADA** (S-15 → S-18) |
 | **Depende de** | SPEC-000, SPEC-008 |
 | **Sesiones** | S-15, S-16, S-17, S-18 |
 
