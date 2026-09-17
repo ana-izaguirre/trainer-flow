@@ -17,7 +17,8 @@
   "exclude": [
     "_core/**/*.test.ts"
   ],
-  "nodeModulesDir": "manual",
+  "nodeModulesDir": "none",
   "//lib": "Sin override de lib: los defaults de Deno ya traen los tipos web (Request, Response, fetch, crypto). Que _core no los use lo hace cumplir el linter, no el compilador.",
-  "//exclude": "Solo los tests de _core, que son de Vitest e importan npm. Los de _shared y los handlers SÍ entran: son tests de Deno y tienen que compilar y pasar el linter como el resto (SPEC-011)."
+  "//exclude": "Solo los tests de _core, que son de Vitest e importan npm. Los de _shared y los handlers SÍ entran: son tests de Deno y tienen que compilar y pasar el linter como el resto (SPEC-011).",
+  "//nodeModulesDir": "Deno resuelve los imports `npm:` de su propia caché, sin buscar un node_modules. Con \"manual\" el despliegue fallaba: `supabase functions deploy` corre en un runner donde nadie hizo `pnpm install`, y el runtime de las Edge Functions tampoco usa node_modules — Supabase empaqueta la función. Depender de él para desplegar era acoplar dos cosas que no tienen que ver."
 }
