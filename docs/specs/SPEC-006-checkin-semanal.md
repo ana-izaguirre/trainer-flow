@@ -2,9 +2,21 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — el dominio del check-in. Falta el cron y el cableado |
 | **Depende de** | SPEC-005 |
 | **Sesiones** | S-21, S-22 |
+
+## Resultado parcial
+
+| Pieza | Estado |
+|---|---|
+| `calculateWeekNumber` desde `sent_at` (regla 2) | ✅ 10 tests |
+| `shouldSendCheckin` (reglas 1 y 8, CA-6) | ✅ 7 tests |
+| `needsReminder`, uno solo (regla 6, CA-5) | ✅ 4 tests |
+| Parseo y validación de las respuestas (regla 5) | ✅ 14 tests |
+| Aviso inmediato al entrenador (regla 7, CA-4) | ✅ 5 tests |
+| El cron de `pg_cron` | ⏳ |
+| Cableado al webhook | ⏳ |
 
 ## 1. Objetivo
 
