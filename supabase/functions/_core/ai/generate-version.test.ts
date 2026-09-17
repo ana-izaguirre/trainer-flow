@@ -33,6 +33,8 @@ function version(overrides: Partial<VersionForGeneration> = {}): VersionForGener
   return {
     versionId: 'v1',
     state: 'NEW',
+    clientName: 'Carlos',
+    versionNumber: 1,
     request: {
       goal: 'Fuerza',
       level: 'intermediate',

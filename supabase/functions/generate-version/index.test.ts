@@ -14,6 +14,8 @@ import { createHandler, readDeps, type HandlerDeps } from './index.ts';
 const VERSION: VersionForGeneration = {
   versionId: 'v1',
   state: 'NEW',
+  clientName: 'Carlos',
+  versionNumber: 1,
   request: {
     goal: 'Fuerza',
     level: 'intermediate',

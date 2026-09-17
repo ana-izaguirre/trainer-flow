@@ -12,6 +12,9 @@ import type { AIFailureReason, AIRequest, TokenUsage } from './ai-provider.ts';
 export interface VersionForGeneration {
   readonly versionId: string;
   readonly state: VersionState;
+  /** Para el aviso: «rutina lista» sin decir de quién no sirve con varios clientes. */
+  readonly clientName: string;
+  readonly versionNumber: number;
   /** La evaluación, ya traducida a lo que el proveedor necesita. */
   readonly request: AIRequest;
   readonly constraints: WorkoutConstraints;

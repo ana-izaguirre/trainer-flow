@@ -297,6 +297,8 @@ async function findVersionForGeneration(
   return {
     versionId: fila['version_id'] as string,
     state: fila['state'] as VersionState,
+    clientName: fila['client_name'] as string,
+    versionNumber: Number(fila['version_number']),
     request: {
       goal: fila['goal'] as string,
       level: fila['level'] as Level,

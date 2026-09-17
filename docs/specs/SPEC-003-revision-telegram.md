@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — webhook y parsing (S-09) |
+| **Estado** | **PARCIAL** — webhook, parsing y avisos con botones. Falta la lógica de los botones (SPEC-004) |
 
 ## Resultado parcial
 
@@ -13,7 +13,7 @@
 | `callback_data` con el límite de 64 bytes | S-09 | ✅ 27 tests |
 | Idempotencia por `update_id` | S-09 | ✅ En el handler |
 | Formateo de mensajes y división a 4096 | S-10 | ✅ 24 tests |
-| Envío con botones al entrenador | S-10 | ⏳ |
+| Envío con botones al entrenador | S-19 | ✅ 22 tests |
 | **Depende de** | SPEC-008, SPEC-009 |
 | **Sesiones** | S-09 |
 

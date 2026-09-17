@@ -32,6 +32,8 @@ import type {
 } from '../ports/ai-provider.ts';
 import type { GenerationRepo } from '../ports/generation-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
+import { buildDraftReady, buildGenerationFailed } from '../telegram/notify.ts';
+import type { InlineKeyboard } from '../telegram/keyboard.ts';
 import { checkRateLimit, type RateLimitConfig } from './rate-limit.ts';
 
 export type GenerateOutcome =
@@ -60,15 +62,6 @@ export interface GenerateDeps {
  */
 const REINTENTABLES: readonly AIFailureReason[] = ['API_ERROR', 'TIMEOUT'];
 
-const AVISOS: Readonly<Record<AIFailureReason, string>> = {
-  RATE_LIMITED: 'La IA no tiene margen ahora mismo.',
-  TIMEOUT: 'La IA tardó demasiado.',
-  API_ERROR: 'La IA no respondió.',
-  INVALID_OUTPUT: 'La IA devolvió una rutina que no se pudo leer.',
-};
-
-const ALTERNATIVA = 'Puedes cargar una plantilla o escribirla a mano sobre esta misma versión.';
-
 export async function generateVersion(
   versionId: string,
   deps: GenerateDeps,
@@ -91,8 +84,10 @@ export async function generateVersion(
   );
 
   if (!cuota.allowed) {
-    // La versión no se toca: sigue en NEW y el entrenador puede seguir.
-    await avisar(deps, version.trainerChatId, AVISOS.RATE_LIMITED);
+    // La versión no se toca: sigue en NEW y el entrenador puede seguir. El
+    // aviso lleva los botones de plantilla y manual: decir «no hay cuota» sin
+    // ofrecer por dónde seguir lo deja mirando un mensaje.
+    await enviar(deps, version.trainerChatId, buildGenerationFailed('RATE_LIMITED', versionId));
     return { kind: 'rate_limited', retryAfterMinutes: cuota.retryAfterMinutes };
   }
 
@@ -129,6 +124,19 @@ export async function generateVersion(
         latencyMs,
       });
       await aplicar(deps, versionId, generating, 'GENERATION_SUCCEEDED');
+
+      // El borrador con sus tres botones. Hasta aquí el sistema hacía todo
+      // bien y no se lo decía a nadie.
+      await enviar(
+        deps,
+        version.trainerChatId,
+        buildDraftReady(
+          validado.workout,
+          { clientName: version.clientName, versionNumber: version.versionNumber },
+          versionId,
+        ),
+      );
+
       return { kind: 'generated', versionId };
     }
   }
@@ -142,7 +150,7 @@ export async function generateVersion(
     latencyMs,
   });
   await aplicar(deps, versionId, generating, 'GENERATION_FAILED');
-  await avisar(deps, version.trainerChatId, AVISOS[reason]);
+  await enviar(deps, version.trainerChatId, buildGenerationFailed(reason, versionId));
 
   return { kind: 'generation_failed', reason };
 }
@@ -174,7 +182,10 @@ async function aplicar(
   if (to !== null) await deps.repo.transition(versionId, from, to);
 }
 
-/** Un aviso que falla no puede tumbar la generación que sí funcionó. */
-async function avisar(deps: GenerateDeps, chatId: number, motivo: string): Promise<void> {
-  await deps.sender.sendMessage(chatId, `${motivo} ${ALTERNATIVA}`);
+async function enviar(
+  deps: GenerateDeps,
+  chatId: number,
+  aviso: { readonly text: string; readonly keyboard: InlineKeyboard | null },
+): Promise<void> {
+  await deps.sender.sendMessage(chatId, aviso.text, aviso.keyboard);
 }

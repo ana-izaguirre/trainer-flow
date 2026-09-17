@@ -6,6 +6,7 @@
  * cómo se consigue.
  */
 import type { Identity } from '../domain/identity.ts';
+import type { InlineKeyboard } from '../telegram/keyboard.ts';
 
 export interface TelegramRepo {
   /**
@@ -24,7 +25,11 @@ export interface TelegramRepo {
 }
 
 export interface TelegramSender {
-  sendMessage(chatId: number, text: string): Promise<void>;
+  /**
+   * `keyboard` es opcional: un aviso que no pide ninguna decisión no lleva
+   * botones, y un `inline_keyboard` vacío hace que Telegram devuelva 400.
+   */
+  sendMessage(chatId: number, text: string, keyboard?: InlineKeyboard | null): Promise<void>;
   /** Telegram deja el botón girando si no se responde pronto. */
   answerCallback(callbackQueryId: string): Promise<void>;
 }
