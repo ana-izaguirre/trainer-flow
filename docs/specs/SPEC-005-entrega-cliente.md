@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — dominio completo. Falta cablear al webhook y el backoff |
+| **Estado** | **PARCIAL** — dominio y cableado completos. Falta el backoff (regla 8) |
 | **Depende de** | SPEC-004 |
 | **Sesiones** | S-19, S-20 |
 
@@ -33,10 +33,19 @@ guarda en el registro del cliente.
 1. Cliente abre el enlace
 2. Telegram envía: { message: { text: "/start abc123", chat: { id: 456 } } }
 3. Se busca client por link_token
-4. Se guarda telegram_chat_id y linked_at
-5. Se le da la bienvenida
-6. Si tiene un plan en APPROVED → se envía ahora
+4. Se resuelve el perfil del cliente, CREÁNDOLO si es su primera vez
+5. Se guarda profile_id y linked_at
+6. Se le da la bienvenida
+7. Si tiene un plan en APPROVED → se envía ahora
 ```
+
+**El paso 4 es el único sitio del sistema donde nace un perfil de cliente.**
+Por eso `/start <token>` se atiende antes de resolver identidad: es el update
+que la crea, así que no puede exigirla (SPEC-009 §3).
+
+El nombre del perfil sale de `clients.full_name`. **No** del `first_name` de
+Telegram: ese lo elige quien escribe, y con él un cliente podría aparecer ante
+el entrenador con el nombre de otro.
 
 ### Mensaje al cliente
 
@@ -66,6 +75,25 @@ guarda en el registro del cliente.
 7. Un token inválido responde con un mensaje neutro, sin revelar si existe.
 8. Reintento con backoff (máximo 3) si Telegram falla. Agotados, el plan sigue
    en `APPROVED` y se avisa al entrenador.
+9. **Un perfil de entrenador no puede canjear un token.** Un `telegram_user_id`
+   tiene un solo perfil con un solo rol; si ya es entrenador, el canje se
+   rechaza con la respuesta neutra.
+10. **Una persona ya vinculada a otra ficha no puede canjear un segundo token.**
+    Lo garantiza el `UNIQUE` de `clients.profile_id`, no una comprobación
+    previa: dos canjes simultáneos no pueden pasar los dos.
+11. Si el enlace falla al guardarse, **no se da la bienvenida.** Decirle
+    "ya estás conectado" a quien no lo está deja a una persona esperando una
+    rutina que nunca va a llegar.
+12. **El canje solo vale en un chat privado.** En un chat privado `chat.id` y
+    `from.id` coinciden; en un grupo no. Sin esta regla, alguien que escriba
+    `/start <token>` en un grupo haría que la rutina —y todos los avisos
+    siguientes— se publicaran ahí.
+13. **Una rutina sin evaluación de Tally se entrega igual.** Las manuales y las
+    de plantilla no tienen `goal`, `days_per_week` ni `session_minutes`: el
+    mensaje omite esa línea en vez de inventarla o quedarse sin enviar.
+14. **Al aprobar se entrega en el momento.** `handleAction` deja la versión en
+    `APPROVED`; entregarla es esta spec. Sin ese enlace, aprobar no le llega
+    nunca al cliente.
 
 ## 5. Estados
 
@@ -112,6 +140,19 @@ APPROVED ──► SENT
   contiene `limitations_detail` en crudo.
 - **CA-8** — DADO un plan en `SENT`, CUANDO se intenta enviarlo otra vez,
   ENTONCES no se duplica.
+- **CA-9** — DADO un cliente **sin perfil**, CUANDO envía `/start <token>`
+  válido, ENTONCES se le crea uno con rol `client` y el nombre de
+  `clients.full_name`, no el de Telegram.
+- **CA-10** — DADO el perfil del entrenador, CUANDO envía `/start <token>`,
+  ENTONCES se rechaza con la respuesta neutra y su rol no cambia.
+- **CA-11** — DADO alguien ya vinculado a una ficha, CUANDO canjea el token de
+  otra, ENTONCES se rechaza y **no** recibe la bienvenida.
+- **CA-12** — DADO un `/start <token>` válido enviado **en un grupo**, CUANDO
+  llega, ENTONCES se rechaza sin vincular y sin publicar nada ahí.
+- **CA-13** — DADO un plan sin evaluación, CUANDO se entrega, ENTONCES el
+  mensaje sale sin la línea de objetivo, no sin enviarse.
+- **CA-14** — DADO un borrador aprobado por el entrenador, CUANDO se pulsa
+  Aprobar, ENTONCES el cliente vinculado recibe la rutina en ese momento.
 
 ## 9. Tests
 

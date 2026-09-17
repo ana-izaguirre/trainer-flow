@@ -16,6 +16,8 @@ import type {
 import type { Level } from '../_core/domain/assessment.ts';
 import type { VersionState } from '../_core/domain/version.ts';
 import type { Workout } from '../_core/domain/workout.ts';
+import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { DeliveryRepo, VersionForDelivery } from '../_core/ports/delivery-ports.ts';
 import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
 import { requireEnv } from './env.ts';
 
@@ -314,5 +316,187 @@ async function findVersionForGeneration(
       hasLimitations: fila['has_limitations'] as boolean,
     },
     trainerChatId: Number(fila['trainer_chat_id']),
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Vinculación y entrega (SPEC-005)
+// -----------------------------------------------------------------------------
+
+/**
+ * Implementa el puerto `DeliveryRepo`.
+ *
+ * Las cinco operaciones son funciones SQL (migración 0009) y no cadenas de
+ * `select` anidados: tres de ellas necesitan joins de cuatro o cinco tablas, y
+ * dos necesitan ser atómicas. Encadenar PostgREST para eso produce algo que
+ * nadie vuelve a leer, y que además no es atómico.
+ */
+export function createDeliveryRepo(db: Db): DeliveryRepo {
+  return {
+    async findClientByToken(token) {
+      // El token es una credencial: no aparece en el mensaje de error.
+      const { data, error } = await db.rpc('client_for_link', { p_token: token }).maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo buscar el enlace: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+      const chatDelEntrenador = fila['trainer_chat_id'];
+
+      return {
+        clientId: fila['client_id'] as string,
+        fullName: fila['full_name'] as string,
+        linkedProfileId: (fila['linked_profile_id'] as string | null) ?? null,
+        linkedTelegramUserId: toNumberOrNull(fila['linked_telegram_user_id']),
+        trainerChatId: Number(chatDelEntrenador),
+      };
+    },
+
+    async ensureClientProfile(telegramUserId, chatId, fullName) {
+      const { data, error } = await db.rpc('ensure_client_profile', {
+        p_telegram_user_id: telegramUserId,
+        p_chat_id: chatId,
+        p_full_name: fullName,
+      });
+
+      if (error !== null) throw new Error(`No se pudo resolver el perfil: ${error.code}`);
+
+      // NULL es una respuesta, no un fallo: ya tiene un perfil que no es de
+      // cliente, y un entrenador no cambia de rol por pulsar un enlace.
+      if (data === null) return null;
+
+      return { profileId: data as string, chatId };
+    },
+
+    async linkClient(clientId, profileId) {
+      const { data, error } = await db.rpc('link_client', {
+        p_client_id: clientId,
+        p_profile_id: profileId,
+      });
+
+      if (error !== null) throw new Error(`No se pudo vincular: ${error.code}`);
+
+      return data === true;
+    },
+
+    findApprovedVersion: (clientId) =>
+      readDelivery(db, 'approved_version_for_client', { p_client_id: clientId }),
+
+    findVersion: (versionId) =>
+      readDelivery(db, 'version_for_delivery', { p_version_id: versionId }),
+
+    async transition(versionId, from, to) {
+      const { data, error } = await db.rpc('apply_version_transition', {
+        p_version_id: versionId,
+        p_expected_state: from,
+        p_next_state: to,
+        // La entrega la dispara el sistema, no una pulsación (SPEC-005 §5).
+        p_actor: 'system',
+      });
+
+      if (error !== null) throw new Error(`No se pudo aplicar la transición: ${error.code}`);
+
+      return data === true;
+    },
+  };
+}
+
+/** `bigint` puede llegar como número o como texto según el driver. */
+function toNumberOrNull(value: unknown): number | null {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+/**
+ * Las dos consultas de entrega devuelven la MISMA forma de fila, así que se
+ * leen con el mismo código: dos lecturas que deben coincidir acaban sin
+ * coincidir.
+ */
+async function readDelivery(
+  db: Db,
+  fn: 'version_for_delivery' | 'approved_version_for_client',
+  args: Record<string, string>,
+): Promise<VersionForDelivery | null> {
+  const { data, error } = await db.rpc(fn, args).maybeSingle();
+
+  if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
+  if (data === null) return null;
+
+  const fila = data as Record<string, unknown>;
+  const goal = fila['goal'] as string | null;
+
+  return {
+    versionId: fila['version_id'] as string,
+    state: fila['state'] as VersionState,
+    content: fila['content'] as Workout,
+    clientName: fila['client_name'] as string,
+    // NULL si aún no canjeó su enlace: no hay dónde escribirle, pero la
+    // versión se devuelve igual para poder avisar al entrenador (CA-3).
+    clientChatId: toNumberOrNull(fila['client_chat_id']),
+    trainerChatId: Number(fila['trainer_chat_id']),
+    // Los tres van juntos o no va ninguno: una rutina manual no tiene
+    // formulario detrás (SPEC-005 regla 13).
+    plan:
+      goal === null
+        ? null
+        : {
+            goal,
+            daysPerWeek: Number(fila['days_per_week']),
+            sessionMinutes: Number(fila['session_minutes']),
+          },
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Los botones del entrenador (SPEC-004)
+// -----------------------------------------------------------------------------
+
+/**
+ * Implementa el puerto `ActionRepo`.
+ *
+ * `findVersion` trae la PERTENENCIA —de qué cliente es y de qué entrenador—
+ * porque eso es lo que `_core/authorization.ts` compara contra la identidad
+ * resuelta del webhook. Un `callback_data` lo fabrica cualquiera; lo que
+ * impide tocar la versión de otro es esa comparación (SPEC-009 regla 8).
+ */
+export function createActionRepo(db: Db, requestId: string): ActionRepo {
+  return {
+    async findVersion(versionId) {
+      const { data, error } = await db
+        .rpc('version_for_action', { p_version_id: versionId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        versionId: fila['version_id'] as string,
+        state: fila['state'] as VersionState,
+        versionNumber: Number(fila['version_number']),
+        content: (fila['content'] as Workout | null) ?? null,
+        clientName: fila['client_name'] as string,
+        client: {
+          clientId: fila['client_id'] as string,
+          trainerId: fila['trainer_id'] as string,
+          profileId: (fila['client_profile_id'] as string | null) ?? null,
+        },
+      };
+    },
+
+    async transition(versionId, from, to) {
+      const { data, error } = await db.rpc('apply_version_transition', {
+        p_version_id: versionId,
+        p_expected_state: from,
+        p_next_state: to,
+        // Fue el entrenador quien pulsó: es el actor que queda en el evento.
+        p_actor: 'trainer',
+        p_request_id: requestId,
+      });
+
+      if (error !== null) throw new Error(`No se pudo aplicar la transición: ${error.code}`);
+
+      return data === true;
+    },
   };
 }

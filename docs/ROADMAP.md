@@ -79,8 +79,8 @@ revés, el fallback siempre queda "para después".
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
-| **S-19** 🟡 | Vinculación | Deep link + `/start <token>` | Token inválido da respuesta neutra |
-| **S-20** 🟡 | Entrega | Mensaje al cliente + entrega diferida | **SPEC-005 cerrada** |
+| **S-19** ✅ | Vinculación | Deep link + `/start <token>` | Token inválido da respuesta neutra |
+| **S-20** ✅ | Entrega | Mensaje al cliente + entrega diferida | **SPEC-005 cerrada** salvo el backoff |
 | **S-21** 🟡 | Cron de check-ins | `pg_cron` + `weekly-checkin` | Correr el cron dos veces no duplica |
 | **S-22** | Respuestas de check-in | Captura + aviso de molestias | **SPEC-006 cerrada** |
 

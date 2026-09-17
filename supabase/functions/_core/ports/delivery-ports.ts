@@ -3,13 +3,35 @@
  */
 import type { VersionState } from '../domain/version.ts';
 import type { Workout } from '../domain/workout.ts';
+import type { PlanSummary } from '../telegram/client-format.ts';
 
 export interface ClientForLink {
   readonly clientId: string;
   readonly fullName: string;
   /** `null` mientras no se haya vinculado. */
   readonly linkedProfileId: string | null;
+  /**
+   * El `telegram_user_id` de quien ya lo canjeó, si alguien lo hizo.
+   *
+   * Viene junto al cliente **a propósito**: permite saber si quien está
+   * canjeando es la misma persona sin crear antes su perfil. Un intento con
+   * un token ajeno no puede dejar rastro en `profiles`.
+   */
+  readonly linkedTelegramUserId: number | null;
   readonly trainerChatId: number;
+}
+
+/** Quien escribe, tal y como viene del update verificado (ADR-009). */
+export interface TelegramUser {
+  /** `from.id`: QUIÉN es. */
+  readonly telegramUserId: number;
+  /** `chat.id`: DÓNDE responderle. */
+  readonly chatId: number;
+}
+
+export interface ClientProfile {
+  readonly profileId: string;
+  readonly chatId: number;
 }
 
 export interface VersionForDelivery {
@@ -17,19 +39,42 @@ export interface VersionForDelivery {
   readonly state: VersionState;
   readonly content: Workout;
   readonly clientName: string;
-  readonly clientChatId: number;
+  /** `null` si el cliente aún no canjeó su enlace: no hay dónde escribirle. */
+  readonly clientChatId: number | null;
   readonly trainerChatId: number;
-  readonly goal: string;
-  readonly daysPerWeek: number;
-  readonly sessionMinutes: number;
+  /** `null` en una rutina manual o de plantilla (SPEC-005 regla 13). */
+  readonly plan: PlanSummary | null;
 }
 
 export interface DeliveryRepo {
   /** El `link_token` es una credencial: nunca se loguea. */
   findClientByToken(token: string): Promise<ClientForLink | null>;
 
-  /** Guarda el perfil y `linked_at`. `false` si otro se adelantó. */
-  linkClient(clientId: string, profileId: string, chatId: number): Promise<boolean>;
+  /**
+   * El perfil de esta persona, **creándolo si es su primera vez**.
+   *
+   * Es el único sitio del sistema donde nace un perfil de cliente, y solo se
+   * llega aquí con un token válido en la mano (SPEC-009 regla 1).
+   *
+   * `fullName` sale de `clients.full_name`, no del `first_name` del update:
+   * ese lo elige quien escribe.
+   *
+   * Devuelve `null` si ese `telegram_user_id` ya tiene un perfil que **no** es
+   * de cliente: un entrenador no puede canjear un token (SPEC-005 regla 9).
+   */
+  ensureClientProfile(
+    telegramUserId: number,
+    chatId: number,
+    fullName: string,
+  ): Promise<ClientProfile | null>;
+
+  /**
+   * Guarda el perfil y `linked_at`. `false` si otro se adelantó.
+   *
+   * No recibe el `chat_id`: `ensureClientProfile` ya lo guardó en el perfil,
+   * y tenerlo en dos sitios es tenerlo mal en uno de los dos.
+   */
+  linkClient(clientId: string, profileId: string): Promise<boolean>;
 
   /** La versión aprobada que espera entrega, si la hay. */
   findApprovedVersion(clientId: string): Promise<VersionForDelivery | null>;

@@ -9,8 +9,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../domain/identity.ts';
+import type { DeliveryRepo } from '../ports/delivery-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import type { ActionDeps } from './actions.ts';
+import type { DeliveryDeps } from './delivery.ts';
 import { handleTelegramWebhook, outcomeToStatus } from './webhook.ts';
 
 const SECRET = 'un-secreto-de-webhook-largo-y-aleatorio';
@@ -65,6 +67,76 @@ function fakeSender() {
 
 const FROM = { id: 500, first_name: 'Ana' };
 
+/** Un token con la forma que `parseStartToken` acepta. */
+const TOKEN = 'k'.repeat(32);
+
+/**
+ * Una entrega falsa que registra qué se le pidió.
+ *
+ * `cliente: null` significa token desconocido; por defecto el token vale y el
+ * cliente aún no tiene perfil, que es el caso que importa.
+ */
+function fakeDelivery(opciones: { cliente?: unknown; entregable?: boolean } = {}) {
+  const pasos: string[] = [];
+
+  const repo: DeliveryRepo = {
+    findClientByToken: () => {
+      pasos.push('findClientByToken');
+      return Promise.resolve(
+        opciones.cliente === undefined
+          ? {
+              clientId: 'c1',
+              fullName: 'Carlos',
+              linkedProfileId: null,
+              linkedTelegramUserId: null,
+              trainerChatId: 10,
+            }
+          : (opciones.cliente as null),
+      );
+    },
+    ensureClientProfile: () => {
+      pasos.push('ensureClientProfile');
+      return Promise.resolve({ profileId: 'perfil-nuevo', chatId: 500 });
+    },
+    linkClient: () => {
+      pasos.push('linkClient');
+      return Promise.resolve(true);
+    },
+    findApprovedVersion: () => Promise.resolve(null),
+    findVersion: () => {
+      pasos.push('findVersion');
+      if (opciones.entregable !== true) return Promise.resolve(null);
+
+      return Promise.resolve({
+        versionId: 'v1',
+        state: 'APPROVED' as const,
+        content: { summary: 'Fuerza', days: [], warnings: [] },
+        clientName: 'Carlos',
+        clientChatId: 500,
+        trainerChatId: 10,
+        plan: null,
+      });
+    },
+    transition: (_v, from, to) => {
+      pasos.push(`transition:${from}->${to}`);
+      return Promise.resolve(true);
+    },
+  };
+
+  const deps: DeliveryDeps = {
+    repo,
+    sender: {
+      sendMessage: (chatId) => {
+        pasos.push(`sendMessage:${chatId}`);
+        return Promise.resolve();
+      },
+      answerCallback: () => Promise.resolve(),
+    },
+  };
+
+  return { deps, pasos };
+}
+
 function comando(text: string, updateId = 1) {
   return {
     update_id: updateId,
@@ -79,6 +151,7 @@ function ejecutar(
     repo?: ReturnType<typeof fakeRepo>;
     sender?: ReturnType<typeof fakeSender>;
     actions?: ActionDeps;
+    delivery?: DeliveryDeps;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -94,6 +167,7 @@ function ejecutar(
         sender: sender.sender,
         expectedSecret: SECRET,
         requestId: 'req-1',
+        delivery: opts.delivery ?? fakeDelivery().deps,
         ...(opts.actions === undefined ? {} : { actions: opts.actions }),
       },
     ),
@@ -124,6 +198,7 @@ describe('🔴 el secreto se verifica ANTES que nada', () => {
       { kind: 'ignored', reason: 'x' },
       { kind: 'duplicate', updateId: 1 },
       { kind: 'unknown_user', telegramUserId: 1 },
+      { kind: 'linked', updateId: 1, outcome: { kind: 'invalid_token' } },
       { kind: 'handled', updateId: 1, profileId: 'p', role: 'trainer', updateKind: 'command' },
     ] as const) {
       // 200 a propósito: un 500 haría que Telegram reintentara en bucle.
@@ -198,6 +273,97 @@ describe('identidad', () => {
       role: 'trainer',
       updateKind: 'command',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('🔴 el deep link: /start <token>', () => {
+  it('un cliente SIN PERFIL con token válido se vincula', async () => {
+    // ESTE es el bug que cerró SPEC-005. Antes, el canje caía en la
+    // resolución de identidad, no encontraba perfil, y el cliente recibía
+    // «no te tengo registrado». El deep link no funcionaba nunca.
+    const repo = fakeRepo({ findIdentity: async () => null });
+    const delivery = fakeDelivery();
+    const { sender, result } = ejecutar(comando(`/start ${TOKEN}`), { repo, delivery: delivery.deps });
+
+    const outcome = await result;
+
+    expect(outcome.kind).toBe('linked');
+    expect(delivery.pasos).toContain('ensureClientProfile');
+    expect(delivery.pasos).toContain('linkClient');
+    expect(sender.sent, 'no puede recibir el mensaje de desconocido').toEqual([]);
+  });
+
+  it('el canje ocurre ANTES de resolver identidad', async () => {
+    // Es el orden lo que arregla el bug: pedir identidad primero volvería a
+    // rechazar a todo cliente nuevo.
+    const repo = fakeRepo();
+    const { result } = ejecutar(comando(`/start ${TOKEN}`), { repo });
+
+    await result;
+    expect(repo.calls).toEqual(['claimEvent', 'markProcessed']);
+    expect(repo.calls).not.toContain('findIdentity');
+  });
+
+  it('un token que no existe da respuesta neutra, no un perfil', async () => {
+    // CA-5. Y sobre todo: `ensureClientProfile` no se llega a llamar.
+    const delivery = fakeDelivery({ cliente: null });
+    const { result } = ejecutar(comando(`/start ${TOKEN}`), { delivery: delivery.deps });
+
+    const outcome = await result;
+
+    expect(outcome).toMatchObject({ kind: 'linked', outcome: { kind: 'invalid_token' } });
+    expect(delivery.pasos).not.toContain('ensureClientProfile');
+  });
+
+  it('el resultado NO lleva el token: se loguea entero', async () => {
+    // `link_token` es una credencial (SPEC-005 §7). El handler loguea el
+    // outcome completo, así que el token no puede viajar dentro.
+    const { result } = ejecutar(comando(`/start ${TOKEN}`));
+
+    expect(JSON.stringify(await result)).not.toContain(TOKEN);
+  });
+
+  it('un /start a secas sigue el camino normal', async () => {
+    // Abrir el bot sin enlace es legítimo, y no es un canje: sin perfil,
+    // respuesta neutra.
+    const repo = fakeRepo({ findIdentity: async () => null });
+    const delivery = fakeDelivery();
+    const { result } = ejecutar(comando('/start'), { repo, delivery: delivery.deps });
+
+    expect((await result).kind).toBe('unknown_user');
+    expect(delivery.pasos).toEqual([]);
+  });
+
+  it('un token con forma imposible no llega a consultar la base', async () => {
+    const delivery = fakeDelivery();
+    const { result } = ejecutar(comando('/start corto'), { delivery: delivery.deps });
+
+    await result;
+    expect(delivery.pasos).toEqual([]);
+  });
+
+  it('el mismo /start dos veces vincula UNA sola vez', async () => {
+    // La idempotencia es la misma que para todo lo demás: el `claimEvent` va
+    // antes del canje.
+    const repo = fakeRepo({ claimEvent: async () => false });
+    const delivery = fakeDelivery();
+    const { result } = ejecutar(comando(`/start ${TOKEN}`), { repo, delivery: delivery.deps });
+
+    expect((await result).kind).toBe('duplicate');
+    expect(delivery.pasos).toEqual([]);
+  });
+
+  it('sin el secreto correcto no se canjea nada', async () => {
+    const delivery = fakeDelivery();
+    const { result } = ejecutar(comando(`/start ${TOKEN}`), {
+      secretHeader: 'otro-secreto-cualquiera-largo',
+      delivery: delivery.deps,
+    });
+
+    expect((await result).kind).toBe('unauthorized');
+    expect(delivery.pasos).toEqual([]);
   });
 });
 
@@ -328,6 +494,37 @@ describe('los botones se enrutan', () => {
 
     return { pasos, actions };
   }
+
+  it('aprobar ENTREGA la rutina en el momento', async () => {
+    // CA-14, regla 14. `handleAction` solo deja la versión en APPROVED; sin
+    // este enlace el entrenador pulsa Aprobar y al cliente no le llega nada.
+    const { actions } = enrutador();
+    const delivery = fakeDelivery({ entregable: true });
+
+    const { result } = ejecutar(conBoton(`act:approve:${VERSION}`), {
+      actions,
+      delivery: delivery.deps,
+    });
+
+    const outcome = await result;
+
+    expect(outcome).toMatchObject({ delivery: { kind: 'delivered', versionId: 'v1' } });
+    expect(delivery.pasos).toContain('sendMessage:500');
+    expect(delivery.pasos).toContain('transition:APPROVED->SENT');
+  });
+
+  it('rechazar no entrega nada', async () => {
+    const { actions } = enrutador();
+    const delivery = fakeDelivery({ entregable: true });
+
+    const { result } = ejecutar(conBoton(`act:reject:${VERSION}`), {
+      actions,
+      delivery: delivery.deps,
+    });
+
+    await result;
+    expect(delivery.pasos).toEqual([]);
+  });
 
   it('un botón válido llega a su acción', async () => {
     const { pasos, actions } = enrutador();

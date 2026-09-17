@@ -12,13 +12,34 @@
  *   1. Verificar el secreto  → antes de tocar absolutamente nada
  *   2. Parsear el update     → dato no confiable
  *   3. Reclamar el evento    → idempotencia
- *   4. Resolver la identidad → nadie se auto-registra
- *   5. Atender
+ *   4. ¿`/start <token>`?    → es el update que CREA identidad
+ *   5. Resolver la identidad → nadie se auto-registra
+ *   6. Atender
+ *   7. Si se aprobó, entregar → SPEC-005 regla 14
+ *
+ * ┌─ POR QUÉ EL PASO 4 VA ANTES DEL 5 ─────────────────────────────────────┐
+ * │ `/start <token>` es el único update que crea identidad, así que no     │
+ * │ puede exigirla. Un cliente que abre su deep link por primera vez       │
+ * │ todavía no tiene perfil: resolviendo identidad primero recibiría «no   │
+ * │ te tengo registrado» y el enlace no funcionaría NUNCA.                 │
+ * │                                                                        │
+ * │ No es auto-registro: el entrenador creó la ficha y emitió el token.    │
+ * │ La autorización se concedió antes de que la persona escribiera         │
+ * │ (SPEC-009 §3).                                                         │
+ * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { UserRole } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
 import { parseCallbackData } from './callback-data.ts';
+import {
+  deliverVersion,
+  linkClient,
+  type DeliverOutcome,
+  type DeliveryDeps,
+  type LinkOutcome,
+} from './delivery.ts';
+import { parseStartToken } from './start.ts';
 import { parseUpdate } from './update.ts';
 import { constantTimeEquals } from '../security/constant-time.ts';
 
@@ -31,6 +52,11 @@ export type WebhookOutcome =
   | { readonly kind: 'ignored'; readonly reason: string }
   | { readonly kind: 'duplicate'; readonly updateId: number }
   | { readonly kind: 'unknown_user'; readonly telegramUserId: number }
+  /**
+   * Un canje de `link_token`. **`outcome` no lleva el token**: este resultado
+   * se loguea entero.
+   */
+  | { readonly kind: 'linked'; readonly updateId: number; readonly outcome: LinkOutcome }
   | {
       readonly kind: 'handled';
       readonly updateId: number;
@@ -39,6 +65,8 @@ export type WebhookOutcome =
       readonly updateKind: 'command' | 'text' | 'callback';
       /** Qué pasó con el botón, cuando el update era uno. */
       readonly action?: ActionOutcome;
+      /** Qué pasó con la entrega, cuando el botón fue Aprobar. */
+      readonly delivery?: DeliverOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -55,6 +83,12 @@ export interface WebhookDeps {
   readonly requestId: string;
   /** Qué hacer con un botón. Ausente mientras no haya nada que enrutar. */
   readonly actions?: ActionDeps;
+  /**
+   * Qué hacer con un `/start <token>`. **Obligatorio**: un webhook que se
+   * pueda construir sin esto es un bot en el que el deep link no funciona, y
+   * eso no puede ser un descuido de cableado.
+   */
+  readonly delivery: DeliveryDeps;
 }
 
 /**
@@ -102,7 +136,24 @@ export async function handleTelegramWebhook(
       return { kind: 'duplicate', updateId: update.updateId };
     }
 
-    // ── 4. Identidad ─────────────────────────────────────────────────────
+    // ── 4. El canje del deep link ────────────────────────────────────────
+    // Va antes de resolver identidad porque es lo que la crea. El token es
+    // una credencial: no se loguea, ni siquiera al rechazarlo.
+    if (update.kind === 'command') {
+      const token = parseStartToken(update.command, update.args);
+
+      if (token !== null) {
+        const outcome = await linkClient(
+          token,
+          { telegramUserId: update.telegramUserId, chatId: update.chatId },
+          deps.delivery,
+        );
+        await deps.repo.markProcessed(externalId);
+        return { kind: 'linked', updateId: update.updateId, outcome };
+      }
+    }
+
+    // ── 5. Identidad ─────────────────────────────────────────────────────
     const identity = await deps.repo.findIdentity(update.telegramUserId);
     if (identity === null) {
       await deps.sender.sendMessage(update.chatId, NEUTRAL_REPLY);
@@ -110,7 +161,7 @@ export async function handleTelegramWebhook(
       return { kind: 'unknown_user', telegramUserId: update.telegramUserId };
     }
 
-    // ── 5. Atender ───────────────────────────────────────────────────────
+    // ── 6. Atender ───────────────────────────────────────────────────────
     // El `callback_data` es dato NO confiable: cualquiera puede fabricar uno.
     // Lo que impide tocar la versión de otro no es este parseo, sino la
     // comprobación de pertenencia que hace `handleAction`.
@@ -136,6 +187,13 @@ export async function handleTelegramWebhook(
       }
     }
 
+    // Aprobar deja la versión lista; entregarla es SPEC-005 (regla 14). Sin
+    // este enlace, el entrenador pulsa Aprobar y al cliente no le llega nada.
+    const delivery =
+      action?.kind === 'approved'
+        ? await deliverVersion(action.versionId, deps.delivery)
+        : undefined;
+
     await deps.repo.markProcessed(externalId);
 
     return {
@@ -145,6 +203,7 @@ export async function handleTelegramWebhook(
       role: identity.role,
       updateKind: update.kind,
       ...(action === undefined ? {} : { action }),
+      ...(delivery === undefined ? {} : { delivery }),
     };
   } catch (error) {
     return {
