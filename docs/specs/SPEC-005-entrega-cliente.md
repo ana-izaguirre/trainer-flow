@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — dominio completo. Falta cablear al webhook y el backoff |
 | **Depende de** | SPEC-004 |
 | **Sesiones** | S-19, S-20 |
 
