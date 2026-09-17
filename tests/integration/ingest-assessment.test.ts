@@ -273,3 +273,87 @@ describe('trazabilidad de extremo a extremo', () => {
     expect(rows[0]!.todo).not.toContain('rodilla');
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('version_for_generation', () => {
+  async function versionDe(trainerId: string, overrides: Record<string, unknown> = {}) {
+    const ids = await ingest(trainerId, overrides);
+    const { rows } = await db.query<Record<string, unknown>>(
+      `SELECT * FROM version_for_generation($1)`,
+      [ids.version_id],
+    );
+    return rows[0];
+  }
+
+  it('reúne versión, evaluación y entrenador en una consulta', async () => {
+    const trainerId = await createProfile(db, 'trainer');
+
+    const fila = await versionDe(trainerId);
+
+    expect(fila).toMatchObject({
+      state: 'NEW',
+      goal: 'Fuerza',
+      level: 'beginner',
+      days_per_week: 4,
+      session_minutes: 60,
+      equipment: 'Mancuernas',
+      has_limitations: false,
+    });
+  });
+
+  it('trae el chat del entrenador, que es a donde va el aviso si algo falla', async () => {
+    const trainerId = await createProfile(db, 'trainer');
+    const { rows } = await db.query<{ telegram_chat_id: string }>(
+      `SELECT telegram_chat_id FROM profiles WHERE id = $1`,
+      [trainerId],
+    );
+
+    const fila = await versionDe(trainerId);
+
+    expect(String(fila!['trainer_chat_id'])).toBe(rows[0]!.telegram_chat_id);
+  });
+
+  it('el detalle de la limitación llega cuando el cliente la declaró', async () => {
+    // Va al prompt. Si no llegara, la rutina no la tendría en cuenta.
+    const trainerId = await createProfile(db, 'trainer');
+
+    const fila = await versionDe(trainerId, { limitaciones: true, detalle: 'Rodilla derecha' });
+
+    expect(fila!['limitations']).toBe('Rodilla derecha');
+  });
+
+  it('sin limitaciones declaradas, el detalle NO viaja', async () => {
+    // El CHECK de la tabla ya lo impide, pero leerlo explícito evita que un
+    // cambio futuro filtre un detalle huérfano al prompt.
+    const trainerId = await createProfile(db, 'trainer');
+
+    const fila = await versionDe(trainerId, { limitaciones: false, detalle: null });
+
+    expect(fila!['limitations']).toBeNull();
+  });
+
+  it('una versión que no existe devuelve cero filas, no un error', async () => {
+    const { rows } = await db.query(
+      `SELECT * FROM version_for_generation('00000000-0000-0000-0000-000000000000')`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it('anon no puede invocarla', async () => {
+    const trainerId = await createProfile(db, 'trainer');
+    const ids = await ingest(trainerId);
+    await db.query('SET ROLE anon');
+
+    let code: string | undefined;
+    try {
+      await db.query(`SELECT * FROM version_for_generation($1)`, [ids.version_id]);
+    } catch (error) {
+      code = pgErrorCode(error);
+    } finally {
+      await db.query('RESET ROLE');
+    }
+
+    expect(code).toBe(PG.INSUFFICIENT_PRIVILEGE);
+  });
+});

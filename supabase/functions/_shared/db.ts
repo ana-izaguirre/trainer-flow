@@ -7,6 +7,15 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { Identity } from '../_core/domain/identity.ts';
 import type { AssessmentToIngest, IngestedIds, TallyRepo } from '../_core/ports/tally-ports.ts';
+import type {
+  GenerationOutcome,
+  GenerationRecord,
+  GenerationRepo,
+  VersionForGeneration,
+} from '../_core/ports/generation-ports.ts';
+import type { Level } from '../_core/domain/assessment.ts';
+import type { VersionState } from '../_core/domain/version.ts';
+import type { Workout } from '../_core/domain/workout.ts';
 import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
 import { requireEnv } from './env.ts';
 
@@ -172,4 +181,136 @@ async function ingestAssessment(
 
   const fila = data as { client_id: string; plan_id: string; version_id: string };
   return { clientId: fila.client_id, planId: fila.plan_id, versionId: fila.version_id };
+}
+
+// -----------------------------------------------------------------------------
+// Generación con IA (SPEC-002)
+// -----------------------------------------------------------------------------
+
+export function createGenerationRepo(db: Db, requestId: string): GenerationRepo {
+  return {
+    findVersion: (versionId) => findVersionForGeneration(db, versionId),
+
+    async recentGenerations(windowMinutes) {
+      const desde = new Date(Date.now() - windowMinutes * 60_000).toISOString();
+
+      // Solo las fechas: el rate limit cuenta llamadas, no le importa qué
+      // pasó con ellas. Las fallidas cuentan igual — consumieron cuota.
+      const { data, error } = await db
+        .from('ai_generations')
+        .select('created_at')
+        .gte('created_at', desde);
+
+      if (error !== null) throw new Error(`No se pudo leer la cuota: ${error.code}`);
+
+      return (data ?? []).map((fila) => new Date(fila.created_at as string));
+    },
+
+    async startGeneration(record: GenerationRecord) {
+      const { data, error } = await db
+        .from('ai_generations')
+        .insert({
+          provider: record.provider,
+          model: record.model,
+          operation: 'generate',
+          version_id: record.versionId,
+          request_id: requestId,
+          status: 'GENERATING',
+        })
+        .select('id')
+        .single();
+
+      if (error !== null || data === null) {
+        throw new Error(`No se pudo registrar la generación: ${error?.code ?? 'sin datos'}`);
+      }
+
+      return data.id as number;
+    },
+
+    async finishGeneration(id, outcome: GenerationOutcome) {
+      const comun = { latency_ms: outcome.latencyMs, finished_at: new Date().toISOString() };
+
+      const fila =
+        outcome.status === 'SUCCEEDED'
+          ? {
+              ...comun,
+              status: 'SUCCEEDED',
+              tokens_in: outcome.usage.tokensIn,
+              tokens_out: outcome.usage.tokensOut,
+            }
+          : { ...comun, status: 'FAILED', failure_reason: outcome.failureReason };
+
+      const { error } = await db.from('ai_generations').update(fila).eq('id', id);
+
+      // Que el cierre falle no puede tumbar una generación que sí funcionó,
+      // pero tampoco puede pasar en silencio: la fila queda en GENERATING para
+      // siempre y la cuota deja de cuadrar.
+      if (error !== null) throw new Error(`No se pudo cerrar la generación: ${error.code}`);
+    },
+
+    async transition(versionId, from, to) {
+      // `apply_version_transition` lleva la guarda de concurrencia: devuelve
+      // false si el estado esperado ya no es el actual.
+      const { data, error } = await db.rpc('apply_version_transition', {
+        p_version_id: versionId,
+        p_expected_state: from,
+        p_next_state: to,
+        p_actor: 'system',
+      });
+
+      if (error !== null) throw new Error(`No se pudo aplicar la transición: ${error.code}`);
+
+      return data === true;
+    },
+
+    async saveContent(versionId, workout: Workout) {
+      const { error } = await db
+        .from('workout_versions')
+        .update({ content: workout })
+        .eq('id', versionId);
+
+      if (error !== null) throw new Error(`No se pudo guardar la rutina: ${error.code}`);
+    },
+  };
+}
+
+/**
+ * Reúne versión, evaluación y entrenador en una consulta.
+ *
+ * El `join` de cinco tablas vive en `version_for_generation` (migración 0007):
+ * encadenar cinco `select` anidados produce algo que nadie vuelve a leer.
+ */
+async function findVersionForGeneration(
+  db: Db,
+  versionId: string,
+): Promise<VersionForGeneration | null> {
+  const { data, error } = await db
+    .rpc('version_for_generation', { p_version_id: versionId })
+    .maybeSingle();
+
+  if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
+  if (data === null) return null;
+
+  const fila = data as Record<string, unknown>;
+  const limitations = (fila['limitations'] as string | null) ?? null;
+
+  return {
+    versionId: fila['version_id'] as string,
+    state: fila['state'] as VersionState,
+    request: {
+      goal: fila['goal'] as string,
+      level: fila['level'] as Level,
+      daysPerWeek: fila['days_per_week'] as number,
+      sessionMinutes: fila['session_minutes'] as number,
+      equipment: fila['equipment'] as string,
+      limitations,
+      // Generar desde cero, no editar. La edición llega en el bloque 7.
+      instruction: null,
+    },
+    constraints: {
+      daysPerWeek: fila['days_per_week'] as number,
+      hasLimitations: fila['has_limitations'] as boolean,
+    },
+    trainerChatId: Number(fila['trainer_chat_id']),
+  };
 }

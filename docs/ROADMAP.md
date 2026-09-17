@@ -72,7 +72,7 @@ revés, el fallback siempre queda "para después".
 |---|---|---|---|
 | **S-15** ✅ | `AIProvider` + rate limit (TDD) | `_core/ports/ai-provider.ts` | Bajo, en el límite, sobre y ventana expirada, cubiertos |
 | **S-16** ✅ | Proveedor de Gemini | `_shared/ai/gemini-provider.ts` | **El grep de "gemini" sobre `_core` no devuelve nada** |
-| **S-17** | Función `generate-version` | Handler + degradación | Un fallo devuelve la versión a `NEW`, no la mata |
+| **S-17** ✅ | Función `generate-version` | Handler + degradación | Un fallo devuelve la versión a `NEW`, no la mata |
 | **S-18** | **E2E-2 y E2E-3** | IA completa y fallo de IA | **SPEC-002 cerrada.** Con `429` el producto sigue funcionando |
 
 ## Bloque 6 — El cliente (S-19 → S-22)
