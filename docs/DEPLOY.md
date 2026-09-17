@@ -269,3 +269,62 @@ supabase db reset
 [Preview con Cloudflare Tunnel](https://developers.cloudflare.com/pages/how-to/preview-with-cloudflare-tunnel/) ·
 [Alternativas para webhooks](https://hookdeck.com/webhooks/platforms/cloudflare-tunnel-alternatives-for-local-webhook-development) ·
 [vitest-coverage-report-action](https://github.com/davelosert/vitest-coverage-report-action)
+
+---
+
+## El check-in semanal — el único paso manual
+
+`pg_cron` dispara la Edge Function `weekly-checkin` los lunes a las 9:00 UTC.
+**Programar ese job no está en las migraciones, y es a propósito:** necesita la
+URL del proyecto y una credencial, y un secreto en un archivo versionado es un
+bloqueante. Además `pg_cron` y `pg_net` son extensiones de Supabase, así que
+una migración con ellas rompería los tests, que corren contra un PostgreSQL
+pelado.
+
+Se hace **una vez**, así:
+
+**1.** Genera el secreto y guárdalo:
+
+```bash
+openssl rand -base64 32          # o el generador que prefieras
+supabase secrets set CHECKIN_CRON_SECRET='<lo que salió>'
+```
+
+**2.** En el SQL Editor de Supabase, pega el contenido de
+`supabase/cron/weekly-checkin.sql` y ejecútalo. Eso crea la función, no el job.
+
+**3.** Todavía en el SQL Editor, programa el job con tus valores:
+
+```sql
+select schedule_weekly_checkin(
+  'https://<tu-ref>.supabase.co/functions/v1/weekly-checkin',
+  '<el mismo CHECKIN_CRON_SECRET>'
+);
+```
+
+**4.** Comprueba que quedó:
+
+```sql
+select jobname, schedule, active from cron.job where jobname = 'weekly-checkin';
+```
+
+### Cambiar la hora, o el secreto
+
+Se vuelve a llamar a `schedule_weekly_checkin`. Reemplaza el job en vez de
+añadir otro, así que llamarla dos veces no deja dos crons mandando el mismo
+check-in.
+
+### Probarlo sin esperar al lunes
+
+```bash
+curl -X POST 'https://<tu-ref>.supabase.co/functions/v1/weekly-checkin' \
+  -H 'x-checkin-cron-secret: <el secreto>'
+```
+
+Es seguro repetirlo: el `UNIQUE (client_id, version_id, week_number)` decide
+qué check-ins existen, no el número de llamadas. Devuelve los contadores de la
+pasada: `{"sent":0,"reminded":0,"skipped":3,"failed":0}`.
+
+**Sin la cabecera responde 401.** La función está expuesta a internet: sin esa
+comprobación, cualquiera podría dispararla en bucle y llenar de check-ins el
+Telegram de todos los clientes.
