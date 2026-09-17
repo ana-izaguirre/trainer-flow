@@ -95,7 +95,7 @@ entrenador crea rutina → carga plantilla → añade ejercicios
 
 Prueba que el producto funciona **sin IA**.
 
-### E2E-2 — Rutina con IA
+### E2E-2 — Rutina con IA ✅ IMPLEMENTADO
 
 ```
 solicita generación → el proveedor devuelve un draft → se valida
@@ -106,7 +106,7 @@ solicita generación → el proveedor devuelve un draft → se valida
 Se asevera que `contenido_enviado !== respuesta_del_proveedor`. Ese assert es
 el principio de producto convertido en test.
 
-### E2E-3 — Fallo de IA
+### E2E-3 — Fallo de IA ✅ IMPLEMENTADO
 
 ```
 solicita generación → el proveedor devuelve 429
