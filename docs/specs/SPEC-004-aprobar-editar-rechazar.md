@@ -2,9 +2,29 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **PARCIAL** — aprobar y rechazar. Falta el flujo de edición |
 | **Depende de** | SPEC-003, SPEC-009 |
 | **Sesiones** | S-10, S-11 |
+
+## Resultado parcial
+
+| Pieza | Estado |
+|---|---|
+| `answerCallbackQuery` siempre, y lo primero (regla 2, CA-5) | ✅ |
+| Solo el entrenador dueño (regla 3, CA-4) | ✅ |
+| Aprobar `DRAFT → APPROVED` (regla 4, CA-1) | ✅ |
+| Rechazar `DRAFT → REJECTED` (regla 5) | ✅ |
+| La máquina de estados decide qué es legal (regla 1, CA-7, CA-8) | ✅ |
+| Doble pulsación (CA-2) | ✅ Vía la guarda de la transición |
+| Enrutado del `callback_query` en el webhook | ✅ |
+| Flujo conversacional de edición (regla 6, CA-3) | ⏳ |
+| Máximo 5 ediciones (regla 9, CA-6) | ⏳ |
+| Retirar los botones tras actuar (regla 8) | ⏳ Ver nota |
+
+> **Sobre la regla 8.** Retirar los botones necesita `editMessageReplyMarkup`,
+> que el puerto no tiene. Mientras tanto la doble pulsación la para la guarda
+> de la transición, que es **más robusta**: retirar botones es cosmético y dos
+> pulsaciones simultáneas lo esquivarían igual.
 
 ## 1. Objetivo
 

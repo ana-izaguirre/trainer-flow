@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
+import type { ActionDeps } from './actions.ts';
 import { handleTelegramWebhook, outcomeToStatus } from './webhook.ts';
 
 const SECRET = 'un-secreto-de-webhook-largo-y-aleatorio';
@@ -77,6 +78,7 @@ function ejecutar(
     secretHeader?: string | null;
     repo?: ReturnType<typeof fakeRepo>;
     sender?: ReturnType<typeof fakeSender>;
+    actions?: ActionDeps;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -87,7 +89,13 @@ function ejecutar(
     sender,
     result: handleTelegramWebhook(
       { secretHeader: opts.secretHeader === undefined ? SECRET : opts.secretHeader, body },
-      { repo: repo.repo, sender: sender.sender, expectedSecret: SECRET, requestId: 'req-1' },
+      {
+        repo: repo.repo,
+        sender: sender.sender,
+        expectedSecret: SECRET,
+        requestId: 'req-1',
+        ...(opts.actions === undefined ? {} : { actions: opts.actions }),
+      },
     ),
   };
 }
@@ -269,5 +277,82 @@ describe('resiliencia', () => {
 
     const { result } = ejecutar(comando('/clientes'), { repo, sender });
     expect((await result).kind).toBe('failed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('los botones se enrutan', () => {
+  const VERSION = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  /** Un update de botón, con el `callback_data` que se le indique. */
+  const conBoton = (data: string) => ({
+    update_id: 1,
+    callback_query: {
+      id: 'cb-1',
+      from: FROM,
+      message: { message_id: 9, chat: { id: 500 } },
+      data,
+    },
+  });
+
+  function enrutador() {
+    const pasos: string[] = [];
+
+    const actions: ActionDeps = {
+      repo: {
+        findVersion: () => {
+          pasos.push('findVersion');
+          return Promise.resolve({
+            versionId: VERSION,
+            state: 'DRAFT' as const,
+            client: { clientId: 'c1', trainerId: ENTRENADOR.profileId, profileId: null },
+            clientName: 'Carlos',
+            versionNumber: 1,
+            content: null,
+          });
+        },
+        transition: (_v, from, to) => {
+          pasos.push(`transition:${from}->${to}`);
+          return Promise.resolve(true);
+        },
+      },
+      sender: {
+        sendMessage: () => Promise.resolve(),
+        answerCallback: (id) => {
+          pasos.push(`answerCallback:${id}`);
+          return Promise.resolve();
+        },
+      },
+    };
+
+    return { pasos, actions };
+  }
+
+  it('un botón válido llega a su acción', async () => {
+    const { pasos, actions } = enrutador();
+
+    const { result } = ejecutar(conBoton(`act:approve:${VERSION}`), { actions });
+
+    expect((await result).kind).toBe('handled');
+    expect(pasos).toContain('transition:DRAFT->APPROVED');
+  });
+
+  it('un `callback_data` ilegible se responde y se ignora', async () => {
+    // No vino de un botón nuestro. Responderlo evita que quede girando; no
+    // enrutarlo evita darle sentido a algo fabricado.
+    const { pasos, actions } = enrutador();
+
+    const { result } = ejecutar(conBoton('basura'), { actions });
+
+    expect((await result).kind).toBe('handled');
+    expect(pasos).toEqual([]);
+  });
+
+  it('sin enrutador configurado, el update se registra igual', async () => {
+    // `actions` es opcional: el flujo no se rompe porque falte.
+    const { result } = ejecutar(conBoton(`act:approve:${VERSION}`));
+
+    expect((await result).kind).toBe('handled');
   });
 });

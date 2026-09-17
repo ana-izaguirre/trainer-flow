@@ -17,6 +17,8 @@
  */
 import type { UserRole } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
+import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
+import { parseCallbackData } from './callback-data.ts';
 import { parseUpdate } from './update.ts';
 import { constantTimeEquals } from '../security/constant-time.ts';
 
@@ -35,6 +37,8 @@ export type WebhookOutcome =
       readonly profileId: string;
       readonly role: UserRole;
       readonly updateKind: 'command' | 'text' | 'callback';
+      /** Qué pasó con el botón, cuando el update era uno. */
+      readonly action?: ActionOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -49,6 +53,8 @@ export interface WebhookDeps {
   readonly sender: TelegramSender;
   readonly expectedSecret: string;
   readonly requestId: string;
+  /** Qué hacer con un botón. Ausente mientras no haya nada que enrutar. */
+  readonly actions?: ActionDeps;
 }
 
 /**
@@ -105,8 +111,31 @@ export async function handleTelegramWebhook(
     }
 
     // ── 5. Atender ───────────────────────────────────────────────────────
-    // El enrutado de comandos y botones llega en el bloque 4. Hoy el flujo ya
-    // verifica, identifica y registra: lo que falta es a quién llamar.
+    // El `callback_data` es dato NO confiable: cualquiera puede fabricar uno.
+    // Lo que impide tocar la versión de otro no es este parseo, sino la
+    // comprobación de pertenencia que hace `handleAction`.
+    let action: ActionOutcome | undefined;
+
+    if (update.kind === 'callback' && deps.actions !== undefined) {
+      const payload = parseCallbackData(update.data);
+
+      if (payload === null) {
+        // Un `callback_data` que no se puede leer no llegó de un botón
+        // nuestro. Se responde para que no quede girando y se ignora.
+        await deps.sender.answerCallback(update.callbackQueryId);
+      } else {
+        action = await handleAction(
+          {
+            action: payload.action,
+            versionId: payload.versionId,
+            callbackQueryId: update.callbackQueryId,
+          },
+          identity,
+          deps.actions,
+        );
+      }
+    }
+
     await deps.repo.markProcessed(externalId);
 
     return {
@@ -115,6 +144,7 @@ export async function handleTelegramWebhook(
       profileId: identity.profileId,
       role: identity.role,
       updateKind: update.kind,
+      ...(action === undefined ? {} : { action }),
     };
   } catch (error) {
     return {
