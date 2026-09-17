@@ -30,6 +30,13 @@
  */
 import type { UserRole } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
+import { parseCheckinCallback } from '../checkin/answers.ts';
+import {
+  handleCheckinAnswer,
+  handleCheckinText,
+  type ReplyDeps,
+  type ReplyOutcome,
+} from '../checkin/reply.ts';
 import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
 import { parseCallbackData } from './callback-data.ts';
 import {
@@ -67,6 +74,8 @@ export type WebhookOutcome =
       readonly action?: ActionOutcome;
       /** Qué pasó con la entrega, cuando el botón fue Aprobar. */
       readonly delivery?: DeliverOutcome;
+      /** Qué pasó con el check-in, cuando el update era una respuesta. */
+      readonly checkin?: ReplyOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -81,14 +90,15 @@ export interface WebhookDeps {
   readonly sender: TelegramSender;
   readonly expectedSecret: string;
   readonly requestId: string;
-  /** Qué hacer con un botón. Ausente mientras no haya nada que enrutar. */
-  readonly actions?: ActionDeps;
   /**
-   * Qué hacer con un `/start <token>`. **Obligatorio**: un webhook que se
-   * pueda construir sin esto es un bot en el que el deep link no funciona, y
-   * eso no puede ser un descuido de cableado.
+   * Las tres capacidades son **obligatorias**. Un webhook que se pueda
+   * construir sin una de ellas es un bot en el que esa parte no funciona, y
+   * eso no puede quedar en un descuido de cableado: ya pasó una vez con el
+   * deep link y con los botones, y no falló nada hasta usarlo de verdad.
    */
+  readonly actions: ActionDeps;
   readonly delivery: DeliveryDeps;
+  readonly checkins: ReplyDeps;
 }
 
 /**
@@ -166,15 +176,22 @@ export async function handleTelegramWebhook(
     // Lo que impide tocar la versión de otro no es este parseo, sino la
     // comprobación de pertenencia que hace `handleAction`.
     let action: ActionOutcome | undefined;
+    let checkin: ReplyOutcome | undefined;
 
-    if (update.kind === 'callback' && deps.actions !== undefined) {
-      const payload = parseCallbackData(update.data);
+    if (update.kind === 'callback') {
+      // Los dos prefijos viajan por el mismo canal, así que se prueban en
+      // orden. `chk:` no puede confundirse con `act:`: son literales.
+      const respuesta = parseCheckinCallback(update.data);
+      const payload = respuesta === null ? parseCallbackData(update.data) : null;
 
-      if (payload === null) {
-        // Un `callback_data` que no se puede leer no llegó de un botón
-        // nuestro. Se responde para que no quede girando y se ignora.
-        await deps.sender.answerCallback(update.callbackQueryId);
-      } else {
+      if (respuesta !== null) {
+        checkin = await handleCheckinAnswer(
+          respuesta.checkinId,
+          { field: respuesta.field, value: respuesta.value },
+          identity,
+          deps.checkins,
+        );
+      } else if (payload !== null) {
         action = await handleAction(
           {
             action: payload.action,
@@ -184,7 +201,18 @@ export async function handleTelegramWebhook(
           identity,
           deps.actions,
         );
+      } else {
+        // Un `callback_data` que no se puede leer no llegó de un botón
+        // nuestro. Se responde para que no quede girando y se ignora.
+        await deps.sender.answerCallback(update.callbackQueryId);
       }
+    }
+
+    // Un mensaje suelto de un cliente puede ser la molestia que el check-in
+    // está esperando. Solo se lee así si hay uno abierto: si no, es alguien
+    // escribiéndole al bot, y eso no se reinterpreta.
+    if (update.kind === 'text' && identity.role === 'client') {
+      checkin = await handleCheckinText(update.text, identity, deps.checkins);
     }
 
     // Aprobar deja la versión lista; entregarla es SPEC-005 (regla 14). Sin
@@ -204,6 +232,7 @@ export async function handleTelegramWebhook(
       updateKind: update.kind,
       ...(action === undefined ? {} : { action }),
       ...(delivery === undefined ? {} : { delivery }),
+      ...(checkin === undefined ? {} : { checkin }),
     };
   } catch (error) {
     return {

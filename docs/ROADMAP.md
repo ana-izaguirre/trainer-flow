@@ -75,14 +75,14 @@ revés, el fallback siempre queda "para después".
 | **S-17** ✅ | Función `generate-version` | Handler + degradación | Un fallo devuelve la versión a `NEW`, no la mata |
 | **S-18** ✅ | **E2E-2 y E2E-3** | IA completa y fallo de IA | **SPEC-002 cerrada.** Con `429` el producto sigue funcionando |
 
-## Bloque 6 — El cliente (S-19 → S-22) 🟡 EN CURSO
+## Bloque 6 — El cliente (S-19 → S-22) ✅ COMPLETADO
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
 | **S-19** ✅ | Vinculación | Deep link + `/start <token>` | Token inválido da respuesta neutra |
 | **S-20** ✅ | Entrega | Mensaje al cliente + entrega diferida | **SPEC-005 cerrada** salvo el backoff |
-| **S-21** 🟡 | Cron de check-ins | `pg_cron` + `weekly-checkin` | Correr el cron dos veces no duplica |
-| **S-22** | Respuestas de check-in | Captura + aviso de molestias | **SPEC-006 cerrada** |
+| **S-21** ✅ | Cron de check-ins | `pg_cron` + `weekly-checkin` | Correr el cron dos veces no duplica |
+| **S-22** ✅ | Respuestas de check-in | Captura + aviso de molestias | **SPEC-006 cerrada** |
 
 ## Bloque 7 — El ciclo completo (S-23 → S-25)
 

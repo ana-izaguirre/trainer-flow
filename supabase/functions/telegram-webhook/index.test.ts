@@ -14,6 +14,7 @@ import { assertEquals, assertStringIncludes, assertThrows } from 'jsr:@std/asser
 import type { Identity } from '../_core/domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
 import { createHandler, readDeps, type HandlerDeps } from './index.ts';
 
@@ -72,6 +73,17 @@ function espia(identity: Identity | null = null): Espia {
     transition: () => Promise.resolve(false),
   };
 
+  const checkinRepo: CheckinRepo = {
+    candidates: () => Promise.resolve([]),
+    createCheckin: () => Promise.resolve('chk-1'),
+    markSent: () => Promise.resolve(),
+    pendingReminders: () => Promise.resolve([]),
+    markReminded: () => Promise.resolve(),
+    findCheckin: () => Promise.resolve(null),
+    findOpenCheckin: () => Promise.resolve(null),
+    saveAnswers: () => Promise.resolve(),
+  };
+
   return {
     deps: {
       expectedSecret: SECRETO,
@@ -79,6 +91,7 @@ function espia(identity: Identity | null = null): Espia {
       sender: () => sender,
       actionRepo: () => actionRepo,
       deliveryRepo: () => deliveryRepo,
+      checkinRepo: () => checkinRepo,
     },
     usosDelRepo,
     enviados,
