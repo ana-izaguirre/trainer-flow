@@ -28,6 +28,7 @@ const SETUP_FILES = [
   'supabase/migrations/0005_drop_client_telegram_handle.sql',
   'supabase/migrations/0006_ingest_assessment.sql',
   'supabase/migrations/0007_version_for_generation.sql',
+  'supabase/migrations/0008_version_for_generation_client.sql',
 ] as const;
 
 /**

@@ -28,6 +28,7 @@ import { parseTallyEnvelope, redactCredentialUrls } from '../assessment/tally-en
 import { validateAssessment } from '../assessment/validate-assessment.ts';
 import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
+import { buildAssessmentArrived } from '../telegram/notify.ts';
 
 export type TallyOutcome =
   | { readonly kind: 'unauthorized' }
@@ -148,6 +149,17 @@ export async function handleTallyWebhook(
       rawPayload,
       ...parsed.value,
     });
+
+    // El entrenador se entera. Hasta aquí el sistema creaba las cuatro filas
+    // correctamente y nadie se enteraba salvo mirando la base de datos.
+    //
+    // El aviso dice QUE hay limitaciones, no cuáles: un mensaje de Telegram se
+    // ve en la pantalla de bloqueo, y el detalle se lee al abrir la rutina.
+    const aviso = buildAssessmentArrived(
+      { ...parsed.value, clientName: parsed.value.fullName },
+      ids.versionId,
+    );
+    await deps.sender.sendMessage(trainer.chatId, aviso.text, aviso.keyboard);
 
     await deps.repo.markProcessed(eventId);
 

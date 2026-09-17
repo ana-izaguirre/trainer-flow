@@ -4,6 +4,7 @@
  * Aquí vive el token del bot y el `fetch`. El dominio no sabe que Telegram
  * existe: recibe y devuelve datos.
  */
+import type { InlineKeyboard } from '../../_core/telegram/keyboard.ts';
 import type { TelegramSender } from '../../_core/ports/telegram-ports.ts';
 import type { Logger } from '../logger.ts';
 
@@ -13,7 +14,7 @@ const API_BASE = 'https://api.telegram.org';
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 
 export interface TelegramClient {
-  sendMessage(chatId: number, text: string): Promise<number | null>;
+  sendMessage(chatId: number, text: string, keyboard?: InlineKeyboard | null): Promise<number | null>;
   /**
    * Telegram deja el botón girando si no se responde en unos segundos, así
    * que esto se llama ANTES de hacer el trabajo lento (SPEC-004 regla 2).
@@ -53,10 +54,15 @@ export function createTelegramClient(botToken: string, log: Logger): TelegramCli
   }
 
   return {
-    async sendMessage(chatId, text) {
+    async sendMessage(chatId, text, keyboard) {
       const payload = await call('sendMessage', {
         chat_id: chatId,
         text: text.slice(0, TELEGRAM_MAX_MESSAGE_LENGTH),
+        // Los mensajes se componen con MarkdownV2 escapado en `_core/telegram/
+        // format.ts`. Sin esto, Telegram los muestra con los backslash a la
+        // vista.
+        parse_mode: 'MarkdownV2',
+        ...(keyboard === undefined || keyboard === null ? {} : { reply_markup: keyboard }),
       });
 
       if (typeof payload !== 'object' || payload === null) return null;
@@ -84,8 +90,8 @@ export function createTelegramClient(botToken: string, log: Logger): TelegramCli
  */
 export function asSender(client: TelegramClient): TelegramSender {
   return {
-    sendMessage: async (chatId, text) => {
-      await client.sendMessage(chatId, text);
+    sendMessage: async (chatId, text, keyboard) => {
+      await client.sendMessage(chatId, text, keyboard);
     },
     answerCallback: (callbackQueryId) => client.answerCallbackQuery(callbackQueryId),
   };
