@@ -83,6 +83,7 @@ const MOTIVO: Readonly<Record<AIFailureReason, string>> = {
 export function buildAssessmentArrived(
   summary: AssessmentSummary,
   versionId: string,
+  deepLink: string,
 ): Notification {
   const lines = [
     `📋 *Nueva evaluación: ${escapeMarkdownV2(summary.clientName)}*`,
@@ -97,6 +98,20 @@ export function buildAssessmentArrived(
   if (summary.hasLimitations) {
     lines.push('', '⚠️ Declaró limitaciones \\(las verás en la rutina\\)');
   }
+
+  // SPEC-014: el enlace de vinculación, para reenviárselo.
+  //
+  // El token se genera al ingerir y se guardaba sin que nadie lo entregara:
+  // sin este renglón el cliente no puede vincularse, y su rutina aprobada se
+  // queda en `APPROVED` para siempre.
+  //
+  // Se escapa como cualquier otro texto: base64url produce `-` y `_`, que en
+  // MarkdownV2 son caracteres especiales.
+  lines.push(
+    '',
+    `🔗 Mándale este enlace a ${escapeMarkdownV2(summary.clientName)} para que reciba su rutina:`,
+    escapeMarkdownV2(deepLink),
+  );
 
   lines.push('', '¿Cómo preparamos la rutina?');
 
