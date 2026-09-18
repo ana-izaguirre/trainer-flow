@@ -233,6 +233,7 @@ plantilla o a mano), la aprueba, el cliente la recibe y hace check-in.
 | | |
 |---|---|
 | Desplegar por primera vez | [`docs/DEPLOY.md`](docs/DEPLOY.md) — un checklist de diez pasos |
+| Cuando algo falla | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — la base es el índice, los logs el detalle |
 | Cómo encajan las piezas | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | El esquema | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
 | Método de trabajo | [`CLAUDE.md`](CLAUDE.md) — primero la spec, después el código |

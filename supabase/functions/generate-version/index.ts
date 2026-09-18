@@ -12,6 +12,7 @@
  */
 import { generateVersion, type GenerateDeps } from '../_core/ai/generate-version.ts';
 import type { RateLimitConfig } from '../_core/ai/rate-limit.ts';
+import { chooseRequestId } from '../_core/observability/request-id.ts';
 import { createProvider } from '../_shared/ai/gemini-provider.ts';
 import { createDb, createGenerationRepo } from '../_shared/db.ts';
 import { optionalEnv, requireEnv } from '../_shared/env.ts';
@@ -70,8 +71,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function createHandler(deps: HandlerDeps): (request: Request) => Promise<Response> {
   return async (request) => {
-    const requestId = crypto.randomUUID();
-    const log = createLogger(requestId);
     const startedAt = Date.now();
 
     let body: unknown = null;
@@ -81,27 +80,55 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
       body = null;
     }
 
+    // SPEC-012 regla 1: quien dispara manda su `requestId`. Usarlo es lo que
+    // une la pulsación del botón con la generación que provoca.
+    const { requestId, rejected } = chooseRequestId(
+      isRecord(body) ? body['requestId'] : null,
+      () => crypto.randomUUID(),
+    );
+    const log = createLogger(requestId);
+
+    if (rejected) {
+      // La generación sigue: perder la traza no es motivo para no generar.
+      log.warn('generate.request_id_invalido', {});
+    }
+
     const versionId = isRecord(body) ? body['versionId'] : null;
     if (typeof versionId !== 'string' || versionId.length === 0) {
       log.warn('generate.sin_version', {});
       return new Response('versionId requerido', { status: 400 });
     }
 
-    const outcome = await generateVersion(versionId, deps.build(requestId, log));
-    const durationMs = Date.now() - startedAt;
+    try {
+      const outcome = await generateVersion(versionId, deps.build(requestId, log));
+      const durationMs = Date.now() - startedAt;
 
-    // El `outcome` no lleva contenido de la rutina ni del prompt: solo qué
-    // pasó. Es seguro loguearlo entero.
-    if (outcome.kind === 'generated' || outcome.kind === 'not_in_new') {
-      log.info(`generate.${outcome.kind}`, { ...outcome, durationMs });
-    } else {
-      log.warn(`generate.${outcome.kind}`, { ...outcome, durationMs });
+      // El `outcome` no lleva contenido de la rutina ni del prompt: solo qué
+      // pasó. Es seguro loguearlo entero.
+      if (outcome.kind === 'generated' || outcome.kind === 'not_in_new') {
+        log.info(`generate.${outcome.kind}`, { ...outcome, durationMs });
+      } else {
+        log.warn(`generate.${outcome.kind}`, { ...outcome, durationMs });
+      }
+
+      // Solo `not_found` es un error del llamante. Todo lo demás son
+      // resultados legítimos: la versión quedó donde el entrenador puede
+      // seguir, que es lo que esta función promete.
+      return new Response(outcome.kind, { status: outcome.kind === 'not_found' ? 404 : 202 });
+    } catch (error) {
+      // SPEC-012 regla 3: toda petición deja una línea de cierre. Sin esto,
+      // la función con más superficie de fallo —red, timeouts, cuatro
+      // escrituras— era la única que podía morirse sin decir nada.
+      log.error('generate.excepcion', {
+        versionId,
+        // El mensaje, nunca el stack: un stack arrastra valores de variables.
+        message: error instanceof Error ? error.message : 'Error desconocido.',
+        durationMs: Date.now() - startedAt,
+      });
+
+      // 500 y no 202: nadie reintenta esto en bucle, y un fallo tiene que verse.
+      return new Response('error', { status: 500 });
     }
-
-    // Solo `not_found` es un error del llamante. Todo lo demás son resultados
-    // legítimos: la versión quedó donde el entrenador puede seguir, que es lo
-    // que esta función promete.
-    return new Response(outcome.kind, { status: outcome.kind === 'not_found' ? 404 : 202 });
   };
 }
 

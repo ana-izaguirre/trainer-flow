@@ -282,3 +282,71 @@ Deno.test('un mensaje normal sigue resolviendo identidad', async () => {
 
   assertEquals(usosDelRepo.includes('findIdentity:500'), true);
 });
+
+// ─── SPEC-012 · ninguna petición se muere en silencio ───────────────────────
+
+/** Como `pedir`, pero devolviendo las líneas del log ya parseadas. */
+async function pedirCapturando(
+  deps: HandlerDeps,
+  request: Request,
+): Promise<{ response: Response; logs: Record<string, unknown>[] }> {
+  const original = console.log;
+  const lineas: string[] = [];
+  console.log = (linea: string) => {
+    lineas.push(linea);
+  };
+
+  try {
+    const response = await createHandler(deps)(request);
+    return { response, logs: lineas.map((l) => JSON.parse(l) as Record<string, unknown>) };
+  } finally {
+    console.log = original;
+  }
+}
+
+Deno.test('CA-4 · una excepción FUERA del dominio deja línea de error', async () => {
+  // El dominio captura lo suyo y devuelve `failed`. Esto es lo de fuera:
+  // construir un repo, construir el sender. Antes salía por arriba sin una
+  // sola línea, y quien depuraba no tenía ni el requestId.
+  const { deps } = espia();
+  const rotas: HandlerDeps = {
+    ...deps,
+    sender: () => {
+      throw new Error('el bot no arrancó');
+    },
+  };
+
+  const { response, logs } = await pedirCapturando(
+    rotas,
+    update({ update_id: 1, message: { chat: { id: 5 }, from: { id: 5 }, text: 'hola' } }),
+  );
+
+  const cierre = logs.find((l) => l['event'] === 'telegram.excepcion');
+  assertEquals(cierre?.['level'], 'error');
+  assertEquals(cierre?.['message'], 'el bot no arrancó');
+  assertEquals(typeof cierre?.['requestId'], 'string');
+  assertEquals(typeof cierre?.['durationMs'], 'number');
+
+  // 200 a propósito: un 500 haría que Telegram reintentara en bucle un
+  // update que va a volver a romperse igual.
+  assertEquals(response.status, 200);
+});
+
+Deno.test('la línea de la excepción no lleva el stack', async () => {
+  const { deps } = espia();
+  const rotas: HandlerDeps = {
+    ...deps,
+    sender: () => {
+      throw new Error('reventó');
+    },
+  };
+
+  const { logs } = await pedirCapturando(
+    rotas,
+    update({ update_id: 2, message: { chat: { id: 5 }, from: { id: 5 }, text: 'hola' } }),
+  );
+
+  const cierre = logs.find((l) => l['event'] === 'telegram.excepcion');
+  assertEquals(cierre?.['stack'], undefined);
+  assertEquals(JSON.stringify(cierre).includes('index.test.ts'), false);
+});
