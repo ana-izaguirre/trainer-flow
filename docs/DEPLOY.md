@@ -5,8 +5,185 @@ Tres cosas distintas que conviene no mezclar:
 | | Qué es | Estado |
 |---|---|---|
 | **CI** | Que nada roto llegue a `main` | ✅ Activo |
-| **CD** | Desplegar a Supabase | ⏳ S-28 |
+| **CD** | Desplegar a Supabase | ✅ Automático desde `main` |
 | **Local** | Ver los cambios funcionando | 📋 Documentado abajo |
+
+**¿Es la primera vez?** Ve directo al checklist de aquí abajo. El resto del
+documento explica *por qué* funciona así; el checklist es *qué teclear*.
+
+---
+
+# Checklist — la primera vez
+
+Diez pasos. **El orden importa en dos sitios**, y están marcados.
+
+Sustituye `<ref>` por el ID de tu proyecto de Supabase y `<TOKEN>` por el del
+bot en todo lo que sigue.
+
+## A. Antes de desplegar
+
+- [ ] **1. Crear el proyecto en Supabase** y apuntar el *project ref* y la
+      contraseña de la base. Las dos hacen falta en el paso 2.
+
+- [ ] **2. Las tres credenciales de despliegue, en GitHub**
+      (Settings → Secrets and variables → Actions):
+
+      | | Tipo | De dónde sale |
+      |---|---|---|
+      | `SUPABASE_ACCESS_TOKEN` | Secret | supabase.com/dashboard/account/tokens |
+      | `SUPABASE_DB_PASSWORD` | Secret | La del paso 1 |
+      | `SUPABASE_PROJECT_REF` | Variable | El *ref* del paso 1 |
+
+      Estas tres **sí** van en GitHub y no rompen la regla de `SECURITY.md`:
+      son credenciales de despliegue, no secretos del producto.
+
+- [ ] **3. Generar los dos secretos que te inventas tú**, y guardarlos donde
+      guardes las contraseñas — los vas a necesitar otra vez en los pasos 6 y 8:
+
+      ```bash
+      openssl rand -hex 32    # → TELEGRAM_WEBHOOK_SECRET
+      openssl rand -hex 32    # → CHECKIN_CRON_SECRET
+      ```
+
+- [ ] **4. ⚠️ Los secretos del producto, ANTES de desplegar.** Este es el
+      primer sitio donde el orden importa: una Edge Function sin sus variables
+      **revienta al arrancar**, no al primer mensaje.
+
+      ```bash
+      supabase link --project-ref <ref>
+      supabase secrets set TELEGRAM_BOT_TOKEN='...'        # BotFather
+      supabase secrets set TELEGRAM_WEBHOOK_SECRET='...'   # el del paso 3
+      supabase secrets set TALLY_SIGNING_SECRET='...'      # panel de Tally
+      supabase secrets set GEMINI_API_KEY='...'            # Google AI Studio
+      supabase secrets set CHECKIN_CRON_SECRET='...'       # el del paso 3
+      ```
+
+      `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` **no se ponen**: Supabase
+      los inyecta en toda Edge Function. Ponerlos a mano no hace daño, pero
+      tampoco hace nada.
+
+## B. Desplegar
+
+- [ ] **5. Mergear a `main`.** El CI corre; si pasa, el deploy aplica las
+      migraciones y sube las cuatro funciones. Se ve en Actions → Deploy.
+
+      Comprueba que están las cuatro:
+
+      ```bash
+      supabase functions list
+      # telegram-webhook · tally-webhook · generate-version · weekly-checkin
+      ```
+
+## C. Conectar el mundo exterior
+
+- [ ] **6. Registrar el webhook de Telegram** con el secreto del paso 3:
+
+      ```bash
+      curl "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+        -d "url=https://<ref>.supabase.co/functions/v1/telegram-webhook" \
+        -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+      ```
+
+      Verifica: `curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"`.
+      `pending_update_count` alto o `last_error_message` con algo dentro
+      significa que el bot no está atendiendo.
+
+- [ ] **7. Tally**, dos cosas en el mismo formulario:
+
+      · **Integrations → Webhooks:**
+        `https://<ref>.supabase.co/functions/v1/tally-webhook`
+
+      · **La pantalla final**, redirigiendo al deep link:
+        `https://t.me/<tu_bot>?start=` + el `link_token`.
+        Sin esto el cliente nunca se vincula, y su rutina se queda esperando
+        en `APPROVED` para siempre.
+
+- [ ] **8. Programar el check-in semanal.** En el SQL Editor de Supabase:
+      pega `supabase/cron/weekly-checkin.sql` y ejecútalo —eso crea la
+      función, no el job—, y después:
+
+      ```sql
+      select schedule_weekly_checkin(
+        'https://<ref>.supabase.co/functions/v1/weekly-checkin',
+        '<CHECKIN_CRON_SECRET>'   -- el del paso 3
+      );
+      ```
+
+      Comprueba:
+      ```sql
+      select jobname, schedule, active from cron.job where jobname = 'weekly-checkin';
+      ```
+
+## D. Darte de alta
+
+- [ ] **9. ⚠️ Tu perfil de entrenador, ANTES de la primera evaluación.**
+      Segundo sitio donde el orden importa: el webhook de Tally busca al
+      entrenador para avisarle, y si no existe, **no marca el evento como
+      procesado**. Tally reintenta, y la evaluación se queda sin entrar.
+
+      No hay alta automática, y es a propósito (SPEC-009 regla 1). En el SQL
+      Editor, con tu `telegram_user_id` —te lo dice `@userinfobot`—:
+
+      ```sql
+      insert into profiles (telegram_user_id, telegram_chat_id, role, full_name)
+      values (<tu_id>, <tu_id>, 'trainer', 'Tu nombre');
+      ```
+
+- [ ] **10. Comprobar que el bot te reconoce.** Escríbele `/start`.
+
+      **No te va a contestar, y está bien.** Los comandos del entrenador
+      (`/clientes`, `/pendientes`…) son SPEC-007, del bloque 7: todavía no
+      existen. Lo que hoy contesta el bot son los botones y el check-in.
+
+      Dónde se comprueba: Edge Functions → `telegram-webhook` → Logs. Tiene
+      que aparecer una línea así:
+
+      ```
+      telegram.handled  { profileId: "...", role: "trainer", updateKind: "command" }
+      ```
+
+      Si en vez de eso pone `unknown_user`, el `telegram_user_id` del paso 9
+      no es el tuyo.
+
+---
+
+## Probar sin esperar a nada
+
+**El check-in**, sin esperar al lunes:
+
+```bash
+curl -X POST 'https://<ref>.supabase.co/functions/v1/weekly-checkin' \
+  -H 'x-checkin-cron-secret: <el del paso 3>'
+```
+
+Es seguro repetirlo: el `UNIQUE (client_id, version_id, week_number)` decide
+qué check-ins existen, no el número de llamadas. Devuelve los contadores de la
+pasada:
+
+```json
+{"sent":0,"reminded":0,"skipped":3,"failed":0}
+```
+
+Sin la cabecera responde `401`, que es justo lo que tiene que pasar.
+
+**El camino entero:** rellena tu propio formulario de Tally con un correo de
+prueba. Deberías recibir el aviso, luego la rutina con botones, y al aprobarla
+te llega a ti mismo como cliente si canjeaste el deep link.
+
+## Si algo no responde
+
+| Síntoma | Dónde mirar primero |
+|---|---|
+| No contesta a un comando | **Normal**: SPEC-007 es del bloque 7. Mira los logs |
+| No contesta a NADA, ni a un botón | `getWebhookInfo` → `last_error_message` |
+| Contesta «no te tengo registrado» | Falta el paso 9, o el `telegram_user_id` no es el tuyo |
+| Tally no entra | Logs de `tally-webhook`. Suele ser `TALLY_SIGNING_SECRET` |
+| La función revienta al arrancar | Falta un secreto del paso 4. El log dice **cuál** |
+| El cliente no recibe su rutina | ¿Canjeó el deep link? Sin vincular se queda en `APPROVED` |
+| El check-in no sale | `select * from cron.job` — ¿existe el job del paso 8? |
+
+Los logs están en el panel: Edge Functions → la función → Logs. Todo lleva
+`request_id`, así que una petición se sigue de punta a punta.
 
 ---
 
@@ -58,18 +235,21 @@ Si la cobertura de cualquiera baja del 100%, **el CI se pone rojo**.
 
 ---
 
-## CD — despliegue a Supabase *(pendiente, S-28)*
+## CD — despliegue a Supabase
+
+Ya está automatizado: lo hace `.github/workflows/deploy.yml` cuando el CI pasa
+en `main`. El detalle está en **Despliegue automático**, más abajo.
+
+Por debajo son estos dos comandos, que **no hace falta correr a mano**:
 
 ```bash
 supabase db push            # aplica las migraciones
 supabase functions deploy   # sube las Edge Functions
 ```
 
-Necesita dos secretos en GitHub: `SUPABASE_ACCESS_TOKEN` y `SUPABASE_PROJECT_ID`.
-
 > ⚠️ **`supabase db push` sobre producción aplica migraciones sin vuelta atrás.**
-> El workflow de despliegue debe depender del de CI y disparar **solo** desde
-> `main`, nunca desde una rama.
+> Por eso el workflow depende del de CI y dispara **solo** desde `main`, nunca
+> desde una rama.
 
 **Sobre entornos de preview por PR:** Supabase tiene *branching*, pero es una
 funcionalidad **de pago**. En el plan gratuito hay un solo proyecto.
@@ -230,18 +410,11 @@ y escribe en las que existen. Al revés, el primer webhook falla con
 
 ### Lo que hay que configurar una vez
 
-Settings → Secrets and variables → Actions:
+Las tres credenciales de despliegue son el **paso 2** del checklist.
 
-| | Tipo | De dónde sale |
-|---|---|---|
-| `SUPABASE_ACCESS_TOKEN` | **Secret** | supabase.com/dashboard/account/tokens |
-| `SUPABASE_DB_PASSWORD` | **Secret** | La contraseña de la base, al crear el proyecto |
-| `SUPABASE_PROJECT_REF` | **Variable** | El ID del proyecto. No es sensible |
-
-Estos tres **sí** van en GitHub, y no contradicen la regla de
-`docs/SECURITY.md`: no son secretos del producto, son credenciales de
-despliegue. `GEMINI_API_KEY` y los de Telegram siguen viviendo solo en
-`supabase secrets set`.
+Van en GitHub y no contradicen la regla de `docs/SECURITY.md`: son
+credenciales de despliegue, no secretos del producto. `GEMINI_API_KEY` y los
+de Telegram siguen viviendo solo en `supabase secrets set`.
 
 ### Volver a desplegar sin tocar el código
 
@@ -272,59 +445,28 @@ supabase db reset
 
 ---
 
-## El check-in semanal — el único paso manual
+## El check-in semanal — por qué es el único paso manual
 
-`pg_cron` dispara la Edge Function `weekly-checkin` los lunes a las 9:00 UTC.
-**Programar ese job no está en las migraciones, y es a propósito:** necesita la
-URL del proyecto y una credencial, y un secreto en un archivo versionado es un
-bloqueante. Además `pg_cron` y `pg_net` son extensiones de Supabase, así que
-una migración con ellas rompería los tests, que corren contra un PostgreSQL
-pelado.
+Cómo se programa está en el **paso 8** del checklist. Aquí queda el motivo,
+que es lo que no se ve al teclearlo.
 
-Se hace **una vez**, así:
+`pg_cron` dispara `weekly-checkin` los lunes a las 9:00 UTC. **Ese job no está
+en las migraciones a propósito**, por dos razones independientes:
 
-**1.** Genera el secreto y guárdalo:
+· Programarlo necesita la URL del proyecto y una credencial. En una migración,
+  o iría un secreto commiteado —bloqueante— o fallaría en cada `db reset`.
 
-```bash
-openssl rand -base64 32          # o el generador que prefieras
-supabase secrets set CHECKIN_CRON_SECRET='<lo que salió>'
-```
-
-**2.** En el SQL Editor de Supabase, pega el contenido de
-`supabase/cron/weekly-checkin.sql` y ejecútalo. Eso crea la función, no el job.
-
-**3.** Todavía en el SQL Editor, programa el job con tus valores:
-
-```sql
-select schedule_weekly_checkin(
-  'https://<tu-ref>.supabase.co/functions/v1/weekly-checkin',
-  '<el mismo CHECKIN_CRON_SECRET>'
-);
-```
-
-**4.** Comprueba que quedó:
-
-```sql
-select jobname, schedule, active from cron.job where jobname = 'weekly-checkin';
-```
+· `pg_cron` y `pg_net` son extensiones de Supabase. Los tests corren contra un
+  PostgreSQL pelado, donde `create extension` falla.
 
 ### Cambiar la hora, o el secreto
 
-Se vuelve a llamar a `schedule_weekly_checkin`. Reemplaza el job en vez de
+Se vuelve a llamar a `schedule_weekly_checkin`. **Reemplaza** el job en vez de
 añadir otro, así que llamarla dos veces no deja dos crons mandando el mismo
 check-in.
 
-### Probarlo sin esperar al lunes
+### Por qué la función pide su propio secreto
 
-```bash
-curl -X POST 'https://<tu-ref>.supabase.co/functions/v1/weekly-checkin' \
-  -H 'x-checkin-cron-secret: <el secreto>'
-```
-
-Es seguro repetirlo: el `UNIQUE (client_id, version_id, week_number)` decide
-qué check-ins existen, no el número de llamadas. Devuelve los contadores de la
-pasada: `{"sent":0,"reminded":0,"skipped":3,"failed":0}`.
-
-**Sin la cabecera responde 401.** La función está expuesta a internet: sin esa
-comprobación, cualquiera podría dispararla en bucle y llenar de check-ins el
-Telegram de todos los clientes.
+Está expuesta a internet. Sin `x-checkin-cron-secret`, cualquiera podría
+dispararla en bucle y llenar de check-ins el Telegram de todos los clientes.
+Se compara en tiempo constante, igual que el de Telegram.
