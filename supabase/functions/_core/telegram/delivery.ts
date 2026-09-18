@@ -23,6 +23,7 @@ import type {
 } from '../ports/delivery-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { formatForClient } from './client-format.ts';
+import { buildKeyboard, CLIENT_ACTIONS } from './keyboard.ts';
 
 export interface DeliveryDeps {
   readonly repo: DeliveryRepo;
@@ -176,6 +177,9 @@ async function enviar(
         clientName: version.clientName,
         plan: version.plan,
       }),
+      // SPEC-010 regla 10: sin estos dos botones, «pedir un cambio» sería una
+      // función que el cliente nunca ve.
+      buildKeyboard(CLIENT_ACTIONS, version.versionId),
     );
   } catch {
     // El cliente bloqueó el bot, o Telegram falló. La rutina NO se pierde:
@@ -192,10 +196,17 @@ async function enviar(
     return { kind: 'already_sent' };
   }
 
+  // SPEC-010 regla 12: la v2 que sale responde a lo que el cliente pidió.
+  // Va DESPUÉS de marcar SENT: si se resolviera antes y el envío fallara, la
+  // queja quedaría cerrada sin que llegara nada.
+  const resueltas = await deps.repo.resolveRequests(version.versionId);
+
   // Regla 6: el entrenador sabe que llegó.
   await deps.sender.sendMessage(
     version.trainerChatId,
-    `✅ ${version.clientName} recibió su rutina\\.`,
+    resueltas > 0
+      ? `✅ ${version.clientName} recibió su rutina nueva\\.`
+      : `✅ ${version.clientName} recibió su rutina\\.`,
   );
 
   return { kind: 'delivered', versionId: version.versionId };

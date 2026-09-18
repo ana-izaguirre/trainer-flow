@@ -33,6 +33,7 @@ const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
   manual: '✍️ A mano',
   accept: '👍 Me sirve',
   change: '✏️ Pedir un cambio',
+  revise: '✏️ Crear v2',
 };
 
 /**
@@ -51,6 +52,14 @@ export const NEW_ACTIONS: readonly CallbackAction[] = ['generate', 'template', '
  * aprobar lo que todavía no existe (SPEC-003 regla 8).
  */
 export const DRAFT_ACTIONS: readonly CallbackAction[] = ['edit', 'approve', 'reject'];
+
+/**
+ * Lo que el CLIENTE puede hacer con la rutina que recibió (SPEC-010).
+ *
+ * Sin estos dos botones, «pedir un cambio» sería una función que el cliente
+ * nunca ve y la spec entera no existiría en la práctica (regla 10).
+ */
+export const CLIENT_ACTIONS: readonly CallbackAction[] = ['accept', 'change'];
 
 /**
  * Las salidas que quedan cuando la IA no puede.

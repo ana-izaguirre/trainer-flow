@@ -16,6 +16,7 @@ import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
 import { createHandler, readDeps, type HandlerDeps } from './index.ts';
@@ -73,6 +74,7 @@ function espia(identity: Identity | null = null): Espia {
     findApprovedVersion: () => Promise.resolve(null),
     findVersion: () => Promise.resolve(null),
     transition: () => Promise.resolve(false),
+    resolveRequests: () => Promise.resolve(0),
   };
 
   const checkinRepo: CheckinRepo = {
@@ -106,6 +108,19 @@ function espia(identity: Identity | null = null): Espia {
     saveDraft: () => Promise.resolve(false),
   };
 
+  const changeRepo: ChangeRequestRepo = {
+    findVersion: () => Promise.resolve(null),
+    request: () => Promise.resolve('req-1'),
+    openForClient: () => {
+      usosDelRepo.push('openForClient');
+      return Promise.resolve(null);
+    },
+    addComment: () => Promise.resolve(false),
+    findRequest: () => Promise.resolve(null),
+    createRevision: () => Promise.resolve('v-2'),
+    recordAccepted: () => Promise.resolve(),
+  };
+
   return {
     deps: {
       expectedSecret: SECRETO,
@@ -116,6 +131,7 @@ function espia(identity: Identity | null = null): Espia {
       checkinRepo: () => checkinRepo,
       queryRepo: () => queryRepo,
       creationRepo: () => creationRepo,
+      changeRepo: () => changeRepo,
       generation: () => ({
         trigger: (versionId) => {
           usosDelRepo.push(`trigger:${versionId}`);

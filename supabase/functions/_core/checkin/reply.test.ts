@@ -32,6 +32,7 @@ function checkin(overrides: Partial<CheckinForReply> = {}): CheckinForReply {
     weekNumber: 3,
     state: 'PENDING',
     answers: VACIAS,
+    sentAt: new Date('2026-03-16T09:00:00Z'),
     trainerChatId: 10,
     daysPerWeek: 4,
     ...overrides,
@@ -247,6 +248,28 @@ describe('un texto suelto', () => {
 
     expect(outcome).toEqual({ kind: 'no_open_checkin' });
     expect(pasos.some((p) => p.startsWith('saveAnswers'))).toBe(false);
+  });
+
+  it('CA-11 · si le preguntaron algo DESPUÉS, el texto no es del check-in', async () => {
+    // El comentario de una solicitud de cambio y la molestia compiten por el
+    // mismo canal. Uno contesta a la última pregunta que le hicieron.
+    const { deps, pasos } = espia();
+    const masReciente = new Date('2026-03-20T09:00:00Z');
+
+    const outcome = await handleCheckinText('me duele', CLIENTE, deps, masReciente);
+
+    expect(outcome).toEqual({ kind: 'no_open_checkin' });
+    expect(pasos.some((p) => p.startsWith('saveAnswers'))).toBe(false);
+  });
+
+  it('...pero si le preguntaron ANTES, sigue siendo del check-in', async () => {
+    const { deps, pasos } = espia();
+    const masAntigua = new Date('2026-03-10T09:00:00Z');
+
+    const outcome = await handleCheckinText('me duele', CLIENTE, deps, masAntigua);
+
+    expect(outcome).toMatchObject({ kind: 'saved' });
+    expect(pasos).toContain('saveAnswers:false');
   });
 
   it('un texto larguísimo se trunca a 500', async () => {

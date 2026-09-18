@@ -83,4 +83,15 @@ export interface DeliveryRepo {
 
   /** Aplica una transición ya validada. `false` si el estado ya cambió. */
   transition(versionId: string, from: VersionState, to: VersionState): Promise<boolean>;
+
+  /**
+   * Cierra las solicitudes del plan al ENVIAR esta versión (SPEC-010 regla 12).
+   *
+   * Al enviar, no al crear la revisión: una revisión abandonada dejaría al
+   * cliente sin respuesta y sin solicitud abierta que lo recordara.
+   *
+   * Devuelve cuántas se cerraron. Cero es normal: la primera rutina de un
+   * cliente no responde a ninguna queja.
+   */
+  resolveRequests(versionId: string): Promise<number>;
 }

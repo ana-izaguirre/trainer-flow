@@ -43,6 +43,8 @@ export interface CheckinForReply {
   readonly weekNumber: number;
   readonly state: 'PENDING' | 'COMPLETED';
   readonly answers: CheckinAnswers;
+  /** Cuándo se le preguntó. Compite con otras preguntas abiertas (SPEC-010 §3). */
+  readonly sentAt: Date;
   readonly trainerChatId: number;
   /** Para decir «3 de 4». `null` si la rutina no vino de un formulario. */
   readonly daysPerWeek: number | null;

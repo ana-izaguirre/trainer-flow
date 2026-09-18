@@ -22,6 +22,7 @@
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { GenerationTrigger } from '../_core/ports/generation-trigger.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
@@ -33,6 +34,7 @@ import { createGenerationTrigger } from '../_shared/generation-trigger.ts';
 import { asSender, createTelegramClient } from '../_shared/telegram/client.ts';
 import {
   createActionRepo,
+  createChangeRequestRepo,
   createCheckinRepo,
   createCreationRepo,
   createDb,
@@ -60,6 +62,7 @@ export interface HandlerDeps {
   readonly queryRepo: () => QueryRepo;
   readonly generation: (log: Logger) => GenerationTrigger;
   readonly creationRepo: (requestId: string) => CreationRepo;
+  readonly changeRepo: (requestId: string) => ChangeRequestRepo;
 }
 
 /**
@@ -83,6 +86,7 @@ export function readDeps(): HandlerDeps {
     queryRepo: () => createQueryRepo(db),
     generation: (log) => createGenerationTrigger(log),
     creationRepo: (requestId) => createCreationRepo(db, requestId),
+    changeRepo: (requestId) => createChangeRequestRepo(db, requestId),
   };
 }
 
@@ -123,6 +127,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
         checkins: { repo: deps.checkinRepo(), sender },
         commands: { repo: deps.queryRepo(), sender },
         creation: { repo: deps.creationRepo(requestId), sender },
+        changes: { repo: deps.changeRepo(requestId), sender },
       },
     );
 
