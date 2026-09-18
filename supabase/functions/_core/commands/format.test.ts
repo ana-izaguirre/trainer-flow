@@ -1,0 +1,230 @@
+/**
+ * SPEC-007 §3 — Los mensajes de los comandos.
+ */
+import { describe, expect, it } from 'vitest';
+import type { ClientDetail, ClientSummary } from '../ports/query-ports.ts';
+import {
+  AYUDA,
+  formatAmbiguous,
+  formatClientDetail,
+  formatClientList,
+  formatNotFound,
+  formatPending,
+  formatStaleCheckins,
+  PAGE_SIZE,
+} from './format.ts';
+
+function resumen(extra: Partial<ClientSummary> = {}): ClientSummary {
+  return {
+    clientId: 'c1',
+    fullName: 'Carlos Pérez',
+    versionState: 'SENT',
+    versionNumber: 2,
+    linked: true,
+    pendingCheckinDays: null,
+    ...extra,
+  };
+}
+
+function ficha(extra: Partial<ClientDetail> = {}): ClientDetail {
+  return {
+    ...resumen(),
+    goal: 'Ganancia muscular',
+    level: 'intermediate',
+    daysPerWeek: 4,
+    sessionMinutes: 60,
+    equipment: 'Gimnasio completo',
+    hasLimitations: false,
+    sentDaysAgo: 12,
+    lastCheckin: null,
+    ...extra,
+  };
+}
+
+// ---------------------------------------------------------------------------
+
+describe('la lista de clientes', () => {
+  it.each([
+    ['sin vincular gana sobre todo lo demás', { linked: false, versionState: 'DRAFT' as const }, 'sin vincular'],
+    ['un check-in colgado', { pendingCheckinDays: 5 }, 'sin responder'],
+    ['un borrador esperando', { versionState: 'DRAFT' as const }, 'pendiente de revisión'],
+    ['generándose', { versionState: 'GENERATING' as const }, 'generándose'],
+    ['sin rutina', { versionState: null, versionNumber: null }, 'sin rutina'],
+    ['recién creada', { versionState: 'NEW' as const }, 'sin rutina'],
+    ['rechazada', { versionState: 'REJECTED' as const }, 'rechazada'],
+    ['al día', {}, 'rutina activa'],
+  ])('%s', (_n, extra, esperado) => {
+    expect(formatClientList([resumen(extra)])[0]).toContain(esperado);
+  });
+
+  it('un check-in de UN día todavía no se reclama', () => {
+    // Dos días es cuando deja de ser «aún no contestó».
+    expect(formatClientList([resumen({ pendingCheckinDays: 1 })])[0]).toContain('rutina activa');
+  });
+
+  it('parte en páginas de 20 y dice cuál es cuál', () => {
+    const muchos = Array.from({ length: 45 }, (_, i) => resumen({ fullName: `C${i}` }));
+    const paginas = formatClientList(muchos);
+
+    expect(paginas).toHaveLength(3);
+    expect(paginas[0]).toContain(`1–${PAGE_SIZE} de 45`);
+    expect(paginas[2]).toContain('41–45 de 45');
+  });
+
+  it('con pocos no numera páginas', () => {
+    expect(formatClientList([resumen()])[0]).toContain('\\(1\\)');
+  });
+
+  it('escapa un nombre con caracteres de MarkdownV2', () => {
+    // El nombre lo escribió un desconocido en Tally.
+    expect(formatClientList([resumen({ fullName: 'Ana [la jefa]' })])[0]).toContain('\\[la jefa\\]');
+  });
+});
+
+describe('la ficha', () => {
+  it('lleva objetivo, nivel y logística', () => {
+    const t = formatClientDetail(ficha());
+    expect(t).toContain('Ganancia muscular');
+    expect(t).toContain('Intermedio');
+    expect(t).toContain('4 días');
+  });
+
+  it('dice QUE hay limitación, no cuál', () => {
+    // El detalle vive en la rutina, que es donde el entrenador lo necesita.
+    const t = formatClientDetail(ficha({ hasLimitations: true }));
+    expect(t).toContain('Declaró limitaciones');
+  });
+
+  it('sin evaluación no inventa el objetivo', () => {
+    const t = formatClientDetail(
+      ficha({ goal: null, level: null, daysPerWeek: null, sessionMinutes: null, equipment: null }),
+    );
+    expect(t).not.toContain('Objetivo');
+    expect(t).toContain('Carlos');
+  });
+
+  it('sin rutina lo dice', () => {
+    expect(formatClientDetail(ficha({ versionState: null, versionNumber: null }))).toContain(
+      'Sin rutina',
+    );
+  });
+
+  it('una rutina que aún no salió muestra su estado', () => {
+    expect(formatClientDetail(ficha({ versionState: 'DRAFT' }))).toContain('DRAFT');
+  });
+
+  it('enviada ayer se dice en singular', () => {
+    expect(formatClientDetail(ficha({ sentDaysAgo: 1 }))).toContain('hace 1 día');
+  });
+
+  it('avisa si no abrió su enlace', () => {
+    expect(formatClientDetail(ficha({ linked: false }))).toContain('no ha abierto su enlace');
+  });
+
+  it('el último check-in, con su molestia', () => {
+    const t = formatClientDetail(
+      ficha({
+        lastCheckin: { weekNumber: 2, sessions: 3, feeling: 'good', discomfort: 'hombro' },
+      }),
+    );
+    expect(t).toContain('semana 2');
+    expect(t).toContain('💪 Bien');
+    expect(t).toContain('hombro');
+  });
+
+  it('un check-in a medias no inventa respuestas', () => {
+    const t = formatClientDetail(
+      ficha({ lastCheckin: { weekNumber: 1, sessions: null, feeling: null, discomfort: '' } }),
+    );
+    expect(t).toContain('sin contestar');
+    expect(t).not.toContain('⚠️ ');
+  });
+
+  it('un estado que no está en la tabla de nivel no revienta', () => {
+    expect(formatClientDetail(ficha({ level: 'raro' as never }))).toContain('raro');
+  });
+
+  it('con objetivo pero sin nivel, no cuelga un separador suelto', () => {
+    const t = formatClientDetail(ficha({ level: null }));
+    expect(t).toContain('Ganancia muscular');
+    expect(t).not.toContain('Ganancia muscular ·');
+  });
+
+  it('sin equipamiento pone un guion, no «null»', () => {
+    const t = formatClientDetail(ficha({ equipment: null }));
+    expect(t).toContain('—');
+    expect(t).not.toContain('null');
+  });
+
+  it('una sensación que no conocemos se muestra tal cual', () => {
+    // Si algún día se añade un botón, el resumen no se queda en blanco.
+    const t = formatClientDetail(
+      ficha({ lastCheckin: { weekNumber: 1, sessions: 2, feeling: 'raro', discomfort: null } }),
+    );
+    expect(t).toContain('raro');
+  });
+});
+
+describe('búsqueda sin resultado claro', () => {
+  it('varias coincidencias se listan', () => {
+    const t = formatAmbiguous([{ fullName: 'Marta' }, { fullName: 'Marcos' }]);
+    expect(t).toContain('Marta');
+    expect(t).toContain('Marcos');
+  });
+
+  it('con sugerencias, se ofrecen', () => {
+    expect(formatNotFound([{ fullName: 'Marta' }])).toContain('Marta');
+  });
+
+  it('sin sugerencias, no se ofrece nada vacío', () => {
+    const t = formatNotFound([]);
+    expect(t).toContain('No tengo a nadie');
+    expect(t).not.toContain('•');
+  });
+});
+
+describe('pendientes y check-ins', () => {
+  it('cada versión lleva su propio teclado', () => {
+    const m = formatPending([
+      { versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b', clientName: 'Carlos', versionNumber: 1, daysWaiting: 2 },
+    ]);
+
+    expect(m).toHaveLength(1);
+    expect(m[0]?.keyboard).not.toBeNull();
+    expect(m[0]?.text).toContain('2 días');
+  });
+
+  it('una que espera desde ayer, en singular', () => {
+    const m = formatPending([
+      { versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b', clientName: 'C', versionNumber: 1, daysWaiting: 1 },
+    ]);
+    expect(m[0]?.text).toContain('1 día');
+  });
+
+  it('sin pendientes, un solo mensaje sin botones', () => {
+    const m = formatPending([]);
+    expect(m).toHaveLength(1);
+    expect(m[0]?.keyboard).toBeUndefined();
+  });
+
+  it('los check-ins colgados dicen si ya se recordó', () => {
+    const t = formatStaleCheckins([
+      { clientName: 'Luis', weekNumber: 3, daysWaiting: 5, reminded: true },
+      { clientName: 'Ana', weekNumber: 1, daysWaiting: 3, reminded: false },
+    ]);
+    expect(t).toContain('ya recordado');
+    expect(t.split('\n').filter((l) => l.startsWith('•'))).toHaveLength(2);
+  });
+
+  it('sin ninguno colgado lo dice', () => {
+    expect(formatStaleCheckins([])).toContain('al día');
+  });
+});
+
+describe('la ayuda', () => {
+  it('nombra los cinco comandos', () => {
+    for (const c of ['/clientes', '/cliente', '/pendientes', '/checkins', '/ayuda']) {
+      expect(AYUDA).toContain(c);
+    }
+  });
+});

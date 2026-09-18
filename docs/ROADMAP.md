@@ -90,7 +90,7 @@ revés, el fallback siempre queda "para después".
 |---|---|---|---|
 | **S-23** | Solicitudes de cambio | Botones + aviso al entrenador | Una solicitud **no** muta la versión |
 | **S-24** | **E2E-4** | Ciclo de revisión completo | **SPEC-010 cerrada.** v1 queda byte a byte igual |
-| **S-25** | Comandos del entrenador | `/clientes`, `/cliente`, `/pendientes`… | **SPEC-007 cerrada** |
+| **S-25** ✅ | Comandos del entrenador | `/clientes`, `/cliente`, `/pendientes`… | **SPEC-007 cerrada** |
 
 ## Bloque 8 — Cierre (S-26 → S-28)
 

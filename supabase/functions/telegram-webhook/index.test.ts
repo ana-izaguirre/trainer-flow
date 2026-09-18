@@ -16,6 +16,7 @@ import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { QueryRepo } from '../_core/ports/query-ports.ts';
 import { createHandler, readDeps, type HandlerDeps } from './index.ts';
 
 const SECRETO = 'secreto-de-prueba';
@@ -84,6 +85,16 @@ function espia(identity: Identity | null = null): Espia {
     saveAnswers: () => Promise.resolve(),
   };
 
+  const queryRepo: QueryRepo = {
+    clients: () => {
+      usosDelRepo.push('clients');
+      return Promise.resolve([]);
+    },
+    clientDetail: () => Promise.resolve(null),
+    pendingVersions: () => Promise.resolve([]),
+    staleCheckins: () => Promise.resolve([]),
+  };
+
   return {
     deps: {
       expectedSecret: SECRETO,
@@ -92,6 +103,7 @@ function espia(identity: Identity | null = null): Espia {
       actionRepo: () => actionRepo,
       deliveryRepo: () => deliveryRepo,
       checkinRepo: () => checkinRepo,
+      queryRepo: () => queryRepo,
     },
     usosDelRepo,
     enviados,

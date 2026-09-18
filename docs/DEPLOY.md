@@ -129,21 +129,17 @@ bot en todo lo que sigue.
       values (<tu_id>, <tu_id>, 'trainer', 'Tu nombre');
       ```
 
-- [ ] **10. Comprobar que el bot te reconoce.** Escríbele `/start`.
+- [ ] **10. Comprobar que el bot te reconoce.** Escríbele `/ayuda`.
 
-      **No te va a contestar, y está bien.** Los comandos del entrenador
-      (`/clientes`, `/pendientes`…) son SPEC-007, del bloque 7: todavía no
-      existen. Lo que hoy contesta el bot son los botones y el check-in.
+      Tiene que contestarte con la lista de comandos. Si lo hace, la identidad
+      del paso 9 funciona y ya puedes usar `/clientes`, `/cliente <nombre>`,
+      `/pendientes` y `/checkins`.
 
-      Dónde se comprueba: Edge Functions → `telegram-webhook` → Logs. Tiene
-      que aparecer una línea así:
-
-      ```
-      telegram.handled  { profileId: "...", role: "trainer", updateKind: "command" }
-      ```
-
-      Si en vez de eso pone `unknown_user`, el `telegram_user_id` del paso 9
+      Si responde *«no te tengo registrado»*, el `telegram_user_id` del paso 9
       no es el tuyo.
+
+      Si no contesta nada, mira Edge Functions → `telegram-webhook` → Logs:
+      cada petición deja una línea con su `request_id`.
 
 ---
 
@@ -174,8 +170,7 @@ te llega a ti mismo como cliente si canjeaste el deep link.
 
 | Síntoma | Dónde mirar primero |
 |---|---|
-| No contesta a un comando | **Normal**: SPEC-007 es del bloque 7. Mira los logs |
-| No contesta a NADA, ni a un botón | `getWebhookInfo` → `last_error_message` |
+| No contesta a nada | `getWebhookInfo` → `last_error_message` |
 | Contesta «no te tengo registrado» | Falta el paso 9, o el `telegram_user_id` no es el tuyo |
 | Tally no entra | Logs de `tally-webhook`. Suele ser `TALLY_SIGNING_SECRET` |
 | La función revienta al arrancar | Falta un secreto del paso 4. El log dice **cuál** |
