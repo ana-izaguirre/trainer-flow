@@ -15,6 +15,18 @@
 | **Depende de** | SPEC-000 |
 | **Sesiones** | S-06, S-07 |
 
+## Corrección de S-27: el estado sí se comprueba
+
+`LOAD_TEMPLATE` y `CREATE_MANUAL` salen **solo de `NEW`** (ver
+`docs/STATE-MACHINE.md`). Los tres flujos de este documento no lo comprobaban:
+pasaban el estado actual como esperado a `fill_version`, que siempre coincide,
+y `fill_version` escribe `state = 'DRAFT'` sin mirar de dónde viene.
+
+Un botón viejo —los mensajes de Telegram no caducan— reescribía una rutina ya
+enviada. Ahora los tres consultan `nextState` antes de tocar nada, y el rechazo
+por estado SÍ explica el motivo: solo llega el dueño, así que no hay nada que
+filtrar.
+
 ## 1. Objetivo
 
 El entrenador puede crear una rutina **sin tocar la IA**: desde una plantilla o

@@ -352,3 +352,59 @@ describe('pertenencia (SPEC-013 CA-5, CA-7, CA-12)', () => {
     expect(e.pasos).toContain('fillVersion:manual');
   });
 });
+
+
+// ─── La máquina de estados, consultada de verdad ────────────────────────────
+
+describe('LOAD_TEMPLATE y CREATE_MANUAL solo salen de NEW', () => {
+  /**
+   * El botón vive en un mensaje de Telegram, y los mensajes no caducan. El
+   * entrenador sube por el chat, encuentra el aviso de hace tres semanas y
+   * pulsa ✍️. Sin esta comprobación, `fill_version` escribía `state='DRAFT'`
+   * sin mirar de dónde venía: la rutina ENVIADA se reescribía vacía.
+   */
+  it.each(['GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED'] as const)(
+    '✍️ sobre una versión en %s no escribe nada',
+    async (estado) => {
+      const e = espia({ version: version({ state: estado }) });
+
+      const r = await startManual(VERSION_ID, ENTRENADOR, e.deps);
+
+      expect(r.kind).toBe('rejected');
+      expect(e.pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
+    },
+  );
+
+  it.each(['GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED'] as const)(
+    '📋 sobre una versión en %s no carga ninguna plantilla',
+    async (estado) => {
+      const e = espia({ version: version({ state: estado }) });
+
+      const r = await loadTemplate(TEMPLATES[0]!.id, VERSION_ID, ENTRENADOR, e.deps);
+
+      expect(r.kind).toBe('rejected');
+      expect(e.guardado).toEqual([]);
+    },
+  );
+
+  it('ni siquiera se listan: no se ofrece un botón que va a fallar', async () => {
+    const e = espia({ version: version({ state: 'SENT' }) });
+
+    expect((await listTemplates(VERSION_ID, ENTRENADOR, e.deps)).kind).toBe('rejected');
+  });
+
+  it('desde NEW sí, que es el camino normal', async () => {
+    const e = espia();
+
+    expect((await startManual(VERSION_ID, ENTRENADOR, e.deps)).kind).toBe('filled');
+    expect(e.pasos).toContain('fillVersion:manual');
+  });
+
+  it('el motivo se explica: solo llega aquí el dueño, no hay nada que filtrar', async () => {
+    const e = espia({ version: version({ state: 'SENT' }) });
+
+    await startManual(VERSION_ID, ENTRENADOR, e.deps);
+
+    expect(e.mensajes[0]?.text).toContain('ya no está en preparación');
+  });
+});
