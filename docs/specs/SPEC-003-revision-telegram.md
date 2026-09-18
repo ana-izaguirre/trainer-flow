@@ -69,7 +69,16 @@ Equipamiento: Gimnasio
 6. Si la IA falló (la versión volvió a `NEW`), se envía un aviso **sin botones
    de aprobación**, ofreciendo plantilla o creación manual.
 7. El `message_id` enviado se guarda para poder retirar los botones después.
-8. El envío con botones solo ocurre si la versión está en `DRAFT`.
+8. **Los botones dependen del estado, y son de dos clases:**
+
+   | Estado | Botones | Qué hacen |
+   |---|---|---|
+   | `NEW` | 🤖 Generar · 📋 Plantilla · ✍️ A mano | **crean** contenido |
+   | `DRAFT` | ✏️ Editar · ✅ Aprobar · ❌ Rechazar | **deciden** sobre él |
+
+   Aprobar y rechazar solo aparecen sobre un `DRAFT`: no se puede aprobar lo
+   que todavía no existe. Y un aviso en `NEW` sin botones dejaba al entrenador
+   esperando un borrador que nadie iba a preparar.
 
 ## 5. Estados
 

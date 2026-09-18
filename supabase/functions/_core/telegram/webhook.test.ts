@@ -81,6 +81,8 @@ function vacioActions(): ActionDeps {
   return {
     repo: { findVersion: () => Promise.resolve(null), transition: () => Promise.resolve(false) },
     sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
+    generation: { trigger: () => Promise.resolve() },
+    requestId: 'req-1',
   };
 }
 
@@ -610,6 +612,13 @@ describe('los botones se enrutan', () => {
           return Promise.resolve();
         },
       },
+      generation: {
+        trigger: (versionId) => {
+          pasos.push(`trigger:${versionId}`);
+          return Promise.resolve();
+        },
+      },
+      requestId: 'req-1',
     };
 
     return { pasos, actions };
@@ -727,6 +736,8 @@ describe('el check-in se enruta', () => {
         transition: () => Promise.resolve(false),
       },
       sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
+      generation: { trigger: () => Promise.resolve() },
+      requestId: 'req-1',
     };
 
     const { result } = ejecutar(conBotonChk(`chk:sessions:3:${CHECKIN_ID}`), {

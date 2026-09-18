@@ -22,11 +22,13 @@
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { GenerationTrigger } from '../_core/ports/generation-trigger.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
 import { handleTelegramWebhook, outcomeToStatus } from '../_core/telegram/webhook.ts';
 import type { Logger } from '../_shared/logger.ts';
 import { createLogger } from '../_shared/logger.ts';
+import { createGenerationTrigger } from '../_shared/generation-trigger.ts';
 import { asSender, createTelegramClient } from '../_shared/telegram/client.ts';
 import {
   createActionRepo,
@@ -54,6 +56,7 @@ export interface HandlerDeps {
   readonly deliveryRepo: () => DeliveryRepo;
   readonly checkinRepo: () => CheckinRepo;
   readonly queryRepo: () => QueryRepo;
+  readonly generation: (log: Logger) => GenerationTrigger;
 }
 
 /**
@@ -75,6 +78,7 @@ export function readDeps(): HandlerDeps {
     deliveryRepo: () => createDeliveryRepo(db),
     checkinRepo: () => createCheckinRepo(db),
     queryRepo: () => createQueryRepo(db),
+    generation: (log) => createGenerationTrigger(log),
   };
 }
 
@@ -105,7 +109,12 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
         sender,
         expectedSecret: deps.expectedSecret,
         requestId,
-        actions: { repo: deps.actionRepo(requestId), sender },
+        actions: {
+          repo: deps.actionRepo(requestId),
+          sender,
+          generation: deps.generation(log),
+          requestId,
+        },
         delivery: { repo: deps.deliveryRepo(), sender },
         checkins: { repo: deps.checkinRepo(), sender },
         commands: { repo: deps.queryRepo(), sender },

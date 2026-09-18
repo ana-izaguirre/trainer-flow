@@ -28,7 +28,7 @@ flowchart TD
     Ingest --> DB[("PostgreSQL")]
     Ingest -.->|"🔔 a new assessment"| T1
 
-    DB --> Source{"which source?"}
+    DB -->|"🔔 the trainer decides"| Source{"which source?"}
 
     subgraph sources ["the three produce the same type"]
         direction LR

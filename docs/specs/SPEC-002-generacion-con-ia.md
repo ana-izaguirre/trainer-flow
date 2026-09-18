@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **IMPLEMENTADA** (S-15 → S-18) |
+| **Estado** | **IMPLEMENTADA** (S-15 → S-18, cableada en S-27) |
 | **Depende de** | SPEC-000, SPEC-008 |
 | **Sesiones** | S-15, S-16, S-17, S-18 |
 
@@ -67,6 +67,48 @@ _shared/ai/gemini-provider.ts   ← implementación. Aquí vive GEMINI_API_KEY
 
 `POST /functions/v1/generate-version` con `{ versionId, requestId }`.
 Invocación interna, requiere `service_role`.
+
+### Qué botones lleva el aviso de fallo
+
+**Depende del motivo, porque no todos se arreglan reintentando:**
+
+| Motivo | Botones | Por qué |
+|---|---|---|
+| `API_ERROR` | 🤖 Reintentar · 📋 · ✍️ | Suele ser pasajero |
+| `TIMEOUT` | 🤖 Reintentar · 📋 · ✍️ | Igual |
+| `RATE_LIMITED` | 📋 · ✍️ | No hay cuota: reintentar falla seguro |
+| `INVALID_OUTPUT` | 📋 · ✍️ | La misma petición devuelve la misma basura |
+
+Es la misma lista que la de los reintentos automáticos (§«reintentar solo lo
+que puede salir bien»), y por la misma razón. **Un botón que va a fallar es
+peor que no ofrecerlo**: gasta una pulsación, hace esperar, y enseña al
+entrenador a desconfiar de los botones.
+
+### Quién la invoca
+
+**El botón «🤖 Generar con IA»**, que viaja en el aviso de evaluación nueva y
+en el de fallo de la IA. Nada más la invoca: no hay disparo automático
+(SPEC-001 regla 8).
+
+```
+Tally → evaluación → versión en NEW → 📱 aviso con tres botones
+                                              │
+                        ┌─────────────────────┼─────────────────────┐
+                   🤖 Generar              📋 Plantilla         ✍️ A mano
+                        │
+           el webhook de Telegram dispara y NO espera
+                        │
+                 generate-version
+```
+
+**El disparo es a ciegas a propósito.** Generar tarda 10–30 segundos y
+Telegram reintenta el update si el webhook tarda: quien pulsa recibe
+«generando…» de inmediato y el resultado llega como un mensaje aparte.
+
+`NEW → GENERATING` **no la hace quien dispara, sino `generate-version`**. Es
+lo que serializa dos pulsaciones rápidas: la segunda encuentra `GENERATING` y
+no llama al proveedor. Si el disparo también transicionara, la propia función
+se encontraría el estado ya cambiado y se negaría a trabajar.
 
 ### Salida
 

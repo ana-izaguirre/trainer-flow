@@ -13,6 +13,7 @@
  */
 
 export const CALLBACK_ACTIONS = [
+  'generate',
   'approve',
   'reject',
   'edit',

@@ -95,14 +95,16 @@ rechaza nombrando el problema real.
 ## 1. Objetivo
 
 Cuando un cliente completa el formulario de Tally, su información queda
-guardada en la base de datos y el sistema dispara la generación de la rutina,
+guardada en la base de datos y el entrenador recibe el aviso para decidir
+cómo crear la rutina,
 respondiendo al webhook en menos de un segundo.
 
 ## 2. Alcance
 
 **Incluye:** endpoint del webhook, verificación de firma, idempotencia,
 parsing del payload, creación de cliente y evaluación, generación del
-`link_token`, plan en estado `NEW`, disparo asíncrono de la generación.
+`link_token`, plan en estado `NEW` y aviso al entrenador con los tres botones.
+**No incluye** disparar la generación: eso lo decide él (regla 8).
 
 **No incluye:** llamar a Gemini (SPEC-002), enviar mensajes (SPEC-003),
 vincular al cliente (SPEC-005).
@@ -204,8 +206,19 @@ export type AssessmentResult =
    (límite del `/start` de Telegram).
 7. Se crea un `workout_plan` y, con `create_workout_version`, su primera
    versión en estado `NEW` con `source='ai'` y `content` en NULL.
-8. **La respuesta se envía antes de invocar la generación.** El webhook nunca
-   espera a Gemini.
+8. **El webhook NO dispara la generación.** Crea la versión en `NEW` y avisa
+   al entrenador con tres botones: generar con IA, plantilla, o a mano.
+
+   Se decidió así, y no con un disparo automático, por dos razones:
+
+   · **Encaja con el principio 1.** Que la primera acción sobre una rutina
+     sea del entrenador, y no del sistema, es la forma más barata de que
+     «la IA propone» sea literal.
+
+   · **La cuota se gasta cuando él quiere.** Con disparo automático, un
+     cliente al que iba a ponerle una plantilla consume una llamada igual.
+
+   El webhook sigue sin esperar a nada lento: responde `200` y termina.
 9. Si el parsing falla, el evento queda guardado y el entrenador recibe un
     aviso. No se pierde el dato.
 
@@ -244,7 +257,7 @@ Registra una fila en `plan_events` con `from_state = NULL`,
 | JSON inválido | `400` | Nada |
 | Campo obligatorio faltante | `200` | Se guarda `raw_payload`, se avisa al entrenador |
 | Falla la base de datos | `500` | Tally reintenta; la idempotencia lo cubre |
-| Falla el disparo de generación | `200` | El plan queda en `NEW`; lo recoge el reintento |
+| Falla el aviso al entrenador | `200` | El plan queda en `NEW`; se ve en `/clientes` |
 
 ## 8. Seguridad
 

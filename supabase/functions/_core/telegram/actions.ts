@@ -22,6 +22,7 @@ import { nextState } from '../domain/state-machine.ts';
 import type { VersionEvent } from '../domain/state-machine.ts';
 import type { VersionState } from '../domain/version.ts';
 import type { ActionRepo } from '../ports/action-ports.ts';
+import type { GenerationTrigger } from '../ports/generation-trigger.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import type { CallbackAction } from './callback-data.ts';
 
@@ -40,6 +41,8 @@ export type ActionOutcome =
       readonly state: VersionState;
       readonly action: CallbackAction;
     }
+  /** Se pidió la generación. El resultado llega aparte, en otro mensaje. */
+  | { readonly kind: 'generating'; readonly versionId: string }
   | { readonly kind: 'approved'; readonly versionId: string }
   | { readonly kind: 'rejected'; readonly versionId: string }
   | { readonly kind: 'not_implemented'; readonly action: CallbackAction };
@@ -47,9 +50,17 @@ export type ActionOutcome =
 export interface ActionDeps {
   readonly repo: ActionRepo;
   readonly sender: TelegramSender;
+  readonly generation: GenerationTrigger;
+  /** Se propaga hasta `ai_generations` para poder seguir la petición. */
+  readonly requestId: string;
 }
 
-/** Qué evento de la máquina de estados dispara cada botón. */
+/**
+ * Qué evento de la máquina de estados dispara cada botón.
+ *
+ * `generate` NO está aquí a propósito: su transición la hace
+ * `generate-version`, no esta función. Ver el recuadro de `generar`.
+ */
 const EVENTO: Partial<Record<CallbackAction, VersionEvent>> = {
   approve: 'APPROVE',
   reject: 'REJECT',
@@ -90,6 +101,9 @@ export async function handleAction(
     return { kind: 'unauthorized' };
   }
 
+  // ── El botón de generar, antes del despacho normal ─────────────────────
+  if (request.action === 'generate') return generar(version, actor, deps);
+
   const evento = EVENTO[request.action];
   if (evento === undefined) {
     // Un botón que no hace nada y no lo dice es peor que uno que no existe.
@@ -128,4 +142,55 @@ export async function handleAction(
     `❌ Rutina rechazada. Puedes empezar otra para ${version.clientName}.`,
   );
   return { kind: 'rejected', versionId: request.versionId };
+}
+
+
+/**
+ * «🤖 Generar con IA».
+ *
+ * ┌─ AQUÍ NO SE TRANSICIONA, Y ES DELIBERADO ──────────────────────────────┐
+ * │ `NEW → GENERATING` la hace `generate-version`, y esa transición es lo  │
+ * │ que serializa dos pulsaciones rápidas: la segunda encuentra            │
+ * │ `GENERATING` y no llama al proveedor.                                  │
+ * │                                                                        │
+ * │ Si se transicionara aquí, la propia función se encontraría el estado   │
+ * │ ya cambiado y se negaría a trabajar. El botón no haría nada.           │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * Sí se consulta la máquina antes: sirve para decir POR QUÉ no se puede,
+ * en vez de disparar a ciegas algo que va a rebotar.
+ */
+async function generar(
+  version: { state: VersionState; versionId: string; clientName: string },
+  actor: Identity,
+  deps: ActionDeps,
+): Promise<ActionOutcome> {
+  if (nextState(version.state, 'GENERATE') === null) {
+    await deps.sender.sendMessage(
+      actor.telegramChatId,
+      `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}.`,
+    );
+    return { kind: 'invalid_action', state: version.state, action: 'generate' };
+  }
+
+  // Se avisa ANTES de disparar: generar tarda, y un botón que no responde
+  // invita a volver a pulsarlo.
+  await deps.sender.sendMessage(
+    actor.telegramChatId,
+    `🤖 Generando la rutina de ${version.clientName}. Te la mando en cuanto esté.`,
+  );
+
+  try {
+    await deps.generation.trigger(version.versionId, deps.requestId);
+  } catch {
+    // La versión sigue en NEW: puede volver a pulsar, o usar una plantilla.
+    // El detalle del fallo va a los logs del handler, no al entrenador.
+    await deps.sender.sendMessage(
+      actor.telegramChatId,
+      'No pude arrancar la generación. Puedes reintentar o usar una plantilla.',
+    );
+    return { kind: 'invalid_action', state: version.state, action: 'generate' };
+  }
+
+  return { kind: 'generating', versionId: version.versionId };
 }

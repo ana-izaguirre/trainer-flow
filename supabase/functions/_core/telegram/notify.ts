@@ -21,6 +21,8 @@ import {
   buildKeyboard,
   DRAFT_ACTIONS,
   FALLBACK_ACTIONS,
+  NEW_ACTIONS,
+  RETRYABLE_FALLBACK_ACTIONS,
   type InlineKeyboard,
 } from './keyboard.ts';
 
@@ -49,6 +51,15 @@ const NIVEL: Readonly<Record<Level, string>> = {
   advanced: 'Avanzado',
 };
 
+/**
+ * Los motivos que se arreglan volviendo a intentarlo.
+ *
+ * Es la misma lista que la de los reintentos automáticos de
+ * `_core/ai/generate-version.ts`: sin cuota o con una respuesta ilegible, un
+ * botón de reintentar fallaría igual.
+ */
+const REINTENTABLES: readonly AIFailureReason[] = ['API_ERROR', 'TIMEOUT'];
+
 const MOTIVO: Readonly<Record<AIFailureReason, string>> = {
   RATE_LIMITED: 'La IA no tiene margen de cuota ahora mismo.',
   TIMEOUT: 'La IA tardó demasiado en responder.',
@@ -59,12 +70,19 @@ const MOTIVO: Readonly<Record<AIFailureReason, string>> = {
 /**
  * Llegó una evaluación nueva.
  *
- * Sin botones: la generación arranca sola. El entrenador no tiene que pedir
- * el borrador — decide al APROBARLO, que es donde vive el principio.
+ * ┌─ ANTES ESTE AVISO MENTÍA ──────────────────────────────────────────────┐
+ * │ Decía «Preparando el borrador...» y no se preparaba nada: el disparo   │
+ * │ automático de la generación nunca llegó a cablearse, así que el        │
+ * │ entrenador esperaba un mensaje que no iba a llegar.                    │
+ * │                                                                        │
+ * │ Ahora pregunta, y las tres respuestas son botones. Que la primera      │
+ * │ acción sobre una rutina sea suya, y no del sistema, es la forma más    │
+ * │ barata de que «la IA propone» sea literal (SPEC-001 regla 8).          │
+ * └────────────────────────────────────────────────────────────────────────┘
  */
 export function buildAssessmentArrived(
   summary: AssessmentSummary,
-  _versionId: string,
+  versionId: string,
 ): Notification {
   const lines = [
     `📋 *Nueva evaluación: ${escapeMarkdownV2(summary.clientName)}*`,
@@ -80,9 +98,9 @@ export function buildAssessmentArrived(
     lines.push('', '⚠️ Declaró limitaciones \\(las verás en la rutina\\)');
   }
 
-  lines.push('', 'Preparando el borrador\\.\\.\\.');
+  lines.push('', '¿Cómo preparamos la rutina?');
 
-  return { text: lines.join('\n'), keyboard: null };
+  return { text: lines.join('\n'), keyboard: buildKeyboard(NEW_ACTIONS, versionId) };
 }
 
 /** El borrador está listo y hay que decidir sobre él. */
@@ -107,12 +125,19 @@ export function buildGenerationFailed(
   reason: AIFailureReason,
   versionId: string,
 ): Notification {
+  const sePuedeReintentar = REINTENTABLES.includes(reason);
+
   return {
     text: [
       `⚠️ ${escapeMarkdownV2(MOTIVO[reason])}`,
       '',
-      'Puedes seguir con una plantilla o escribirla a mano, sobre esta misma versión\\.',
+      sePuedeReintentar
+        ? 'Puedes reintentar, o seguir con una plantilla o a mano, sobre esta misma versión\\.'
+        : 'Puedes seguir con una plantilla o escribirla a mano, sobre esta misma versión\\.',
     ].join('\n'),
-    keyboard: buildKeyboard(FALLBACK_ACTIONS, versionId),
+    keyboard: buildKeyboard(
+      sePuedeReintentar ? RETRYABLE_FALLBACK_ACTIONS : FALLBACK_ACTIONS,
+      versionId,
+    ),
   };
 }

@@ -53,7 +53,11 @@ interface Espia {
 }
 
 function espia(
-  opciones: { version?: VersionForAction | null; transicionFalla?: boolean } = {},
+  opciones: {
+    version?: VersionForAction | null;
+    transicionFalla?: boolean;
+    disparoFalla?: boolean;
+  } = {},
 ): Espia {
   const pasos: string[] = [];
   const mensajes: string[] = [];
@@ -69,9 +73,20 @@ function espia(
     },
   };
 
+  const generation = {
+    trigger: (versionId: string) => {
+      pasos.push(`trigger:${versionId}`);
+      return opciones.disparoFalla === true
+        ? Promise.reject(new Error('la función no responde'))
+        : Promise.resolve();
+    },
+  };
+
   return {
     deps: {
       repo,
+      generation,
+      requestId: 'req-1',
       sender: {
         sendMessage: (chatId, text) => {
           mensajes.push(`${chatId}:${text}`);
@@ -246,5 +261,98 @@ describe('una versión que no existe', () => {
     const outcome = await handleAction(pulsar('approve'), TRAINER, deps);
 
     expect(outcome.kind).toBe('unauthorized');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+
+describe('🤖 el botón de generar', () => {
+  it('dispara la generación y avisa al entrenador', async () => {
+    const { deps, pasos, mensajes } = espia({ version: version('NEW') });
+
+    const outcome = await handleAction(
+      { action: 'generate', versionId: 'v1', callbackQueryId: 'cb-1' },
+      TRAINER,
+      deps,
+    );
+
+    expect(outcome).toEqual({ kind: 'generating', versionId: 'v1' });
+    expect(pasos).toContain('trigger:v1');
+    expect(mensajes.some((m) => m.includes('Generando'))).toBe(true);
+  });
+
+  it('🔴 NO transiciona: eso lo hace `generate-version`', async () => {
+    // Si transicionara aquí, la propia función se encontraría GENERATING y se
+    // negaría a trabajar. El botón no haría nada.
+    const { deps, pasos } = espia({ version: version('NEW') });
+
+    await handleAction(
+      { action: 'generate', versionId: 'v1', callbackQueryId: 'cb-1' },
+      TRAINER,
+      deps,
+    );
+
+    expect(pasos.some((p) => p.startsWith('transition'))).toBe(false);
+  });
+
+  it('avisa ANTES de disparar', async () => {
+    // Generar tarda; un botón que no responde invita a volver a pulsarlo.
+    const { deps, pasos, mensajes } = espia({ version: version('NEW') });
+
+    await handleAction(
+      { action: 'generate', versionId: 'v1', callbackQueryId: 'cb-1' },
+      TRAINER,
+      deps,
+    );
+
+    expect(mensajes[0]).toContain('Generando');
+    expect(pasos.indexOf('trigger:v1')).toBeGreaterThan(-1);
+  });
+
+  it.each(['GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED'] as const)(
+    'desde %s no se genera, y se dice por qué',
+    async (state) => {
+      const { deps, pasos, mensajes } = espia({ version: version(state) });
+
+      const outcome = await handleAction(
+        { action: 'generate', versionId: 'v1', callbackQueryId: 'cb-1' },
+        TRAINER,
+        deps,
+      );
+
+      expect(outcome).toMatchObject({ kind: 'invalid_action', state, action: 'generate' });
+      expect(pasos).not.toContain('trigger:v1');
+      // No un «no puedo» a secas: dice en qué estado está.
+      expect(mensajes.at(-1)?.length).toBeGreaterThan(20);
+    },
+  );
+
+  it('si el disparo falla, la versión sigue en NEW y se ofrece salida', async () => {
+    const { deps, mensajes } = espia({ version: version('NEW'), disparoFalla: true });
+
+    const outcome = await handleAction(
+      { action: 'generate', versionId: 'v1', callbackQueryId: 'cb-1' },
+      TRAINER,
+      deps,
+    );
+
+    expect(outcome).toMatchObject({ kind: 'invalid_action' });
+    expect(mensajes.at(-1)).toContain('plantilla');
+  });
+
+  it('una versión ajena no se genera', async () => {
+    // El `callback_data` lo fabrica cualquiera: lo que lo detiene es la
+    // pertenencia, igual que para aprobar.
+    const { deps, pasos } = espia({ version: version('NEW') });
+
+    const outcome = await handleAction(
+      { action: 'generate', versionId: 'v1', callbackQueryId: 'cb-1' },
+      OTRO_ENTRENADOR,
+      deps,
+    );
+
+    expect(outcome).toEqual({ kind: 'unauthorized' });
+    expect(pasos).not.toContain('trigger:v1');
   });
 });
