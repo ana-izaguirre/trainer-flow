@@ -15,6 +15,7 @@
  */
 import { canModifyVersion } from '../authorization.ts';
 import type { Identity } from '../domain/identity.ts';
+import { nextState } from '../domain/state-machine.ts';
 import { describeErrors } from '../domain/draft.ts';
 import { validateDraft } from '../domain/validate-draft.ts';
 import type { Workout } from '../domain/workout.ts';
@@ -69,6 +70,11 @@ export async function listTemplates(
   const version = await versionPropia(versionId, actor, deps);
   if (version === null) return rechazar(chatId, deps, 'no existe o no es suya');
 
+  // No se ofrecen botones que al pulsarse van a rechazarse.
+  if (nextState(version.state, 'LOAD_TEMPLATE') === null) {
+    return rechazarPorEstado(chatId, deps, version.state);
+  }
+
   const aplicables = templatesFor({
     ...(version.daysPerWeek === null ? {} : { daysPerWeek: version.daysPerWeek }),
     ...(version.level === null ? {} : { level: version.level }),
@@ -103,6 +109,12 @@ export async function loadTemplate(
   const version = await versionPropia(versionId, actor, deps);
   if (version === null) return rechazar(chatId, deps, 'no existe o no es suya');
 
+  // `LOAD_TEMPLATE` solo sale de NEW. Sin esto, un botón viejo de un mensaje
+  // de hace semanas reescribía una rutina ya ENVIADA y la devolvía a DRAFT.
+  if (nextState(version.state, 'LOAD_TEMPLATE') === null) {
+    return rechazarPorEstado(chatId, deps, version.state);
+  }
+
   // Regla 9: sin el aviso, un cliente con limitaciones haría fallar
   // `validateDraft` y el entrenador no podría ni cargar la plantilla.
   const draft = applyTemplate(template, {
@@ -122,6 +134,13 @@ export async function startManual(
   const chatId = actor.telegramChatId;
   const version = await versionPropia(versionId, actor, deps);
   if (version === null) return rechazar(chatId, deps, 'no existe o no es suya');
+
+  // `CREATE_MANUAL` solo sale de NEW. `fill_version` escribe `state='DRAFT'`
+  // sin mirar de dónde viene, así que si esto no lo comprueba, no lo
+  // comprueba nadie.
+  if (nextState(version.state, 'CREATE_MANUAL') === null) {
+    return rechazarPorEstado(chatId, deps, version.state);
+  }
 
   // Se guarda sin pasar por `validateDraft`: una rutina vacía NO es válida, y
   // ese es justo el estado en el que tiene que quedar para poder editarla.
@@ -221,4 +240,23 @@ async function rechazar(
 ): Promise<CreationOutcome> {
   await deps.sender.sendMessage(chatId, 'No puedo hacer eso con esta rutina\\.');
   return { kind: 'rejected', reason };
+}
+
+/**
+ * Rechazo por ESTADO, no por pertenencia.
+ *
+ * Aquí sí se explica el motivo: solo llega el dueño de la rutina, que ya tiene
+ * acceso. No hay nada que filtrar y sí algo que aclararle — normalmente ha
+ * pulsado un botón viejo de un mensaje de hace semanas.
+ */
+async function rechazarPorEstado(
+  chatId: number,
+  deps: CreationDeps,
+  estado: string,
+): Promise<CreationOutcome> {
+  await deps.sender.sendMessage(
+    chatId,
+    'Esa rutina ya no está en preparación, así que no puedo cambiarle el contenido\\.',
+  );
+  return { kind: 'rejected', reason: `estado ${estado}` };
 }

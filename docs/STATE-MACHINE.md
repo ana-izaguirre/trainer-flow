@@ -245,3 +245,52 @@ test lo detecta aunque la transición nueva funcione perfectamente.
 
 El punto §11 dice que el core no debe depender de librerías. Meter XState en
 `_core` rompería esa regla por 20 líneas de código que ya están escritas arriba.
+
+---
+
+## Quién la hace cumplir, y quién no
+
+**Esta tabla vive solo en TypeScript.** La base de datos NO valida
+transiciones: `apply_version_transition` lo dice en su propio comentario —
+*«aplica una transición ya validada por `_core`»*— y lo único que comprueba es
+que el estado esperado siga siendo el actual, para no pisar a quien se
+adelantó.
+
+Es un *compare-and-swap*, no una máquina de estados.
+
+### Todo el que escriba un estado tiene que consultarla
+
+| Quién escribe | Consulta `nextState` |
+|---|---|
+| `ai/generate-version.ts` | ✅ |
+| `telegram/actions.ts` | ✅ |
+| `telegram/delivery.ts` | ✅ |
+| `creation/flows.ts` | ✅ **desde S-27** |
+
+`fill_version` escribe `state = 'DRAFT'` sin mirar de dónde viene, y los tres
+flujos de creación le pasaban el estado actual como esperado — que siempre
+coincide, porque acababan de leerlo. El resultado: `LOAD_TEMPLATE` y
+`CREATE_MANUAL`, que según esta tabla **solo salen de `NEW`**, funcionaban
+desde cualquier estado.
+
+> El botón vive en un mensaje de Telegram, y los mensajes no caducan. El
+> entrenador sube por el chat, encuentra el aviso de hace tres semanas y pulsa
+> ✍️: la rutina **ya enviada** se reescribía vacía y volvía a `DRAFT`.
+
+Sin atacante y sin concurrencia. Corregido en S-27.
+
+### Lo que sigue pendiente
+
+Que la regla viva en un solo sitio sigue siendo una garantía de disciplina, no
+de construcción: nada impide que un quinto camino vuelva a saltársela.
+
+**Propuesta para una sesión futura:** un trigger en `workout_versions` que
+valide `OLD.state → NEW.state` contra estas mismas 11 transiciones, más un test
+que recorra los 36 pares de estados y exija que el trigger y `TRANSITIONS`
+digan lo mismo. Así `DRAFT → SENT` deja de ser imposible *porque el código no
+lo hace* y pasa a ser imposible *porque la base lo rechaza*.
+
+No es gratis: hay un test de esquema que hoy hace `UPDATE … SET state = 'SENT'`
+a mano y habría que reescribirlo, y las dos copias de la tabla pueden
+desincronizarse si nadie mira el test de acuerdo. Por eso va aparte, con su
+spec, y no colado en un arreglo.
