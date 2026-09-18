@@ -32,6 +32,11 @@ import type { UserRole } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import { parseCheckinCallback } from '../checkin/answers.ts';
 import {
+  handleCommand,
+  type CommandDeps,
+  type CommandOutcome,
+} from '../commands/router.ts';
+import {
   handleCheckinAnswer,
   handleCheckinText,
   type ReplyDeps,
@@ -76,6 +81,8 @@ export type WebhookOutcome =
       readonly delivery?: DeliverOutcome;
       /** Qué pasó con el check-in, cuando el update era una respuesta. */
       readonly checkin?: ReplyOutcome;
+      /** Qué pasó con el comando, cuando el update era uno. */
+      readonly command?: CommandOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -99,6 +106,7 @@ export interface WebhookDeps {
   readonly actions: ActionDeps;
   readonly delivery: DeliveryDeps;
   readonly checkins: ReplyDeps;
+  readonly commands: CommandDeps;
 }
 
 /**
@@ -177,6 +185,13 @@ export async function handleTelegramWebhook(
     // comprobación de pertenencia que hace `handleAction`.
     let action: ActionOutcome | undefined;
     let checkin: ReplyOutcome | undefined;
+    let command: CommandOutcome | undefined;
+
+    // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
+    // se atendió en el paso 4, antes de que hubiera identidad.
+    if (update.kind === 'command') {
+      command = await handleCommand(update.command, update.args, identity, deps.commands);
+    }
 
     if (update.kind === 'callback') {
       // Los dos prefijos viajan por el mismo canal, así que se prueban en
@@ -233,6 +248,7 @@ export async function handleTelegramWebhook(
       ...(action === undefined ? {} : { action }),
       ...(delivery === undefined ? {} : { delivery }),
       ...(checkin === undefined ? {} : { checkin }),
+      ...(command === undefined ? {} : { command }),
     };
   } catch (error) {
     return {

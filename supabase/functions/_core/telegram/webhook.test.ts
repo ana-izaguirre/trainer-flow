@@ -10,10 +10,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
+import type { QueryRepo } from '../ports/query-ports.ts';
 import type { DeliveryRepo } from '../ports/delivery-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import type { ActionDeps } from './actions.ts';
 import type { ReplyDeps } from '../checkin/reply.ts';
+import type { CommandDeps } from '../commands/router.ts';
 import type { DeliveryDeps } from './delivery.ts';
 import { handleTelegramWebhook, outcomeToStatus } from './webhook.ts';
 
@@ -80,6 +82,51 @@ function vacioActions(): ActionDeps {
     repo: { findVersion: () => Promise.resolve(null), transition: () => Promise.resolve(false) },
     sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
   };
+}
+
+/** Consultas falsas que registran qué se pidió. Por defecto, sin clientes. */
+function fakeCommands(opciones: { clientes?: { clientId: string; fullName: string }[] } = {}) {
+  const pasos: string[] = [];
+
+  const repo: QueryRepo = {
+    clients: () => {
+      pasos.push('clients');
+      return Promise.resolve(
+        (opciones.clientes ?? []).map((c) => ({
+          ...c,
+          versionState: null,
+          versionNumber: null,
+          linked: true,
+          pendingCheckinDays: null,
+        })),
+      );
+    },
+    clientDetail: () => {
+      pasos.push('clientDetail');
+      return Promise.resolve(null);
+    },
+    pendingVersions: () => {
+      pasos.push('pendingVersions');
+      return Promise.resolve([]);
+    },
+    staleCheckins: () => {
+      pasos.push('staleCheckins');
+      return Promise.resolve([]);
+    },
+  };
+
+  const deps: CommandDeps = {
+    repo,
+    sender: {
+      sendMessage: (chatId) => {
+        pasos.push(`sendMessage:${chatId}`);
+        return Promise.resolve();
+      },
+      answerCallback: () => Promise.resolve(),
+    },
+  };
+
+  return { deps, pasos };
 }
 
 const CHECKIN_ID = '9a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
@@ -222,6 +269,7 @@ function ejecutar(
     actions?: ActionDeps;
     delivery?: DeliveryDeps;
     checkins?: ReturnType<typeof fakeCheckins>;
+    commands?: ReturnType<typeof fakeCommands>;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -239,6 +287,7 @@ function ejecutar(
         requestId: 'req-1',
         delivery: opts.delivery ?? fakeDelivery().deps,
         checkins: (opts.checkins ?? fakeCheckins()).deps,
+        commands: (opts.commands ?? fakeCommands()).deps,
         actions: opts.actions ?? vacioActions(),
       },
     ),

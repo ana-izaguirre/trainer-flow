@@ -2,9 +2,19 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **IMPLEMENTADA** |
 | **Depende de** | SPEC-003, SPEC-009 |
 | **Sesiones** | S-25 |
+
+## Resultado
+
+| Pieza | Estado |
+|---|---|
+| `matchClientName`: exacto, parcial, ambiguo, sin match | ✅ 9 tests |
+| Los cinco comandos + uno desconocido | ✅ 21 tests |
+| Formateo y paginación a 20 | ✅ 35 tests |
+| Las cuatro consultas SQL | ✅ 22 tests de integración |
+| Cableado al webhook y al handler | ✅ |
 
 ## 1. Objetivo
 
@@ -61,14 +71,24 @@ Lista de comandos.
    escriba recibe un mensaje genérico.
 2. `/cliente` busca por coincidencia parcial, sin distinguir mayúsculas.
    Varias coincidencias: se listan para elegir.
-3. Sin coincidencias: se sugieren nombres cercanos.
-4. Las listas se limitan a 20 elementos por mensaje.
+3. **Sin coincidencias: se sugiere por iniciales, no por distancia de edición.**
+   Con diez clientes, un Levenshtein es maquinaria para un problema que no
+   existe. Si nada contiene lo escrito, se ofrecen los que empiezan por la
+   misma letra; si tampoco hay, se dice que no hay nadie con ese nombre.
+4. **Las listas se parten en mensajes de 20.** No se truncan: con 25 clientes
+   salen dos mensajes, no uno con 20 y el resto perdido. Telegram corta en
+   4096 caracteres, así que `splitMessage` sigue siendo la última red.
 5. `/pendientes` incluye botones que llevan directo a la acción de SPEC-004.
 6. Un comando desconocido responde con `/ayuda`.
 
 ## 5. Estados
 
 Solo lectura. No cambia estados.
+
+**Eso es una propiedad, no una nota.** Estos comandos no pueden aprobar, ni
+enviar, ni tocar una versión: el puerto que usan no expone ninguna escritura.
+Los botones de `/pendientes` llevan a las acciones de SPEC-004, que sí escriben
+y ya tienen su propia autorización.
 
 ## 6. Errores
 
@@ -99,8 +119,14 @@ Solo lectura. No cambia estados.
   recibe un mensaje genérico y **ningún dato**.
 - **CA-5** — DADO 2 versiones en `DRAFT`, CUANDO se envía `/pendientes`,
   ENTONCES aparecen ambos con botones funcionales.
-- **CA-6** — DADO 25 clientes, CUANDO se envía `/clientes`, ENTONCES se
-  pagina en varios mensajes.
+- **CA-6** — DADO 25 clientes, CUANDO se envía `/clientes`, ENTONCES salen
+  **dos mensajes** con los 25, no uno con 20.
+- **CA-7** — DADO un check-in `PENDING` de hace 3 días, CUANDO se envía
+  `/checkins`, ENTONCES aparece; uno de ayer, no.
+- **CA-8** — DADO un comando desconocido, CUANDO lo escribe el entrenador,
+  ENTONCES recibe `/ayuda` y **ninguna consulta toca la base de datos**.
+- **CA-9** — DADO que el entrenador aún no tiene clientes, CUANDO envía
+  `/clientes`, ENTONCES recibe instrucciones, no una lista vacía.
 
 ## 9. Tests
 
@@ -115,8 +141,11 @@ Solo lectura. No cambia estados.
 ## 10. Archivos que toca
 
 ```
-supabase/functions/_core/commands.ts
-supabase/functions/_core/commands.test.ts
-supabase/functions/_core/client-match.ts
-supabase/functions/telegram-webhook/handlers/commands.ts
+supabase/functions/_core/commands/router.ts        el despacho
+supabase/functions/_core/commands/match.ts         búsqueda por nombre
+supabase/functions/_core/commands/format.ts        los mensajes
+supabase/functions/_core/ports/query-ports.ts      solo lectura, a propósito
+supabase/functions/_shared/db.ts                   el adaptador
+supabase/functions/_core/telegram/webhook.ts       el enrutado
+supabase/migrations/0011_trainer_queries.sql       las consultas
 ```
