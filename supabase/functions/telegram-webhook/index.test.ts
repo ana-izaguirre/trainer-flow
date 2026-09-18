@@ -104,6 +104,12 @@ function espia(identity: Identity | null = null): Espia {
       deliveryRepo: () => deliveryRepo,
       checkinRepo: () => checkinRepo,
       queryRepo: () => queryRepo,
+      generation: () => ({
+        trigger: (versionId) => {
+          usosDelRepo.push(`trigger:${versionId}`);
+          return Promise.resolve();
+        },
+      }),
     },
     usosDelRepo,
     enviados,

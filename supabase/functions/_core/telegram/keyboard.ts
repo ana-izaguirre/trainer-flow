@@ -25,6 +25,7 @@ export interface InlineKeyboard {
 
 /** El texto de cada acción. Con emoji: se leen de un vistazo en el móvil. */
 const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
+  generate: '🤖 Generar con IA',
   approve: '✅ Aprobar',
   reject: '❌ Rechazar',
   edit: '✏️ Editar',
@@ -34,16 +35,41 @@ const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
   change: '✏️ Pedir un cambio',
 };
 
-/** Lo que el entrenador puede hacer con un borrador. */
+/**
+ * Lo que se puede hacer con una versión que aún no tiene contenido.
+ *
+ * Son las tres fuentes del principio 2, hechas interfaz: las tres producen un
+ * `WorkoutDraft` y pasan por la misma validación. Que la IA sea la primera no
+ * la hace especial — es la que más tarda, nada más.
+ */
+export const NEW_ACTIONS: readonly CallbackAction[] = ['generate', 'template', 'manual'];
+
+/**
+ * Lo que el entrenador puede hacer con un borrador.
+ *
+ * Aprobar y rechazar NO aparecen sobre una versión en `NEW`: no se puede
+ * aprobar lo que todavía no existe (SPEC-003 regla 8).
+ */
 export const DRAFT_ACTIONS: readonly CallbackAction[] = ['edit', 'approve', 'reject'];
 
 /**
- * Las dos salidas que quedan cuando la IA no puede.
+ * Las salidas que quedan cuando la IA no puede.
  *
  * Decir «la IA falló» sin ofrecer por dónde seguir deja al entrenador mirando
  * un mensaje (ADR-005).
+ *
+ * **Reintentar solo aparece cuando puede salir bien.** Sin cuota, o con una
+ * respuesta ilegible, el botón fallaría igual: gastaría una pulsación, haría
+ * esperar, y enseñaría al entrenador a desconfiar de los botones. Es la misma
+ * lista que la de los reintentos automáticos, y por la misma razón.
  */
 export const FALLBACK_ACTIONS: readonly CallbackAction[] = ['template', 'manual'];
+
+export const RETRYABLE_FALLBACK_ACTIONS: readonly CallbackAction[] = [
+  'generate',
+  'template',
+  'manual',
+];
 
 /**
  * Una sola fila: en un móvil tres botones caben sin apretarse.

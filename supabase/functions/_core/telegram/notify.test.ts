@@ -12,6 +12,7 @@ import {
   buildGenerationFailed,
 } from './notify.ts';
 import { parseCallbackData } from './callback-data.ts';
+import type { InlineKeyboard } from './keyboard.ts';
 
 const VERSION = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
 
@@ -38,6 +39,13 @@ const RUTINA = {
 };
 
 // ---------------------------------------------------------------------------
+
+/** Las acciones de un teclado, en orden, leídas de su `callback_data`. */
+function acciones(keyboard: InlineKeyboard | null): (string | undefined)[] {
+  return (keyboard?.inline_keyboard ?? [])
+    .flat()
+    .map((b) => parseCallbackData(b.callback_data)?.action);
+}
 
 describe('llegó una evaluación', () => {
   it('dice de quién y lo que pidió', () => {
@@ -74,10 +82,14 @@ describe('llegó una evaluación', () => {
     expect(text).not.toContain('⚠️');
   });
 
-  it('no lleva botones: la generación arranca sola', () => {
-    // El entrenador no tiene que pedir el borrador. Decide al APROBARLO, que
-    // es donde vive el principio.
-    expect(buildAssessmentArrived(RESUMEN, VERSION).keyboard).toBeNull();
+  it('lleva los tres botones de crear', () => {
+    // Antes no llevaba ninguno, y el texto decía «preparando el borrador»:
+    // nadie lo preparaba. Ahora pregunta, y las tres respuestas son botones.
+    const aviso = buildAssessmentArrived(RESUMEN, VERSION);
+
+    expect(aviso.keyboard).not.toBeNull();
+    expect(acciones(aviso.keyboard)).toEqual(['generate', 'template', 'manual']);
+    expect(aviso.text).toContain('¿Cómo preparamos la rutina?');
   });
 
   it('escapa lo que pueda romper el formato', () => {
@@ -99,9 +111,12 @@ describe('el borrador está listo', () => {
     const { keyboard } = buildDraftReady(RUTINA, { clientName: 'C', versionNumber: 1 }, VERSION);
 
     expect(keyboard).not.toBeNull();
-    const acciones = keyboard!.inline_keyboard.flat().map((b) => parseCallbackData(b.callback_data));
-    expect(acciones.map((a) => a?.action)).toEqual(['edit', 'approve', 'reject']);
-    expect(acciones.every((a) => a?.versionId === VERSION)).toBe(true);
+    expect(acciones(keyboard)).toEqual(['edit', 'approve', 'reject']);
+    // Todos apuntan a ESTA versión: un botón con otro id tocaría otra rutina.
+    const ids = keyboard!.inline_keyboard
+      .flat()
+      .map((b) => parseCallbackData(b.callback_data)?.versionId);
+    expect(ids.every((id) => id === VERSION)).toBe(true);
   });
 });
 
@@ -113,18 +128,36 @@ describe('la IA no pudo', () => {
     expect(text.length).toBeGreaterThan(10);
   });
 
-  it.each(['RATE_LIMITED', 'TIMEOUT', 'API_ERROR', 'INVALID_OUTPUT'] as const)(
-    '%s ofrece las dos salidas que quedan',
+  it.each(['API_ERROR', 'TIMEOUT'] as const)(
+    '%s SÍ ofrece reintentar: suele ser pasajero',
     (reason) => {
-      // Es la degradación del ADR-005 hecha botón: el producto no se bloquea.
-      const { keyboard } = buildGenerationFailed(reason, VERSION);
+      const { keyboard, text } = buildGenerationFailed(reason, VERSION);
 
-      const acciones = keyboard!.inline_keyboard.flat().map((b) =>
-        parseCallbackData(b.callback_data),
-      );
-      expect(acciones.map((a) => a?.action)).toEqual(['template', 'manual']);
+      expect(acciones(keyboard)).toEqual(['generate', 'template', 'manual']);
+      expect(text).toContain('reintentar');
     },
   );
+
+  it.each(['RATE_LIMITED', 'INVALID_OUTPUT'] as const)(
+    '%s NO ofrece reintentar: fallaría igual',
+    (reason) => {
+      // Un botón que va a fallar gasta una pulsación, hace esperar, y enseña
+      // al entrenador a desconfiar de los botones.
+      const { keyboard, text } = buildGenerationFailed(reason, VERSION);
+
+      expect(acciones(keyboard)).toEqual(['template', 'manual']);
+      expect(text).not.toContain('reintentar');
+    },
+  );
+
+  it('pero SIEMPRE quedan plantilla y manual: el producto no se bloquea', () => {
+    // La degradación del ADR-005 hecha botón.
+    for (const reason of ['RATE_LIMITED', 'TIMEOUT', 'API_ERROR', 'INVALID_OUTPUT'] as const) {
+      const salidas = acciones(buildGenerationFailed(reason, VERSION).keyboard);
+      expect(salidas, reason).toContain('template');
+      expect(salidas, reason).toContain('manual');
+    }
+  });
 
   it('cada motivo tiene su mensaje: «falló» a secas no dice nada', () => {
     const textos = (['RATE_LIMITED', 'TIMEOUT', 'API_ERROR', 'INVALID_OUTPUT'] as const).map(

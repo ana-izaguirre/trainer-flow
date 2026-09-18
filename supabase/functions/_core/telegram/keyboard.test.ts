@@ -39,7 +39,7 @@ describe('el teclado de un borrador', () => {
 });
 
 describe('el teclado de cuando la IA falla', () => {
-  it('ofrece plantilla y manual: las dos salidas que quedan', () => {
+  it('ofrece plantilla y manual: las salidas que siempre quedan', () => {
     // Decir «la IA falló» sin ofrecer por dónde seguir deja al entrenador
     // mirando un mensaje.
     const teclado = buildKeyboard(FALLBACK_ACTIONS, VERSION)!;
