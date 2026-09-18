@@ -5,6 +5,10 @@ Responde siempre en español latino neutro. Documentos, specs y comentarios de
 código también en español. Los identificadores de código (variables, funciones,
 tablas, columnas) en inglés.
 
+**Excepción: el README.** `README.md` va en inglés, porque es lo primero que ve
+quien llega al repositorio desde fuera. `README.es.md` lleva la versión en
+español. Los dos dicen lo mismo: si se cambia uno, se cambia el otro.
+
 ## Metodología: Spec Driven Development
 
 **Regla #1: no se escribe código sin una spec aprobada.**

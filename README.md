@@ -1,131 +1,246 @@
 # 🏋️ TrainerFlow
 
 [![CI](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml)
-[![Cobertura](https://img.shields.io/badge/cobertura-100%25-brightgreen)](docs/TESTING.md)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](docs/TESTING.md)
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-estricto-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Deno](https://img.shields.io/badge/Deno-Edge%20Functions-70FFAF?logo=deno&logoColor=black)](supabase/functions/deno.json)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](docs/DATA-MODEL.md)
-[![SDD](https://img.shields.io/badge/m%C3%A9todo-Spec%20Driven%20Development-8A63D2)](docs/specs/)
+[![SDD](https://img.shields.io/badge/method-Spec%20Driven%20Development-8A63D2)](docs/specs/)
 
-Herramienta que ayuda a un entrenador personal a crear y hacer seguimiento de
-rutinas — **manualmente, con plantillas o con IA**, sin quitarle nunca la
-decisión final.
+**English** · [Español](README.es.md)
 
-> El badge de cobertura no es decorativo: si baja del 100%, **el CI se pone
-> rojo**. El umbral está en `vitest.config.ts`.
+A tool that helps a personal trainer build and follow up on workout plans —
+**by hand, from a template, or with AI** — without ever taking the final call
+away from them.
 
----
-
-## Qué hace
-
-```
-El cliente completa un formulario (2-3 min)
-            ↓
-El entrenador crea la rutina:  IA · plantilla · desde cero
-            ↓
-La revisa y la edita en Telegram
-            ↓
-La aprueba
-            ↓
-El cliente la recibe en Telegram
-            ↓
-Check-in semanal · puede pedir cambios
-```
-
-**Interfaz: Telegram.** No hay dashboard ni app. El entrenador ya lo tiene abierto.
+> The coverage badge isn't decorative: if it drops below 100%, **CI goes red**.
+> The threshold lives in `vitest.config.ts`.
 
 ---
 
-## Los dos principios
+## What it does
 
-### 1. La IA propone, el entrenador decide
+```mermaid
+flowchart TD
+    Form["🧍 The client fills in<br/>a 2–3 min form"] --> Tally[["Tally"]]
+    Tally -->|webhook| Ingest["tally-webhook"]
+    Ingest --> DB[("PostgreSQL")]
+    Ingest -.->|"🔔 a new assessment"| T1
 
-Una rutina mal adaptada puede lesionar a alguien. Por eso la revisión humana no
-es una convención, es estructura:
+    DB --> Source{"which source?"}
 
-- **La transición `DRAFT → SENT` no existe.** El único camino a `SENT` sale de
-  `APPROVED`, y ahí solo se llega con una acción del entrenador.
-- Ningún cambio de estado ocurre fuera de la máquina de estados.
-- Cobertura del 100% sobre ella, incluidas las transiciones inválidas.
+    subgraph sources ["the three produce the same type"]
+        direction LR
+        Source -->|AI| Gen["generate-version"]
+        Source -->|template| Tpl["templates.ts"]
+        Source -->|by hand| Man["the editor"]
+    end
 
-### 2. La IA es una capacidad, no la dueña del dominio
+    Gen -.->|"the only replaceable part"| Gemini[["Gemini"]]
 
+    sources --> Draft["DRAFT · the trainer reads it<br/>in Telegram, with buttons"]
+    Draft --> T1["🧑‍🏫 TRAINER"]
+
+    T1 ==>|"✋ approves"| Sent["SENT"]
+    T1 -->|"rejects or edits"| Draft
+
+    Sent --> Deliver["🧍 the client gets the plan,<br/>already adapted"]
+
+    Cron(["⏰ pg_cron · Mondays"]) --> Weekly["weekly-checkin"]
+    Deliver --> Weekly
+    Weekly -->|"3 questions"| Answer["🧍 the client answers"]
+    Answer -->|"⚠️ discomfort → right away"| T1
+
+    style T1 fill:#8A63D2,color:#fff,stroke:#5B3FA8
+    style Sent fill:#3ECF8E,color:#000,stroke:#2A9E6B
+    style Gemini stroke-dasharray: 5 5
+    style Form fill:#E8F8F0,color:#000
+    style Deliver fill:#E8F8F0,color:#000
+    style Answer fill:#E8F8F0,color:#000
+
+    style sources fill:#F7F5FC,stroke:#C9BEE8
 ```
-IA ──────────┐
-Plantilla ───┼──► WorkoutDraft ──► validar ──► WorkoutVersion
-Manual ──────┘
-```
 
-Las tres fuentes producen el mismo tipo y pasan por la misma validación.
-**Si Gemini se cae, el producto sigue funcionando**: el entrenador usa una
-plantilla o escribe la rutina a mano.
+**The interface is Telegram.** No dashboard, no app. The trainer already has it
+open.
 
-La palabra "Gemini" no aparece en `_core/`. El dominio solo conoce la interfaz
-`AIProvider`.
+The dashed line to Gemini is the point: it's the only replaceable part. Every
+other path works without it.
 
 ---
 
-## Cómo funciona por dentro
+## The two principles
 
-### Las cuatro decisiones que importan
+### 1. The AI proposes, the trainer decides
 
-**1. El webhook nunca espera a la IA.** Generar tarda 10–30s; Tally corta antes
-y reintenta. El patrón es `recibir → guardar → responder 200 → disparar aparte`.
+A badly adapted workout can injure someone. So human review isn't a convention
+here — it's structure:
 
-**2. Idempotencia por `UNIQUE (source, external_id)`.** Todo webhook inserta ahí
-antes de hacer nada. Si Postgres lo rechaza, el evento ya se procesó.
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> NEW
 
-**3. Versionado con snapshot completo.** Una rutina enviada no se sobrescribe
-nunca. Un cambio produce `version + 1`; la anterior queda intacta.
+    NEW --> GENERATING: GENERATE
+    NEW --> DRAFT: LOAD_TEMPLATE
+    NEW --> DRAFT: CREATE_MANUAL
 
-**4. Degradación controlada.** Sin margen de cuota o con la API caída, la versión
-vuelve a `NEW` y el entrenador continúa por plantilla o manual.
+    GENERATING --> DRAFT: GENERATION_SUCCEEDED
+    GENERATING --> NEW: GENERATION_FAILED
 
-### Estado
+    DRAFT --> DRAFT: EDIT
+    DRAFT --> APPROVED: APPROVE ✋
+    APPROVED --> SENT: SEND
 
-🚧 **En desarrollo.**
+    NEW --> REJECTED: REJECT
+    DRAFT --> REJECTED: REJECT
+    APPROVED --> REJECTED: REJECT
 
-**El producto ya funciona sin IA.** `E2E-1` recorre el camino completo — crear,
-editar, aprobar, enviar — y asevera que `ai_generations` queda con **cero
-filas**. Ese hito no se deshace: lo que viene mejora el producto, no lo
-habilita.
+    SENT --> [*]
+    REJECTED --> [*]
 
-> ### Aquí no hay números ni tablas de progreso, a propósito
+    note right of DRAFT
+        There is no DRAFT to SENT edge.
+        Not "we never call it".
+        It is not in the table.
+    end note
+
+    note right of APPROVED
+        Only APPROVE gets you here.
+        Only a trainer's tap fires it.
+    end note
+```
+
+- **The `DRAFT → SENT` transition does not exist.** The only road to `SENT`
+  starts at `APPROVED`, and the only way there is a trainer's action.
+- No state change happens outside the state machine.
+- 100% coverage on it, invalid transitions included.
+
+`GENERATION_FAILED` goes back to `NEW`, not to a dead end: the trainer carries
+on with a template or writes it by hand, on the same version.
+
+### 2. The AI is a capability, not the owner of the domain
+
+```
+AI ──────────┐
+Template ────┼──► WorkoutDraft ──► validate ──► WorkoutVersion
+By hand ─────┘
+```
+
+All three sources produce the same type and go through the same validation.
+**If Gemini goes down, the product keeps working**: the trainer uses a template
+or writes the plan by hand.
+
+The word "Gemini" does not appear in `_core/`. The domain only knows the
+`AIProvider` interface — and a test greps for it.
+
+---
+
+## How it works inside
+
+### The layers, and what each one may import
+
+```mermaid
+flowchart TB
+    fns["<b>🌐 Edge Functions</b> · Deno<br/>telegram-webhook · tally-webhook<br/>generate-version · weekly-checkin<br/><i>HTTP glue only</i>"]
+
+    shared["<b>🔌 _shared/</b> · adapters<br/>db.ts · telegram/ · ai/gemini-provider.ts<br/><i>Deno, npm, fetch live here</i>"]
+
+    core["<b>🧠 _core/</b> · pure TypeScript<br/>domain/ · authorization.ts · ports/<br/><i>no Deno, no npm, no fetch, no I/O</i>"]
+
+    fns ==>|"builds the adapters<br/>and calls the domain"| shared
+    shared ==>|"implements the ports"| core
+    core x--x|"<b>❌ NEVER</b><br/>oxlint fails the build"| shared
+
+    style core fill:#EDE7F9,stroke:#8A63D2,stroke-width:3px,color:#000
+    style shared fill:#E4F7EE,stroke:#3ECF8E,stroke-width:2px,color:#000
+    style fns fill:#F4F4F6,stroke:#B8B8C4,stroke-width:2px,color:#000
+```
+
+`_core/` uses no `Deno.*`, no `process.*`, no `fetch`, no `npm:` imports and
+nothing from `_shared`. **The linter enforces it** — it isn't a guideline
+(ADR-001). That's what lets the whole domain run under Node and Vitest while
+production runs on Deno.
+
+### The four decisions that matter
+
+**1. A webhook never waits for the AI.** Generating takes 10–30s; Tally times
+out before that and retries. The pattern is
+`receive → store → answer 200 → fire separately`.
+
+**2. Idempotency through `UNIQUE (source, external_id)`.** Every webhook
+inserts there before doing anything else. If Postgres rejects it, the event was
+already processed. It's the mechanism, not a side effect: a prior check would
+let two concurrent requests both through.
+
+**3. Versioning with a full snapshot.** A plan that was sent is never
+overwritten. A change produces `version + 1`; the previous one stays intact.
+
+**4. Controlled degradation.** Out of quota or with the API down, the version
+goes back to `NEW` and the trainer carries on with a template or by hand.
+
+### Status
+
+🚧 **In development.**
+
+**The product already works without AI.** `E2E-1` walks the whole path — create,
+edit, approve, send — and asserts `ai_generations` ends with **zero rows**. That
+milestone doesn't come undone: what comes next improves the product, it doesn't
+enable it.
+
+> ### There are no counts or progress tables here, on purpose
 >
-> Los tenía, y mentían. Decían «375 tests» cuando había 504, y listaban specs
-> como borrador cuando ya tenían código. Un dato que hay que actualizar a mano
-> en cada commit es un dato que va a estar mal.
+> There used to be, and they lied. They said "375 tests" when there were 504,
+> and listed specs as drafts when they already had code. A number you have to
+> update by hand on every commit is a number that will be wrong.
 >
-> | Qué quieres saber | Dónde está, de verdad |
+> | What you want to know | Where it actually lives |
 > |---|---|
-> | Si todo pasa ahora mismo | El badge de CI, arriba |
-> | En qué va cada spec | El campo **Estado** de cada [`spec`](docs/specs/) |
-> | Qué sesión toca | [`ROADMAP.md`](docs/ROADMAP.md) |
-> | Cuántos tests hay | `pnpm test:run` |
+> | Whether everything passes right now | The CI badge, up top |
+> | How each spec is doing | The **Estado** field in each [`spec`](docs/specs/) |
+> | Which session is next | [`ROADMAP.md`](docs/ROADMAP.md) |
+> | How many tests there are | `pnpm test:run` |
 >
-> Cada uno se actualiza solo, o vive junto a lo que describe.
+> Each of those updates itself, or lives next to what it describes.
 
-### Los tres módulos con cobertura obligatoria del 100%
+### The three modules at a mandatory 100%
 
-| Módulo | Qué garantiza |
+| Module | What it guarantees |
 |---|---|
-| `authorization.ts` | Con RLS en denegación total, es lo único que separa a un cliente de los datos de otro |
-| `domain/state-machine.ts` | Hace imposible que una rutina llegue al cliente sin aprobación |
-| `domain/validate-draft.ts` | La frontera con la IA: nada entra al dominio sin pasar por aquí |
+| `authorization.ts` | With RLS denying everything, it's the only thing keeping one client's data from another |
+| `domain/state-machine.ts` | Makes it impossible for a plan to reach a client unapproved |
+| `domain/validate-draft.ts` | The border with the AI: nothing enters the domain without passing through |
 
-Si la cobertura de cualquiera baja del 100%, **el CI se pone rojo**. Eso no hay
-que mantenerlo a mano: está en `vitest.config.ts`.
+If any of them drops below 100%, **CI goes red**. That doesn't need
+maintaining by hand — it's in `vitest.config.ts`.
 
-### Fuera de alcance en V1
+### Out of scope for V1
 
-Dashboard web · App móvil · Pagos · RAG · Biblioteca de ejercicios · Analytics ·
-Multi-entrenador · Diffing entre versiones · Segundo proveedor de IA ·
-Cualquier automatización sin supervisión humana.
+Web dashboard · Mobile app · Payments · RAG · Exercise library · Analytics ·
+Multi-trainer · Diffing between versions · A second AI provider · Any
+automation without human supervision.
 
-### Terminado cuando
+### Done when
 
-Un cliente completa el formulario, el entrenador crea la rutina (con IA,
-plantilla o a mano), la aprueba, el cliente la recibe y hace check-in.
+A client fills in the form, the trainer builds the plan (with AI, a template or
+by hand), approves it, the client receives it and checks in.
 
-**Y cuando Gemini se cae, el entrenador sigue trabajando.**
+**And when Gemini goes down, the trainer keeps working.**
+
+---
+
+## Getting started
+
+| | |
+|---|---|
+| Deploying for the first time | [`docs/DEPLOY.md`](docs/DEPLOY.md) — a ten-step checklist |
+| How the pieces fit | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| The schema | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
+| Working method | [`CLAUDE.md`](CLAUDE.md) — spec first, code second |
+
+```bash
+pnpm install
+pnpm test:run     # domain, under Node
+pnpm deno:test    # adapters and handlers, under Deno
+```
