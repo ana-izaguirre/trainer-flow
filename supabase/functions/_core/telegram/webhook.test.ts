@@ -9,9 +9,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../domain/identity.ts';
+import type { CheckinRepo } from '../ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../ports/delivery-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import type { ActionDeps } from './actions.ts';
+import type { ReplyDeps } from '../checkin/reply.ts';
 import type { DeliveryDeps } from './delivery.ts';
 import { handleTelegramWebhook, outcomeToStatus } from './webhook.ts';
 
@@ -66,6 +68,73 @@ function fakeSender() {
 }
 
 const FROM = { id: 500, first_name: 'Ana' };
+
+/**
+ * Unas acciones que no encuentran nada, para los tests que no las miran.
+ *
+ * `actions` es obligatorio desde que se descubrió que el handler no lo pasaba
+ * y los botones llevaban dos PRs sin funcionar sin que fallara ningún test.
+ */
+function vacioActions(): ActionDeps {
+  return {
+    repo: { findVersion: () => Promise.resolve(null), transition: () => Promise.resolve(false) },
+    sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
+  };
+}
+
+const CHECKIN_ID = '9a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+/**
+ * Un check-in falso. Por defecto es de OTRO cliente: así, si el enrutado
+ * dejara de comprobar la pertenencia, los tests lo notarían.
+ */
+function fakeCheckins(opciones: { dueño?: string | null; abierto?: boolean } = {}) {
+  const pasos: string[] = [];
+
+  const registro = {
+    checkinId: CHECKIN_ID,
+    clientProfileId: opciones.dueño === undefined ? 'otro-perfil' : opciones.dueño,
+    clientName: 'Carlos',
+    weekNumber: 2,
+    state: 'PENDING' as const,
+    answers: { sessions: null, feeling: null, discomfort: null },
+    trainerChatId: 10,
+    daysPerWeek: 4,
+  };
+
+  const repo: CheckinRepo = {
+    candidates: () => Promise.resolve([]),
+    createCheckin: () => Promise.resolve(CHECKIN_ID),
+    markSent: () => Promise.resolve(),
+    pendingReminders: () => Promise.resolve([]),
+    markReminded: () => Promise.resolve(),
+    findCheckin: () => {
+      pasos.push('findCheckin');
+      return Promise.resolve(registro);
+    },
+    findOpenCheckin: () => {
+      pasos.push('findOpenCheckin');
+      return Promise.resolve(opciones.abierto === true ? registro : null);
+    },
+    saveAnswers: (_id, _answers, completed) => {
+      pasos.push(`saveAnswers:${completed}`);
+      return Promise.resolve();
+    },
+  };
+
+  const deps: ReplyDeps = {
+    repo,
+    sender: {
+      sendMessage: (chatId) => {
+        pasos.push(`sendMessage:${chatId}`);
+        return Promise.resolve();
+      },
+      answerCallback: () => Promise.resolve(),
+    },
+  };
+
+  return { deps, pasos };
+}
 
 /** Un token con la forma que `parseStartToken` acepta. */
 const TOKEN = 'k'.repeat(32);
@@ -152,6 +221,7 @@ function ejecutar(
     sender?: ReturnType<typeof fakeSender>;
     actions?: ActionDeps;
     delivery?: DeliveryDeps;
+    checkins?: ReturnType<typeof fakeCheckins>;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -168,7 +238,8 @@ function ejecutar(
         expectedSecret: SECRET,
         requestId: 'req-1',
         delivery: opts.delivery ?? fakeDelivery().deps,
-        ...(opts.actions === undefined ? {} : { actions: opts.actions }),
+        checkins: (opts.checkins ?? fakeCheckins()).deps,
+        actions: opts.actions ?? vacioActions(),
       },
     ),
   };
@@ -546,10 +617,109 @@ describe('los botones se enrutan', () => {
     expect(pasos).toEqual([]);
   });
 
-  it('sin enrutador configurado, el update se registra igual', async () => {
-    // `actions` es opcional: el flujo no se rompe porque falte.
-    const { result } = ejecutar(conBoton(`act:approve:${VERSION}`));
+});
+
+// ---------------------------------------------------------------------------
+
+describe('el check-in se enruta', () => {
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 500,
+    telegramChatId: 500,
+  };
+
+  const conBotonChk = (data: string) => ({
+    update_id: 1,
+    callback_query: {
+      id: 'cb-1',
+      from: FROM,
+      message: { message_id: 9, chat: { id: 500 } },
+      data,
+    },
+  });
+
+  it('una respuesta del cliente llega a su check-in', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente' });
+
+    const { result } = ejecutar(conBotonChk(`chk:feeling:good:${CHECKIN_ID}`), { repo, checkins });
 
     expect((await result).kind).toBe('handled');
+    expect(checkins.pasos).toContain('findCheckin');
+    expect(checkins.pasos).toContain('saveAnswers:false');
+  });
+
+  it('CA-7 · el check-in de OTRO se rechaza', async () => {
+    // El `checkinId` viaja en el `callback_data`: cualquiera puede fabricarlo.
+    // Lo que lo detiene es la pertenencia, no el parseo.
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'otro-perfil' });
+
+    const { result } = ejecutar(conBotonChk(`chk:feeling:good:${CHECKIN_ID}`), { repo, checkins });
+
+    expect(await result).toMatchObject({ checkin: { kind: 'rejected' } });
+    expect(checkins.pasos).not.toContain('saveAnswers:false');
+  });
+
+  it('un `chk:` NO se confunde con un `act:`', async () => {
+    // Los dos prefijos viajan por el mismo canal, y un check-in que acabara
+    // en `handleAction` buscaría una versión con el id de un check-in.
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente' });
+    const tocadas: string[] = [];
+
+    const actions: ActionDeps = {
+      repo: {
+        findVersion: () => {
+          tocadas.push('findVersion');
+          return Promise.resolve(null);
+        },
+        transition: () => Promise.resolve(false),
+      },
+      sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
+    };
+
+    const { result } = ejecutar(conBotonChk(`chk:sessions:3:${CHECKIN_ID}`), {
+      repo,
+      checkins,
+      actions,
+    });
+
+    await result;
+    expect(checkins.pasos).toContain('findCheckin');
+    expect(tocadas, 'no puede pasar por las acciones del entrenador').toEqual([]);
+  });
+
+  it('un texto suelto del cliente puede ser la molestia', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: true });
+
+    const { result } = ejecutar(comando('me molesta el hombro'), { repo, checkins });
+
+    expect((await result).kind).toBe('handled');
+    expect(checkins.pasos).toContain('findOpenCheckin');
+    expect(checkins.pasos).toContain('saveAnswers:false');
+  });
+
+  it('...pero solo si hay uno esperándola', async () => {
+    // Sin check-in abierto, un mensaje es un mensaje. No se reinterpreta.
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: false });
+
+    const { result } = ejecutar(comando('hola'), { repo, checkins });
+
+    expect(await result).toMatchObject({ checkin: { kind: 'no_open_checkin' } });
+    expect(checkins.pasos).not.toContain('saveAnswers:false');
+  });
+
+  it('un texto del ENTRENADOR no se lee como check-in', async () => {
+    // El entrenador no tiene check-ins: su texto es otra cosa.
+    const checkins = fakeCheckins({ abierto: true });
+
+    const { result } = ejecutar(comando('una nota cualquiera'), { checkins });
+
+    await result;
+    expect(checkins.pasos).toEqual([]);
   });
 });

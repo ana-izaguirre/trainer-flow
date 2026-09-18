@@ -17,6 +17,8 @@ import type { Level } from '../_core/domain/assessment.ts';
 import type { VersionState } from '../_core/domain/version.ts';
 import type { Workout } from '../_core/domain/workout.ts';
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { CheckinAnswers } from '../_core/checkin/answers.ts';
+import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo, VersionForDelivery } from '../_core/ports/delivery-ports.ts';
 import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
 import { requireEnv } from './env.ts';
@@ -498,5 +500,128 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
 
       return data === true;
     },
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Check-in semanal (SPEC-006)
+// -----------------------------------------------------------------------------
+
+/**
+ * Implementa el puerto `CheckinRepo`.
+ *
+ * Ninguna de estas consultas decide CUÁNDO toca un check-in: traen candidatos
+ * y escriben lo que `_core/checkin/schedule.ts` decidió. El número de semana
+ * es lo que hace funcionar al `UNIQUE`, y tiene que poder probarse sin una
+ * base de datos delante.
+ */
+export function createCheckinRepo(db: Db): CheckinRepo {
+  return {
+    async candidates() {
+      const { data, error } = await db.rpc('checkin_candidates');
+
+      if (error !== null) throw new Error(`No se pudieron leer los candidatos: ${error.code}`);
+
+      return (data ?? []).map((fila: Record<string, unknown>) => ({
+        clientId: fila['client_id'] as string,
+        clientName: fila['client_name'] as string,
+        clientChatId: toNumberOrNull(fila['client_chat_id']),
+        versionId: fila['version_id'] as string,
+        state: fila['state'] as VersionState,
+        sentAt: new Date(fila['sent_at'] as string),
+        lastWeekSent: Number(fila['last_week_sent']),
+      }));
+    },
+
+    async createCheckin(clientId, versionId, weekNumber) {
+      const { data, error } = await db.rpc('create_checkin', {
+        p_client_id: clientId,
+        p_version_id: versionId,
+        p_week_number: weekNumber,
+      });
+
+      if (error !== null || data === null) {
+        throw new Error(`No se pudo crear el check-in: ${error?.code ?? 'sin datos'}`);
+      }
+
+      return data as string;
+    },
+
+    async markSent(checkinId) {
+      const { error } = await db.rpc('mark_checkin_sent', { p_checkin_id: checkinId });
+      if (error !== null) throw new Error(`No se pudo marcar enviado: ${error.code}`);
+    },
+
+    async pendingReminders() {
+      const { data, error } = await db.rpc('checkins_to_remind');
+
+      if (error !== null) throw new Error(`No se pudieron leer los pendientes: ${error.code}`);
+
+      return (data ?? []).map((fila: Record<string, unknown>) => ({
+        checkinId: fila['checkin_id'] as string,
+        clientChatId: Number(fila['client_chat_id']),
+        weekNumber: Number(fila['week_number']),
+        state: fila['state'] as 'PENDING' | 'COMPLETED',
+        sentAt: new Date(fila['sent_at'] as string),
+        reminderSentAt:
+          fila['reminder_sent_at'] === null
+            ? null
+            : new Date(fila['reminder_sent_at'] as string),
+      }));
+    },
+
+    async markReminded(checkinId) {
+      const { error } = await db.rpc('mark_checkin_reminded', { p_checkin_id: checkinId });
+      if (error !== null) throw new Error(`No se pudo marcar el recordatorio: ${error.code}`);
+    },
+
+    findCheckin: (checkinId) =>
+      readCheckin(db, 'checkin_for_reply', { p_checkin_id: checkinId }),
+
+    findOpenCheckin: (profileId) =>
+      readCheckin(db, 'open_checkin_for_profile', { p_profile_id: profileId }),
+
+    async saveAnswers(checkinId, answers, completed) {
+      const { error } = await db.rpc('save_checkin_answers', {
+        p_checkin_id: checkinId,
+        p_answers: answers,
+        p_completed: completed,
+      });
+
+      // El mensaje de error NUNCA lleva las respuestas: son datos de salud.
+      if (error !== null) throw new Error(`No se pudieron guardar las respuestas: ${error.code}`);
+    },
+  };
+}
+
+/** Las dos consultas de check-in devuelven la misma fila: se leen igual. */
+async function readCheckin(
+  db: Db,
+  fn: 'checkin_for_reply' | 'open_checkin_for_profile',
+  args: Record<string, string>,
+): Promise<CheckinForReply | null> {
+  const { data, error } = await db.rpc(fn, args).maybeSingle();
+
+  if (error !== null) throw new Error(`No se pudo leer el check-in: ${error.code}`);
+  if (data === null) return null;
+
+  const fila = data as Record<string, unknown>;
+  const guardadas = (fila['answers'] ?? {}) as Partial<CheckinAnswers>;
+
+  return {
+    checkinId: fila['checkin_id'] as string,
+    clientProfileId: (fila['client_profile_id'] as string | null) ?? null,
+    clientName: fila['client_name'] as string,
+    weekNumber: Number(fila['week_number']),
+    state: fila['state'] as 'PENDING' | 'COMPLETED',
+    // `answers` es NULL mientras no conteste nada: los tres campos a `null`
+    // significan «sin contestar», que no es lo mismo que «ninguna».
+    answers: {
+      sessions: guardadas.sessions ?? null,
+      feeling: guardadas.feeling ?? null,
+      discomfort: guardadas.discomfort ?? null,
+    },
+    trainerChatId: Number(fila['trainer_chat_id']),
+    daysPerWeek: toNumberOrNull(fila['days_per_week']),
   };
 }

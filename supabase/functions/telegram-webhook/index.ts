@@ -20,6 +20,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
 import { handleTelegramWebhook, outcomeToStatus } from '../_core/telegram/webhook.ts';
@@ -28,6 +29,7 @@ import { createLogger } from '../_shared/logger.ts';
 import { asSender, createTelegramClient } from '../_shared/telegram/client.ts';
 import {
   createActionRepo,
+  createCheckinRepo,
   createDb,
   createDeliveryRepo,
   createTelegramRepo,
@@ -48,6 +50,7 @@ export interface HandlerDeps {
   readonly sender: (log: Logger) => TelegramSender;
   readonly actionRepo: (requestId: string) => ActionRepo;
   readonly deliveryRepo: () => DeliveryRepo;
+  readonly checkinRepo: () => CheckinRepo;
 }
 
 /**
@@ -67,6 +70,7 @@ export function readDeps(): HandlerDeps {
     sender: (log) => asSender(createTelegramClient(botToken, log)),
     actionRepo: (requestId) => createActionRepo(db, requestId),
     deliveryRepo: () => createDeliveryRepo(db),
+    checkinRepo: () => createCheckinRepo(db),
   };
 }
 
@@ -85,7 +89,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
       body = null;
     }
 
-    // El sender se construye una vez y lo comparten los tres flujos: así un
+    // El sender se construye una vez y lo comparten los cuatro flujos: así un
     // mensaje del canje y uno de un botón salen por el mismo sitio y quedan
     // bajo el mismo `request_id`.
     const sender = deps.sender(log);
@@ -99,6 +103,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
         requestId,
         actions: { repo: deps.actionRepo(requestId), sender },
         delivery: { repo: deps.deliveryRepo(), sender },
+        checkins: { repo: deps.checkinRepo(), sender },
       },
     );
 
