@@ -105,44 +105,59 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
       body = null;
     }
 
-    // El sender se construye una vez y lo comparten los cinco flujos: así un
-    // mensaje del canje y uno de un botón salen por el mismo sitio y quedan
-    // bajo el mismo `request_id`.
-    const sender = deps.sender(log);
+    try {
+      // El sender se construye una vez y lo comparten los cinco flujos: así
+      // un mensaje del canje y uno de un botón salen por el mismo sitio y
+      // quedan bajo el mismo `request_id`.
+      const sender = deps.sender(log);
 
-    const outcome = await handleTelegramWebhook(
-      { secretHeader: request.headers.get(SECRET_HEADER), body },
-      {
-        repo: deps.repo(requestId),
-        sender,
-        expectedSecret: deps.expectedSecret,
-        requestId,
-        actions: {
-          repo: deps.actionRepo(requestId),
+      const outcome = await handleTelegramWebhook(
+        { secretHeader: request.headers.get(SECRET_HEADER), body },
+        {
+          repo: deps.repo(requestId),
           sender,
-          generation: deps.generation(log),
+          expectedSecret: deps.expectedSecret,
           requestId,
+          actions: {
+            repo: deps.actionRepo(requestId),
+            sender,
+            generation: deps.generation(log),
+            requestId,
+          },
+          delivery: { repo: deps.deliveryRepo(), sender },
+          checkins: { repo: deps.checkinRepo(), sender },
+          commands: { repo: deps.queryRepo(), sender },
+          creation: { repo: deps.creationRepo(requestId), sender },
+          changes: { repo: deps.changeRepo(requestId), sender },
         },
-        delivery: { repo: deps.deliveryRepo(), sender },
-        checkins: { repo: deps.checkinRepo(), sender },
-        commands: { repo: deps.queryRepo(), sender },
-        creation: { repo: deps.creationRepo(requestId), sender },
-        changes: { repo: deps.changeRepo(requestId), sender },
-      },
-    );
+      );
 
-    const durationMs = Date.now() - startedAt;
+      const durationMs = Date.now() - startedAt;
 
-    // El `outcome` nunca lleva datos del recurso, solo qué pasó: es seguro
-    // loguearlo entero.
-    if (outcome.kind === 'unauthorized' || outcome.kind === 'failed') {
-      log.warn(`telegram.${outcome.kind}`, { ...outcome, durationMs });
-    } else {
-      log.info(`telegram.${outcome.kind}`, { ...outcome, durationMs });
+      // El `outcome` nunca lleva datos del recurso, solo qué pasó: es seguro
+      // loguearlo entero.
+      if (outcome.kind === 'unauthorized' || outcome.kind === 'failed') {
+        log.warn(`telegram.${outcome.kind}`, { ...outcome, durationMs });
+      } else {
+        log.info(`telegram.${outcome.kind}`, { ...outcome, durationMs });
+      }
+
+      const status = outcomeToStatus(outcome);
+      return new Response(status === 401 ? 'unauthorized' : 'ok', { status });
+    } catch (error) {
+      // SPEC-012 regla 3: ninguna petición se muere en silencio. El dominio
+      // ya captura lo suyo y devuelve `failed`; esto atrapa lo que pasa
+      // FUERA de él, como construir un repo o el propio sender.
+      log.error('telegram.excepcion', {
+        // El mensaje, nunca el stack: un stack arrastra valores de variables.
+        message: error instanceof Error ? error.message : 'Error desconocido.',
+        durationMs: Date.now() - startedAt,
+      });
+
+      // 200 a propósito, igual que `failed`: un 500 haría que Telegram
+      // reintentara en bucle un update que va a volver a romperse.
+      return new Response('ok', { status: 200 });
     }
-
-    const status = outcomeToStatus(outcome);
-    return new Response(status === 401 ? 'unauthorized' : 'ok', { status });
   };
 }
 

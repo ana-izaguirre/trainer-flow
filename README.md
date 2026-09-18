@@ -235,6 +235,7 @@ by hand), approves it, the client receives it and checks in.
 | | |
 |---|---|
 | Deploying for the first time | [`docs/DEPLOY.md`](docs/DEPLOY.md) — a ten-step checklist |
+| When something breaks | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — the database is the index, the logs are the detail |
 | How the pieces fit | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | The schema | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
 | Working method | [`CLAUDE.md`](CLAUDE.md) — spec first, code second |

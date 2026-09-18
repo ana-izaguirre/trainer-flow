@@ -54,33 +54,48 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
     const log = createLogger(requestId);
     const startedAt = Date.now();
 
-    const rawBody = await request.text();
+    try {
+      const rawBody = await request.text();
 
-    const outcome = await handleTallyWebhook(
-      { rawBody, signature: readSignatureHeader(request.headers) },
-      {
-        repo: deps.repo(requestId),
-        verifier: deps.verifier,
-        sender: deps.sender(log),
-        newLinkToken,
-        requestId,
-      },
-    );
+      const outcome = await handleTallyWebhook(
+        { rawBody, signature: readSignatureHeader(request.headers) },
+        {
+          repo: deps.repo(requestId),
+          verifier: deps.verifier,
+          sender: deps.sender(log),
+          newLinkToken,
+          requestId,
+        },
+      );
 
-    const durationMs = Date.now() - startedAt;
+      const durationMs = Date.now() - startedAt;
 
-    // El `outcome` no lleva datos del formulario, solo qué pasó: es seguro
-    // loguearlo entero. `reason` describe la forma del sobre, nunca una
-    // respuesta del cliente.
-    if (outcome.kind === 'unauthorized' || outcome.kind === 'failed') {
-      log.warn(`tally.${outcome.kind}`, { ...outcome, durationMs });
-    } else {
-      log.info(`tally.${outcome.kind}`, { ...outcome, durationMs });
+      // El `outcome` no lleva datos del formulario, solo qué pasó: es seguro
+      // loguearlo entero. `reason` describe la forma del sobre, nunca una
+      // respuesta del cliente.
+      if (outcome.kind === 'unauthorized' || outcome.kind === 'failed') {
+        log.warn(`tally.${outcome.kind}`, { ...outcome, durationMs });
+      } else {
+        log.info(`tally.${outcome.kind}`, { ...outcome, durationMs });
+      }
+
+      // Tally no lee el cuerpo, solo el código. El texto es para quien depura
+      // con curl.
+      return new Response(outcome.kind, { status: outcomeToStatus(outcome) });
+    } catch (error) {
+      // SPEC-012 regla 3: ninguna petición se muere en silencio. Aquí entra
+      // lo que pasa fuera del dominio: leer el cuerpo, construir el repo.
+      log.error('tally.excepcion', {
+        // El mensaje, nunca el stack: un stack arrastra valores de variables,
+        // y por aquí pasan respuestas de un formulario de salud.
+        message: error instanceof Error ? error.message : 'Error desconocido.',
+        durationMs: Date.now() - startedAt,
+      });
+
+      // 500, igual que `failed`: Tally reintenta un número acotado de veces
+      // y una evaluación perdida deja a un cliente sin rutina.
+      return new Response('error', { status: 500 });
     }
-
-    // Tally no lee el cuerpo, solo el código. El texto es para quien depura
-    // con curl.
-    return new Response(outcome.kind, { status: outcomeToStatus(outcome) });
   };
 }
 

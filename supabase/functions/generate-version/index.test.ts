@@ -41,11 +41,16 @@ const RUTINA = {
   warnings: [],
 };
 
-function espia(version: VersionForGeneration | null = VERSION): {
+function espia(
+  version: VersionForGeneration | null = VERSION,
+  alGenerar: (() => never) | null = null,
+): {
   deps: HandlerDeps;
   generaciones: number;
+  /** El que llega al repo, y por tanto a `ai_generations` y `plan_events`. */
+  requestIdDelRepo: string | null;
 } {
-  const contador = { generaciones: 0 };
+  const contador = { generaciones: 0, requestId: null as string | null };
 
   const repo: GenerationRepo = {
     findVersion: () => Promise.resolve(version),
@@ -63,6 +68,7 @@ function espia(version: VersionForGeneration | null = VERSION): {
       model: 'falso',
       generate: () => {
         contador.generaciones += 1;
+        if (alGenerar !== null) alGenerar();
         return Promise.resolve({
           ok: true,
           draft: { source: 'ai', raw: RUTINA },
@@ -77,23 +83,47 @@ function espia(version: VersionForGeneration | null = VERSION): {
   });
 
   return {
-    deps: { build },
+    deps: {
+      build: (requestId) => {
+        contador.requestId = requestId;
+        return build();
+      },
+    },
     get generaciones() {
       return contador.generaciones;
+    },
+    get requestIdDelRepo() {
+      return contador.requestId;
     },
   };
 }
 
-async function pedir(deps: HandlerDeps, body: string): Promise<Response> {
+interface Capturado {
+  readonly response: Response;
+  /** Cada línea del log ya parseada: es JSON de una línea por contrato. */
+  readonly logs: readonly Record<string, unknown>[];
+}
+
+async function pedirCapturando(deps: HandlerDeps, body: string): Promise<Capturado> {
   const original = console.log;
-  console.log = () => {};
+  const lineas: string[] = [];
+  console.log = (linea: string) => {
+    lineas.push(linea);
+  };
+
   try {
-    return await createHandler(deps)(
+    const response = await createHandler(deps)(
       new Request('https://ejemplo.test/', { method: 'POST', body }),
     );
+
+    return { response, logs: lineas.map((l) => JSON.parse(l) as Record<string, unknown>) };
   } finally {
     console.log = original;
   }
+}
+
+async function pedir(deps: HandlerDeps, body: string): Promise<Response> {
+  return (await pedirCapturando(deps, body)).response;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,4 +179,124 @@ Deno.test('readDeps lanza nombrando la variable que falta', () => {
   } finally {
     for (const [n, v] of previos) if (v !== undefined) Deno.env.set(n, v);
   }
+});
+
+// ─── SPEC-012 · la traza de extremo a extremo ───────────────────────────────
+
+const REQ_A = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+
+Deno.test('CA-1 · el requestId que llega es el que se usa, no uno nuevo', async () => {
+  // ESTE es el test que faltaba. `telegram-webhook` ya mandaba su requestId
+  // en el cuerpo; esta función lo tiraba y se inventaba otro, así que buscar
+  // en los logs el id del botón no encontraba la generación que provocó.
+  const espiado = espia();
+
+  const { response, logs } = await pedirCapturando(
+    espiado.deps,
+    JSON.stringify({ versionId: 'v1', requestId: REQ_A }),
+  );
+
+  assertEquals(response.status, 202);
+
+  // Todas las líneas, no solo la última.
+  assertEquals(logs.length > 0, true);
+  for (const linea of logs) assertEquals(linea['requestId'], REQ_A);
+
+  // Y el que llega al repo, que es el que acaba en las tablas.
+  assertEquals(espiado.requestIdDelRepo, REQ_A);
+});
+
+Deno.test('CA-2 · sin requestId se genera uno y todo sigue igual', async () => {
+  const espiado = espia();
+
+  const { response, logs } = await pedirCapturando(
+    espiado.deps,
+    JSON.stringify({ versionId: 'v1' }),
+  );
+
+  assertEquals(response.status, 202);
+  assertEquals(typeof espiado.requestIdDelRepo, 'string');
+  assertEquals(logs.every((l) => l['requestId'] === espiado.requestIdDelRepo), true);
+
+  // Y no se avisa de nada: no traer uno es normal.
+  assertEquals(logs.some((l) => l['event'] === 'generate.request_id_invalido'), false);
+});
+
+Deno.test('CA-3 · un requestId que no es UUID se descarta y se avisa', async () => {
+  // Se descarta por la forma, no por desconfianza: acabaría en una columna
+  // `uuid` y reventaría la escritura. Perder la traza es mejor que perder
+  // la fila.
+  for (const malo of ['req-42', '', 12345, { a: 1 }, `${REQ_A} or 1=1`]) {
+    const espiado = espia();
+
+    const { response, logs } = await pedirCapturando(
+      espiado.deps,
+      JSON.stringify({ versionId: 'v1', requestId: malo }),
+    );
+
+    const etiqueta = JSON.stringify(malo);
+    assertEquals(response.status, 202, `con ${etiqueta}`);
+    assertEquals(espiado.requestIdDelRepo !== malo, true, `con ${etiqueta}`);
+    assertEquals(
+      logs.some((l) => l['event'] === 'generate.request_id_invalido'),
+      true,
+      `con ${etiqueta}`,
+    );
+  }
+});
+
+Deno.test('CA-4 · una excepción deja línea de cierre con requestId y durationMs', async () => {
+  // `_core/ai/generate-version.ts` no tiene un solo `catch`. Antes de esto,
+  // un fallo de red o de la base salía por arriba sin una sola línea: la
+  // función con más superficie de fallo era la que menos contaba.
+  const espiado = espia(VERSION, () => {
+    throw new Error('la base dijo que no');
+  });
+
+  const { response, logs } = await pedirCapturando(
+    espiado.deps,
+    JSON.stringify({ versionId: 'v1', requestId: REQ_A }),
+  );
+
+  assertEquals(response.status, 500);
+
+  const cierre = logs.find((l) => l['event'] === 'generate.excepcion');
+  assertEquals(cierre !== undefined, true);
+  assertEquals(cierre?.['level'], 'error');
+  assertEquals(cierre?.['requestId'], REQ_A);
+  assertEquals(cierre?.['message'], 'la base dijo que no');
+  assertEquals(typeof cierre?.['durationMs'], 'number');
+});
+
+Deno.test('CA-5 · la línea del error NO lleva el stack', async () => {
+  // Un stack arrastra rutas y, según dónde reviente, valores de variables.
+  const espiado = espia(VERSION, () => {
+    throw new Error('reventó');
+  });
+
+  const { logs } = await pedirCapturando(
+    espiado.deps,
+    JSON.stringify({ versionId: 'v1', requestId: REQ_A }),
+  );
+
+  const cierre = logs.find((l) => l['event'] === 'generate.excepcion');
+  assertEquals(cierre?.['stack'], undefined);
+  assertEquals(JSON.stringify(cierre).includes('index.test.ts'), false);
+});
+
+Deno.test('lo que se lanza y no es un Error tampoco rompe el log', async () => {
+  const espiado = espia(VERSION, () => {
+    throw 'una cadena pelada';
+  });
+
+  const { response, logs } = await pedirCapturando(
+    espiado.deps,
+    JSON.stringify({ versionId: 'v1' }),
+  );
+
+  assertEquals(response.status, 500);
+  assertEquals(
+    logs.find((l) => l['event'] === 'generate.excepcion')?.['message'],
+    'Error desconocido.',
+  );
 });

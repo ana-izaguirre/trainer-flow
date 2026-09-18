@@ -145,3 +145,43 @@ Deno.test('readDeps lanza nombrando la variable que falta', () => {
     }
   }
 });
+
+// ─── SPEC-012 · ninguna petición se muere en silencio ───────────────────────
+
+Deno.test('CA-4 · una excepción FUERA del dominio deja línea de error y 500', async () => {
+  const { deps } = espia();
+  const rotas: HandlerDeps = {
+    ...deps,
+    repo: () => {
+      throw new Error('no hay conexión');
+    },
+  };
+
+  const original = console.log;
+  const lineas: string[] = [];
+  console.log = (linea: string) => {
+    lineas.push(linea);
+  };
+
+  let response: Response;
+  try {
+    response = await createHandler(rotas)(envio(CUERPO, { 'tally-signature': 'firma' }));
+  } finally {
+    console.log = original;
+  }
+
+  const logs = lineas.map((l) => JSON.parse(l) as Record<string, unknown>);
+  const cierre = logs.find((l) => l['event'] === 'tally.excepcion');
+
+  assertEquals(cierre?.['level'], 'error');
+  assertEquals(cierre?.['message'], 'no hay conexión');
+  assertEquals(typeof cierre?.['requestId'], 'string');
+  assertEquals(typeof cierre?.['durationMs'], 'number');
+
+  // El stack no, que por aquí pasan respuestas de un formulario de salud.
+  assertEquals(cierre?.['stack'], undefined);
+
+  // 500, igual que `failed`: Tally reintenta un número acotado de veces y
+  // una evaluación perdida deja a un cliente sin rutina.
+  assertEquals(response.status, 500);
+});
