@@ -21,6 +21,7 @@ export const CALLBACK_ACTIONS = [
   'manual',
   'accept',
   'change',
+  'revise',
 ] as const;
 
 export type CallbackAction = (typeof CALLBACK_ACTIONS)[number];

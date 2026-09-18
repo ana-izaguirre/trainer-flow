@@ -28,9 +28,19 @@
  * │ (SPEC-009 §3).                                                         │
  * └────────────────────────────────────────────────────────────────────────┘
  */
-import type { UserRole } from '../domain/identity.ts';
+import type { Identity, UserRole } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import { parseCheckinCallback } from '../checkin/answers.ts';
+import {
+  acceptVersion,
+  addComment,
+  askReason,
+  requestChange,
+  startRevision,
+  type ChangeOutcome,
+  type ChangeRequestDeps,
+} from '../change-request/flows.ts';
+import { parseChangeCallback } from '../domain/change-request.ts';
 import {
   listTemplates,
   loadTemplate,
@@ -101,6 +111,8 @@ export type WebhookOutcome =
       readonly creation?: CreationOutcome;
       /** Qué pasó con un comando del editor. */
       readonly editor?: EditorOutcome;
+      /** Qué pasó con una solicitud de cambio. */
+      readonly change?: ChangeOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -127,6 +139,8 @@ export interface WebhookDeps {
   readonly commands: CommandDeps;
   /** Plantillas, creación manual y el editor: el camino que no usa la IA. */
   readonly creation: CreationDeps & EditorDeps;
+  /** Lo que el cliente puede pedir sobre su rutina (SPEC-010). */
+  readonly changes: ChangeRequestDeps;
 }
 
 /**
@@ -208,6 +222,7 @@ export async function handleTelegramWebhook(
     let command: CommandOutcome | undefined;
     let creation: CreationOutcome | undefined;
     let editor: EditorOutcome | undefined;
+    let change: ChangeOutcome | undefined;
 
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
@@ -228,10 +243,17 @@ export async function handleTelegramWebhook(
       // orden. `chk:` no puede confundirse con `act:`: son literales.
       const respuesta = parseCheckinCallback(update.data);
       const plantilla = respuesta === null ? parseTemplateCallback(update.data) : null;
+      const motivo =
+        respuesta === null && plantilla === null ? parseChangeCallback(update.data) : null;
       const payload =
-        respuesta === null && plantilla === null ? parseCallbackData(update.data) : null;
+        respuesta === null && plantilla === null && motivo === null
+          ? parseCallbackData(update.data)
+          : null;
 
-      if (plantilla !== null) {
+      if (motivo !== null) {
+        // El cliente eligió por qué quiere el cambio.
+        change = await requestChange(motivo.reason, motivo.versionId, identity, deps.changes);
+      } else if (plantilla !== null) {
         // La segunda pulsación de 📋: ya se sabe CUÁL cargar.
         creation = await loadTemplate(
           plantilla.templateId,
@@ -246,6 +268,13 @@ export async function handleTelegramWebhook(
           identity,
           deps.checkins,
         );
+      } else if (
+        payload !== null &&
+        (payload.action === 'accept' || payload.action === 'change' || payload.action === 'revise')
+      ) {
+        // Los botones de SPEC-010. `accept` y `change` los pulsa el CLIENTE;
+        // `revise`, el entrenador. Cada flujo comprueba su pertenencia.
+        change = await enrutarSolicitud(payload.action, payload.versionId, identity, deps);
       } else if (payload !== null && (payload.action === 'template' || payload.action === 'manual')) {
         // Los dos caminos sin IA. Van aparte de `handleAction` porque no son
         // una transición sobre la versión: una lista plantillas y la otra
@@ -275,7 +304,30 @@ export async function handleTelegramWebhook(
     // está esperando. Solo se lee así si hay uno abierto: si no, es alguien
     // escribiéndole al bot, y eso no se reinterpreta.
     if (update.kind === 'text' && identity.role === 'client') {
-      checkin = await handleCheckinText(update.text, identity, deps.checkins);
+      // Dos cosas pueden estar esperando texto: el comentario de una solicitud
+      // y la molestia de un check-in. Gana la más reciente, que es a la que
+      // cualquiera contestaría (SPEC-010 §3).
+      const solicitud = await deps.changes.repo.openForClient(identity.profileId);
+      const esperandoComentario =
+        solicitud !== null && !solicitud.hasComment ? solicitud : null;
+
+      checkin = await handleCheckinText(
+        update.text,
+        identity,
+        deps.checkins,
+        esperandoComentario?.askedAt ?? null,
+      );
+
+      // El check-in no lo quiso: entonces es para la solicitud.
+      if (checkin.kind === 'no_open_checkin' && esperandoComentario !== null) {
+        change = await addComment(
+          esperandoComentario.requestId,
+          esperandoComentario.clientId,
+          update.text,
+          identity,
+          deps.changes,
+        );
+      }
     }
 
     // Aprobar deja la versión lista; entregarla es SPEC-005 (regla 14). Sin
@@ -299,6 +351,7 @@ export async function handleTelegramWebhook(
       ...(command === undefined ? {} : { command }),
       ...(creation === undefined ? {} : { creation }),
       ...(editor === undefined ? {} : { editor }),
+      ...(change === undefined ? {} : { change }),
     };
   } catch (error) {
     return {
@@ -330,4 +383,18 @@ function editarSiEsEntrenador(
     identity.telegramChatId,
     deps.creation,
   );
+}
+
+
+/** Los tres botones de SPEC-010, cada uno a su flujo. */
+function enrutarSolicitud(
+  action: 'accept' | 'change' | 'revise',
+  versionId: string,
+  identity: Identity,
+  deps: WebhookDeps,
+): Promise<ChangeOutcome> {
+  if (action === 'accept') return acceptVersion(versionId, identity, deps.changes);
+  if (action === 'change') return askReason(versionId, identity, deps.changes);
+
+  return startRevision(versionId, identity, deps.changes);
 }

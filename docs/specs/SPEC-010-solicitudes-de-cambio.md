@@ -2,9 +2,18 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | **IMPLEMENTADA** |
 | **Depende de** | SPEC-005, SPEC-008 |
 | **Sesiones** | S-22, S-23 |
+
+## Resultado
+
+| Pieza | Estado |
+|---|---|
+| Los siete motivos y su callback | ✅ 17 tests |
+| Los cuatro flujos (aceptar, pedir, comentar, revisar) | ✅ 33 tests |
+| El enrutado, con cuatro prefijos por el mismo canal | ✅ 9 tests |
+| Las consultas y el UNIQUE parcial | ✅ 20 tests de integración |
 
 ## 1. Objetivo
 
@@ -41,6 +50,21 @@ Al pulsar "Pedir un cambio":
 Puedes añadir un comentario después.
 ```
 
+El `callback_data` de cada motivo es `chg:<reason>:<versionId>`. Prefijo
+propio, como `tpl:`: no es una acción sobre la versión, es el motivo elegido.
+El más largo, `chg:uncomfortable_exercise:<uuid>`, ocupa **63 de los 64**.
+Va justo, así que hay un test que mide los siete contra el límite: un motivo
+nuevo con nombre largo se vería ahí y no en un botón muerto en producción.
+
+### El comentario compite con el check-in
+
+Los dos piden texto libre al cliente, y llegan por el mismo canal. **Gana lo
+que se le preguntó más tarde**: se compara `change_requests.created_at` con el
+`sent_at` del check-in abierto, y el texto va al más reciente.
+
+Es determinista y no depende de ventanas de tiempo. Y es lo que espera
+cualquiera: uno contesta a la última pregunta que le hicieron.
+
 ### Vista del entrenador
 
 ```
@@ -50,8 +74,16 @@ Rutina v1 · enviada hace 9 días
 Motivo: 😰 Muy difícil
 Comentario: "No termino la semana 1"
 
-[✏️ Crear v2]   [💬 Responder]
+[✏️ Crear v2]
 ```
+
+**Sin botón de responder en V1.** Contestar por chat necesita un canal
+entrenador → cliente que hoy no existe, y abrirlo es una funcionalidad, no un
+botón. Queda en el backlog: mientras tanto, la respuesta es la v2.
+
+Pulsar «Crear v2» crea la versión nueva en `NEW` y **muestra los mismos tres
+botones de SPEC-008** —IA, plantilla, a mano—. No hay un camino especial para
+una revisión: es el mismo que para la primera rutina.
 
 ## 4. Reglas de negocio
 
@@ -63,14 +95,25 @@ Comentario: "No termino la semana 1"
 4. **La versión anterior permanece intacta:** ni su contenido, ni su estado, ni
    su `sent_at` cambian.
 5. El comentario es opcional, máximo 500 caracteres.
-6. Una sola solicitud abierta por versión. Otra sobre la misma versión actualiza
-   el motivo en vez de duplicar.
+6. **Una sola solicitud abierta por versión, garantizado por un índice único
+   parcial.** No por una comprobación previa: dos pulsaciones simultáneas la
+   pasarían las dos. Otra sobre la misma versión actualiza el motivo en vez de
+   duplicar.
 7. Al enviar la versión nueva, la solicitud pasa a `RESOLVED` y guarda
    `resolved_by_version_id`.
 8. "Me sirve" registra un evento en `plan_events`. **No cambia de estado**:
    `SENT` ya es terminal.
 9. El entrenador puede crear la versión nueva por IA, plantilla o manual: el
    mismo camino de SPEC-008.
+10. **El mensaje de la rutina lleva los dos botones.** Sin ellos, «pedir un
+    cambio» sería un botón que el cliente nunca ve, y la spec entera no
+    existiría en la práctica.
+11. **Un texto libre del cliente va a lo último que se le preguntó.** Si tiene
+    una solicitud esperando comentario y un check-in esperando molestia, gana
+    la más reciente de las dos.
+12. **La solicitud se resuelve al ENVIAR la v2, no al crearla.** Si se
+    resolviera al crearla, una revisión abandonada dejaría al cliente sin
+    respuesta y sin solicitud abierta que lo recordara.
 
 ## 5. Estados
 
@@ -130,6 +173,12 @@ v2: DRAFT → APPROVED → SENT
   segunda, ENTONCES hay **una sola** fila en `OPEN`.
 - **CA-9** — DADO "Me sirve", CUANDO se pulsa, ENTONCES se registra el evento y
   el estado sigue en `SENT`.
+- **CA-10** — DADO que el cliente recibe su rutina, CUANDO llega, ENTONCES el
+  mensaje trae los dos botones.
+- **CA-11** — DADO un cliente con solicitud y check-in abiertos, CUANDO escribe,
+  ENTONCES el texto va al más reciente de los dos.
+- **CA-12** — DADO una solicitud abierta, CUANDO el entrenador pulsa «Crear v2»,
+  ENTONCES la solicitud **sigue OPEN** hasta que la v2 se envíe.
 
 ## 9. Tests
 

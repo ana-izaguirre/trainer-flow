@@ -69,15 +69,24 @@ export async function handleCheckinAnswer(
  *
  * Solo se lee como molestia si hay un check-in esperándola. Si no, no es una
  * respuesta: es alguien escribiéndole al bot, y eso no se inventa.
+ *
+ * `askedBefore` es la fecha de OTRA pregunta pendiente —hoy, el comentario de
+ * una solicitud de cambio (SPEC-010 §3)—. Si esa es más reciente, el texto no
+ * es para el check-in: uno contesta a la última pregunta que le hicieron.
  */
 export async function handleCheckinText(
   text: string,
   actor: Identity,
   deps: ReplyDeps,
+  askedBefore: Date | null = null,
 ): Promise<ReplyOutcome> {
   const checkin = await deps.repo.findOpenCheckin(actor.profileId);
 
   if (checkin === null || checkin.answers.discomfort !== null) {
+    return { kind: 'no_open_checkin' };
+  }
+
+  if (askedBefore !== null && askedBefore.getTime() > checkin.sentAt.getTime()) {
     return { kind: 'no_open_checkin' };
   }
 

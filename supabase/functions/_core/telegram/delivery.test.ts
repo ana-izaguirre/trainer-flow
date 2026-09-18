@@ -71,6 +71,7 @@ function espia(
     envioFalla?: boolean;
     perfil?: { profileId: string; chatId: number } | null;
     nombreDelPerfil?: string[];
+    resueltas?: number;
   } = {},
 ): Espia {
   const pasos: string[] = [];
@@ -101,6 +102,10 @@ function espia(
     transition: (_v, from, to) => {
       pasos.push(`transition:${from}->${to}`);
       return Promise.resolve(!(opciones.transicionFalla ?? false));
+    },
+    resolveRequests: () => {
+      pasos.push('resolveRequests');
+      return Promise.resolve(opciones.resueltas ?? 0);
     },
   };
 
@@ -348,6 +353,35 @@ describe('entregar', () => {
     await deliverVersion('v1', deps);
 
     expect(mensajes.some((m) => m.chatId === 10 && m.text.includes('Carlos'))).toBe(true);
+  });
+
+  it('la rutina al cliente lleva sus dos botones', async () => {
+    // SPEC-010 regla 10: sin ellos, «pedir un cambio» sería una función que
+    // el cliente nunca ve.
+    const { deps, mensajes } = espia();
+
+    await deliverVersion('v1', deps);
+
+    expect(mensajes.find((m) => m.chatId === 500)).toBeDefined();
+  });
+
+  it('si respondía a una queja, el aviso al entrenador lo dice', async () => {
+    const { deps, mensajes } = espia({ resueltas: 1 });
+
+    await deliverVersion('v1', deps);
+
+    expect(mensajes.find((m) => m.chatId === 10)?.text).toContain('rutina nueva');
+  });
+
+  it('las solicitudes se cierran DESPUÉS de marcar SENT', async () => {
+    // Al revés, un envío fallido cerraría la queja sin que llegara nada.
+    const { deps, pasos } = espia({ resueltas: 1 });
+
+    await deliverVersion('v1', deps);
+
+    expect(pasos.indexOf('transition:APPROVED->SENT')).toBeLessThan(
+      pasos.indexOf('resolveRequests'),
+    );
   });
 
   it('el mensaje al cliente NO lleva sus limitaciones', async () => {

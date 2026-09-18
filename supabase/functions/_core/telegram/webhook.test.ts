@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
+import type { ChangeRequestRepo } from '../ports/change-request-ports.ts';
 import type { CreationRepo } from '../ports/creation-ports.ts';
 import type { QueryRepo } from '../ports/query-ports.ts';
 import type { DeliveryRepo } from '../ports/delivery-ports.ts';
@@ -17,6 +18,7 @@ import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import type { ActionDeps } from './actions.ts';
 import type { ReplyDeps } from '../checkin/reply.ts';
 import type { CommandDeps } from '../commands/router.ts';
+import type { ChangeRequestDeps } from '../change-request/flows.ts';
 import type { CreationDeps } from '../creation/flows.ts';
 import type { EditorDeps } from '../creation/editor-session.ts';
 import type { DeliveryDeps } from './delivery.ts';
@@ -134,6 +136,85 @@ function fakeCommands(opciones: { clientes?: { clientId: string; fullName: strin
   return { deps, pasos };
 }
 
+/**
+ * Solicitudes de cambio. Por defecto la versión es del cliente `p-cliente` y
+ * está en SENT, que es lo único sobre lo que se puede pedir un cambio.
+ */
+function fakeChanges(
+  opciones: { abierta?: { hasComment: boolean; askedAt: Date } | null; version?: unknown } = {},
+) {
+  const pasos: string[] = [];
+
+  const repo: ChangeRequestRepo = {
+    findVersion: () => {
+      pasos.push('findVersion');
+      return Promise.resolve(
+        opciones.version === undefined
+          ? {
+              versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+              state: 'SENT' as const,
+              planId: 'plan-1',
+              clientName: 'Carlos',
+              versionNumber: 1,
+              trainerChatId: 10,
+              client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
+            }
+          : (opciones.version as null),
+      );
+    },
+    request: () => {
+      pasos.push('request');
+      return Promise.resolve('req-1');
+    },
+    openForClient: () => {
+      pasos.push('openForClient');
+      return Promise.resolve(
+        opciones.abierta === undefined || opciones.abierta === null
+          ? null
+          : { requestId: 'req-1', clientId: 'c1', ...opciones.abierta },
+      );
+    },
+    addComment: () => {
+      pasos.push('addComment');
+      return Promise.resolve(true);
+    },
+    findRequest: () =>
+      Promise.resolve({
+        requestId: 'req-1',
+        versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+        planId: 'plan-1',
+        versionNumber: 1,
+        state: 'OPEN' as const,
+        reason: 'too_hard' as const,
+        comment: 'me cuesta',
+        clientName: 'Carlos',
+        trainerId: 'p-trainer',
+        sentDaysAgo: 9,
+      }),
+    createRevision: () => {
+      pasos.push('createRevision');
+      return Promise.resolve('9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b');
+    },
+    recordAccepted: () => {
+      pasos.push('recordAccepted');
+      return Promise.resolve();
+    },
+  };
+
+  const deps: ChangeRequestDeps = {
+    repo,
+    sender: {
+      sendMessage: (chatId) => {
+        pasos.push(`sendMessage:${chatId}`);
+        return Promise.resolve();
+      },
+      answerCallback: () => Promise.resolve(),
+    },
+  };
+
+  return { deps, pasos };
+}
+
 const RUTINA_MINIMA = {
   summary: 'Fuerza',
   days: [
@@ -221,6 +302,7 @@ function fakeCheckins(opciones: { dueño?: string | null; abierto?: boolean } = 
     weekNumber: 2,
     state: 'PENDING' as const,
     answers: { sessions: null, feeling: null, discomfort: null },
+    sentAt: new Date('2026-03-16T09:00:00Z'),
     trainerChatId: 10,
     daysPerWeek: 4,
   };
@@ -313,6 +395,7 @@ function fakeDelivery(opciones: { cliente?: unknown; entregable?: boolean } = {}
       pasos.push(`transition:${from}->${to}`);
       return Promise.resolve(true);
     },
+    resolveRequests: () => Promise.resolve(0),
   };
 
   const deps: DeliveryDeps = {
@@ -347,6 +430,7 @@ function ejecutar(
     checkins?: ReturnType<typeof fakeCheckins>;
     commands?: ReturnType<typeof fakeCommands>;
     creation?: ReturnType<typeof fakeCreation>;
+    changes?: ReturnType<typeof fakeChanges>;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -366,6 +450,7 @@ function ejecutar(
         checkins: (opts.checkins ?? fakeCheckins()).deps,
         commands: (opts.commands ?? fakeCommands()).deps,
         creation: (opts.creation ?? fakeCreation()).deps,
+        changes: (opts.changes ?? fakeChanges()).deps,
         actions: opts.actions ?? vacioActions(),
       },
     ),
@@ -987,5 +1072,149 @@ describe('el camino sin IA se enruta', () => {
     await result;
     expect(creation.pasos).toEqual([]);
     expect(commands.pasos).toContain('clients');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('las solicitudes de cambio se enrutan', () => {
+  const VERSION_SENT = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 500,
+    telegramChatId: 500,
+  };
+
+  const boton = (data: string) => ({
+    update_id: 1,
+    callback_query: {
+      id: 'cb-1',
+      from: FROM,
+      message: { message_id: 9, chat: { id: 500 } },
+      data,
+    },
+  });
+
+  it('👍 me sirve llega a su flujo', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const changes = fakeChanges();
+
+    const { result } = ejecutar(boton(`act:accept:${VERSION_SENT}`), { repo, changes });
+
+    expect(await result).toMatchObject({ change: { kind: 'accepted' } });
+    expect(changes.pasos).toContain('recordAccepted');
+  });
+
+  it('✏️ pedir un cambio pregunta los motivos, sin guardar', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const changes = fakeChanges();
+
+    const { result } = ejecutar(boton(`act:change:${VERSION_SENT}`), { repo, changes });
+
+    expect(await result).toMatchObject({ change: { kind: 'asked_reason' } });
+    expect(changes.pasos).not.toContain('request');
+  });
+
+  it('el motivo elegido SÍ se guarda', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const changes = fakeChanges();
+
+    const { result } = ejecutar(boton(`chg:too_hard:${VERSION_SENT}`), { repo, changes });
+
+    expect(await result).toMatchObject({ change: { kind: 'requested' } });
+    expect(changes.pasos).toContain('request');
+  });
+
+  it('✏️ crear v2 es del ENTRENADOR', async () => {
+    const changes = fakeChanges();
+
+    const { result } = ejecutar(boton(`act:revise:${VERSION_SENT}`), { changes });
+
+    expect(await result).toMatchObject({ change: { kind: 'revision_started' } });
+    expect(changes.pasos).toContain('createRevision');
+  });
+
+  it('un `chg:` NO se confunde con los otros prefijos', async () => {
+    // Cuatro prefijos por el mismo canal: act, chk, tpl y chg.
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const changes = fakeChanges();
+    const creation = fakeCreation();
+    const checkins = fakeCheckins({ dueño: 'p-cliente' });
+
+    const { result } = ejecutar(boton(`chg:want_variety:${VERSION_SENT}`), {
+      repo,
+      changes,
+      creation,
+      checkins,
+    });
+
+    await result;
+    expect(changes.pasos).toContain('request');
+    expect(creation.pasos).toEqual([]);
+    expect(checkins.pasos).toEqual([]);
+  });
+});
+
+describe('CA-11 · el texto libre va a la última pregunta', () => {
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 500,
+    telegramChatId: 500,
+  };
+
+  it('con una solicitud MÁS RECIENTE, el texto es su comentario', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: true });
+    const changes = fakeChanges({
+      abierta: { hasComment: false, askedAt: new Date('2026-03-20T09:00:00Z') },
+    });
+
+    const { result } = ejecutar(comando('no termino la semana'), { repo, checkins, changes });
+
+    expect(await result).toMatchObject({ change: { kind: 'commented' } });
+    expect(changes.pasos).toContain('addComment');
+    expect(checkins.pasos).not.toContain('saveAnswers:false');
+  });
+
+  it('con el check-in más reciente, el texto es la molestia', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: true });
+    const changes = fakeChanges({
+      abierta: { hasComment: false, askedAt: new Date('2026-03-01T09:00:00Z') },
+    });
+
+    const { result } = ejecutar(comando('me duele el hombro'), { repo, checkins, changes });
+
+    await result;
+    expect(checkins.pasos).toContain('saveAnswers:false');
+    expect(changes.pasos).not.toContain('addComment');
+  });
+
+  it('una solicitud que YA tiene comentario no se lo come', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: true });
+    const changes = fakeChanges({
+      abierta: { hasComment: true, askedAt: new Date('2026-03-20T09:00:00Z') },
+    });
+
+    const { result } = ejecutar(comando('otra cosa'), { repo, checkins, changes });
+
+    await result;
+    expect(checkins.pasos).toContain('saveAnswers:false');
+    expect(changes.pasos).not.toContain('addComment');
+  });
+
+  it('sin nada abierto, un mensaje es solo un mensaje', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: false });
+    const changes = fakeChanges({ abierta: null });
+
+    const { result } = ejecutar(comando('hola'), { repo, checkins, changes });
+
+    expect(await result).toMatchObject({ checkin: { kind: 'no_open_checkin' } });
+    expect(changes.pasos).not.toContain('addComment');
   });
 });

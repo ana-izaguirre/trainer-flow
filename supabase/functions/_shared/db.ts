@@ -17,6 +17,8 @@ import type { Level } from '../_core/domain/assessment.ts';
 import type { VersionState } from '../_core/domain/version.ts';
 import type { Workout } from '../_core/domain/workout.ts';
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
+import type { ChangeReason } from '../_core/domain/change-request.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { CheckinAnswers } from '../_core/checkin/answers.ts';
 import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
@@ -402,6 +404,16 @@ export function createDeliveryRepo(db: Db): DeliveryRepo {
 
       return data === true;
     },
+
+    async resolveRequests(versionId) {
+      const { data, error } = await db.rpc('resolve_change_requests', {
+        p_version_id: versionId,
+      });
+
+      if (error !== null) throw new Error(`No se pudieron cerrar las solicitudes: ${error.code}`);
+
+      return Number(data ?? 0);
+    },
   };
 }
 
@@ -625,6 +637,7 @@ async function readCheckin(
     clientName: fila['client_name'] as string,
     weekNumber: Number(fila['week_number']),
     state: fila['state'] as 'PENDING' | 'COMPLETED',
+    sentAt: new Date((fila['sent_at'] ?? new Date(0).toISOString()) as string),
     // `answers` es NULL mientras no conteste nada: los tres campos a `null`
     // significan «sin contestar», que no es lo mismo que «ninguna».
     answers: {
@@ -821,6 +834,142 @@ export function createCreationRepo(db: Db, requestId: string): CreationRepo {
 
       // `false` no es un fallo: se aprobó mientras el entrenador escribía.
       return data === true;
+    },
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Solicitudes de cambio (SPEC-010)
+// -----------------------------------------------------------------------------
+
+/**
+ * Implementa el puerto `ChangeRequestRepo`.
+ *
+ * **Ninguna de estas operaciones escribe en `workout_versions`.** La regla 4
+ * dice que la versión enviada queda intacta, y aquí no hay con qué tocarla.
+ */
+export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRequestRepo {
+  return {
+    async findVersion(versionId) {
+      const { data, error } = await db
+        .rpc('version_for_request', { p_version_id: versionId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        versionId: fila['version_id'] as string,
+        state: fila['state'] as VersionState,
+        planId: fila['plan_id'] as string,
+        clientName: fila['client_name'] as string,
+        versionNumber: Number(fila['version_number']),
+        trainerChatId: Number(fila['trainer_chat_id']),
+        client: {
+          clientId: fila['client_id'] as string,
+          trainerId: fila['trainer_id'] as string,
+          profileId: (fila['client_profile_id'] as string | null) ?? null,
+        },
+      };
+    },
+
+    async request(versionId, clientId, reason) {
+      const { data, error } = await db.rpc('request_change', {
+        p_version_id: versionId,
+        p_client_id: clientId,
+        p_reason: reason,
+      });
+
+      if (error !== null || data === null) {
+        throw new Error(`No se pudo registrar la solicitud: ${error?.code ?? 'sin datos'}`);
+      }
+
+      return data as string;
+    },
+
+    async openForClient(profileId) {
+      const { data, error } = await db
+        .rpc('open_change_request_for_client', { p_profile_id: profileId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer la solicitud: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        requestId: fila['request_id'] as string,
+        clientId: fila['client_id'] as string,
+        hasComment: fila['has_comment'] === true,
+        askedAt: new Date(fila['asked_at'] as string),
+      };
+    },
+
+    async addComment(requestId, clientId, comment) {
+      const { data, error } = await db.rpc('add_change_comment', {
+        p_request_id: requestId,
+        p_client_id: clientId,
+        p_comment: comment,
+      });
+
+      // El mensaje de error NUNCA lleva el comentario: es texto libre del
+      // cliente y puede contener información de salud (SPEC-010 §7).
+      if (error !== null) throw new Error(`No se pudo guardar el comentario: ${error.code}`);
+
+      return data === true;
+    },
+
+    async findRequest(requestId) {
+      const { data, error } = await db
+        .rpc('change_request_for_trainer', { p_request_id: requestId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer la solicitud: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        requestId: fila['request_id'] as string,
+        versionId: fila['version_id'] as string,
+        planId: fila['plan_id'] as string,
+        versionNumber: Number(fila['version_number']),
+        state: fila['state'] as 'OPEN' | 'RESOLVED',
+        reason: fila['reason'] as ChangeReason,
+        comment: (fila['comment'] as string | null) ?? null,
+        clientName: fila['client_name'] as string,
+        trainerId: fila['trainer_id'] as string,
+        sentDaysAgo: toNumberOrNull(fila['sent_days_ago']),
+      };
+    },
+
+    async createRevision(planId, trainerId) {
+      // La misma función atómica que crea la primera versión: número bajo
+      // bloqueo, plan apuntando a la nueva, y evento registrado.
+      const { data, error } = await db.rpc('create_workout_version', {
+        p_plan_id: planId,
+        p_source: 'manual',
+        p_created_by: trainerId,
+        p_request_id: httpRequestId,
+      });
+
+      if (error !== null || data === null) {
+        throw new Error(`No se pudo crear la revisión: ${error?.code ?? 'sin datos'}`);
+      }
+
+      return data as string;
+    },
+
+    async recordAccepted(versionId, clientId) {
+      const { error } = await db.rpc('record_version_accepted', {
+        p_version_id: versionId,
+        p_client_id: clientId,
+        p_request_id: httpRequestId,
+      });
+
+      if (error !== null) throw new Error(`No se pudo registrar el visto bueno: ${error.code}`);
     },
   };
 }
