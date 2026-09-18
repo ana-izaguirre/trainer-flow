@@ -216,7 +216,9 @@ export async function handleTelegramWebhook(
     // ── 6. Atender ───────────────────────────────────────────────────────
     // El `callback_data` es dato NO confiable: cualquiera puede fabricar uno.
     // Lo que impide tocar la versión de otro no es este parseo, sino la
-    // comprobación de pertenencia que hace `handleAction`.
+    // comprobación de pertenencia que hace CADA flujo al que se enruta.
+    // Los tres de creación no la hacían, y por eso un cliente podía escribir
+    // en la rutina de otro (SPEC-013 §2).
     let action: ActionOutcome | undefined;
     let checkin: ReplyOutcome | undefined;
     let command: CommandOutcome | undefined;
@@ -258,7 +260,7 @@ export async function handleTelegramWebhook(
         creation = await loadTemplate(
           plantilla.templateId,
           plantilla.versionId,
-          identity.telegramChatId,
+          identity,
           deps.creation,
         );
       } else if (respuesta !== null) {
@@ -279,10 +281,13 @@ export async function handleTelegramWebhook(
         // Los dos caminos sin IA. Van aparte de `handleAction` porque no son
         // una transición sobre la versión: una lista plantillas y la otra
         // escribe contenido.
+        // `identity` entera, no solo su `chatId`: estos tres flujos comprueban
+        // pertenencia desde SPEC-013. Pasar el chat suelto era justo lo que
+        // permitía que un cliente tocara la versión de otro.
         creation =
           payload.action === 'template'
-            ? await listTemplates(payload.versionId, identity.telegramChatId, deps.creation)
-            : await startManual(payload.versionId, identity.telegramChatId, deps.creation);
+            ? await listTemplates(payload.versionId, identity, deps.creation)
+            : await startManual(payload.versionId, identity, deps.creation);
       } else if (payload !== null) {
         action = await handleAction(
           {

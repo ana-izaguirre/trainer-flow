@@ -147,26 +147,42 @@ jobs:
           fetch-depth: 0
 
       # A committed secret is a blocker (CLAUDE.md).
+      #
+      # ┌─ WHY EVERY COMMIT, NOT JUST THE CHECKOUT ──────────────────────────┐
+      # │ `git grep` with no revision searches the WORKING TREE. This step   │
+      # │ was named "Scan the history" and did not scan it: a secret that    │
+      # │ was committed and then deleted passed CI while still sitting in    │
+      # │ the history, readable by anyone who clones. Deleting a leaked      │
+      # │ secret from a file does not unleak it.                             │
+      # │                                                                    │
+      # │ The output is captured instead of used as the `if` condition:      │
+      # │ xargs may split into several batches, and only the last batch's    │
+      # │ exit code would survive.                                           │
+      # └────────────────────────────────────────────────────────────────────┘
       - name: Scan the history
         run: |
           pattern='(gemini|telegram|tally|supabase)[_a-z]*(key|token|secret)[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_-]{16,}'
           # .github/workflows IS scanned too. A secret pasted into CI is just as
           # much a secret as one pasted into the code, and CI is a place where
           # one easily shows up "just to test something".
-          if git grep -rniE "$pattern" -- ':!pnpm-lock.yaml'; then
-            echo "::error::Possible secret in the repository"
+          found=$(git rev-list --all | xargs -r git grep -nIiE "$pattern" -- ':!pnpm-lock.yaml' || true)
+          if [ -n "$found" ]; then
+            echo "$found"
+            echo "::error::Possible secret in the repository history"
             exit 1
           fi
-          echo "No secrets found."
+          echo "No secrets found, in any commit."
 
       # Tally's download URLs carry a JWT inside. Not even in a fixture.
       - name: Check no JWT was left in the repository
         run: |
-          if git grep -rnE 'eyJ[A-Za-z0-9_-]{10,}\.' -- ':!pnpm-lock.yaml'; then
-            echo "::error::There is a JWT in the repository"
+          found=$(git rev-list --all | xargs -r git grep -nIE 'eyJ[A-Za-z0-9_-]{10,}\.' -- ':!pnpm-lock.yaml' || true)
+          if [ -n "$found" ]; then
+            echo "$found"
+            echo "::error::There is a JWT in the repository history"
             exit 1
           fi
-          echo "No JWTs."
+          echo "No JWTs, in any commit."
 
       # Any .env in any directory, not just the root. The only one allowed is
       # .env.example, which contains no secrets and not even their names.

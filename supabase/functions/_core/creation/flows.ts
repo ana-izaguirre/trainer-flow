@@ -13,6 +13,8 @@
  * │ IA: sería tener dos definiciones de «rutina válida» (regla 4).         │
  * └────────────────────────────────────────────────────────────────────────┘
  */
+import { canModifyVersion } from '../authorization.ts';
+import type { Identity } from '../domain/identity.ts';
 import { describeErrors } from '../domain/draft.ts';
 import { validateDraft } from '../domain/validate-draft.ts';
 import type { Workout } from '../domain/workout.ts';
@@ -60,11 +62,12 @@ const AYUDA_EDITOR = [
  */
 export async function listTemplates(
   versionId: string,
-  chatId: number,
+  actor: Identity,
   deps: CreationDeps,
 ): Promise<CreationOutcome> {
-  const version = await deps.repo.findVersion(versionId);
-  if (version === null) return rechazar(chatId, deps, 'no existe');
+  const chatId = actor.telegramChatId;
+  const version = await versionPropia(versionId, actor, deps);
+  if (version === null) return rechazar(chatId, deps, 'no existe o no es suya');
 
   const aplicables = templatesFor({
     ...(version.daysPerWeek === null ? {} : { daysPerWeek: version.daysPerWeek }),
@@ -89,15 +92,16 @@ export async function listTemplates(
 export async function loadTemplate(
   templateId: string,
   versionId: string,
-  chatId: number,
+  actor: Identity,
   deps: CreationDeps,
 ): Promise<CreationOutcome> {
+  const chatId = actor.telegramChatId;
   const template = findTemplate(templateId);
   // Un `callback_data` lo fabrica cualquiera: la forma no basta.
   if (template === undefined) return rechazar(chatId, deps, 'plantilla desconocida');
 
-  const version = await deps.repo.findVersion(versionId);
-  if (version === null) return rechazar(chatId, deps, 'no existe');
+  const version = await versionPropia(versionId, actor, deps);
+  if (version === null) return rechazar(chatId, deps, 'no existe o no es suya');
 
   // Regla 9: sin el aviso, un cliente con limitaciones haría fallar
   // `validateDraft` y el entrenador no podría ni cargar la plantilla.
@@ -112,11 +116,12 @@ export async function loadTemplate(
 /** ✍️ — un borrador vacío y las instrucciones para llenarlo. */
 export async function startManual(
   versionId: string,
-  chatId: number,
+  actor: Identity,
   deps: CreationDeps,
 ): Promise<CreationOutcome> {
-  const version = await deps.repo.findVersion(versionId);
-  if (version === null) return rechazar(chatId, deps, 'no existe');
+  const chatId = actor.telegramChatId;
+  const version = await versionPropia(versionId, actor, deps);
+  if (version === null) return rechazar(chatId, deps, 'no existe o no es suya');
 
   // Se guarda sin pasar por `validateDraft`: una rutina vacía NO es válida, y
   // ese es justo el estado en el que tiene que quedar para poder editarla.
@@ -187,6 +192,28 @@ function teclado(
 }
 
 /** Lo mismo para una ajena que para una que no existe. */
+/**
+ * Carga la versión Y comprueba que sea de quien actúa.
+ *
+ * ┌─ POR QUÉ DEVUELVE `null` EN LOS DOS CASOS ─────────────────────────────┐
+ * │ «No existe» y «no es tuya» salen por la misma puerta, con el mismo     │
+ * │ mensaje. Quien prueba identificadores a ver qué pega no aprende cuáles │
+ * │ son reales (SPEC-013 regla 2).                                        │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * Va ANTES de la primera escritura, no entre medias.
+ */
+async function versionPropia(
+  versionId: string,
+  actor: Identity,
+  deps: CreationDeps,
+): Promise<VersionForCreation | null> {
+  const version = await deps.repo.findVersion(versionId);
+  if (version === null) return null;
+
+  return canModifyVersion(actor, version).allowed ? version : null;
+}
+
 async function rechazar(
   chatId: number,
   deps: CreationDeps,

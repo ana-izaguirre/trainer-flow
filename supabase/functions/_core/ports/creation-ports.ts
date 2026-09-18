@@ -9,13 +9,24 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { Level } from '../domain/assessment.ts';
-import type { VersionState } from '../domain/version.ts';
+import type { ClientRef, VersionState } from '../domain/version.ts';
 import type { Workout } from '../domain/workout.ts';
 
-/** Lo que hace falta para ORDENAR las plantillas de este cliente. */
+/**
+ * Lo que hace falta para ORDENAR las plantillas de este cliente… y para saber
+ * de quién es.
+ *
+ * ┌─ POR QUÉ LLEVA `client` ───────────────────────────────────────────────┐
+ * │ Estos flujos se alcanzan desde un `callback_data`, que es dato NO      │
+ * │ confiable. Sin la pertenencia aquí, el código de arriba no podía       │
+ * │ comprobar nada aunque quisiera: el dato no llegaba (SPEC-013 §2).      │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
 export interface VersionForCreation {
   readonly versionId: string;
   readonly state: VersionState;
+  /** De quién es. Sin esto no se puede autorizar. */
+  readonly client: ClientRef;
   readonly clientName: string;
   readonly versionNumber: number;
   /** `null` en un plan sin evaluación de Tally. */

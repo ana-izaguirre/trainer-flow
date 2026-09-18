@@ -95,6 +95,8 @@ export const PG = {
   CHECK_VIOLATION: '23514',
   NOT_NULL_VIOLATION: '23502',
   INSUFFICIENT_PRIVILEGE: '42501',
+  /** Un valor que no encaja en el tipo, p. ej. un enum inexistente. */
+  INVALID_TEXT_REPRESENTATION: '22P02',
 } as const;
 
 /** Contenido mínimo válido de un Workout, para los tests de esquema. */

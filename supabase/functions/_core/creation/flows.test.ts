@@ -8,6 +8,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
+import type { Identity } from '../domain/identity.ts';
 import type { CreationRepo, VersionForCreation } from '../ports/creation-ports.ts';
 import { TEMPLATES } from '../templates.ts';
 import { parseTemplateCallback } from '../telegram/template-callback.ts';
@@ -16,10 +17,19 @@ import { listTemplates, loadTemplate, startManual, type CreationDeps } from './f
 const VERSION_ID = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
 const CHAT = 10;
 
+/** El dueño de la versión de abajo. */
+const ENTRENADOR: Identity = {
+  profileId: 'p-trainer',
+  role: 'trainer',
+  telegramUserId: CHAT,
+  telegramChatId: CHAT,
+};
+
 function version(extra: Partial<VersionForCreation> = {}): VersionForCreation {
   return {
     versionId: VERSION_ID,
     state: 'NEW',
+    client: { clientId: 'c-1', trainerId: 'p-trainer', profileId: 'p-cliente' },
     clientName: 'Carlos Pérez',
     versionNumber: 1,
     daysPerWeek: 3,
@@ -89,7 +99,7 @@ describe('📋 listar plantillas', () => {
     // Regla 8: el entrenador elige siempre, aunque solo encaje una.
     const { deps, pasos, mensajes } = espia();
 
-    const outcome = await listTemplates(VERSION_ID, CHAT, deps);
+    const outcome = await listTemplates(VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'listed' });
     expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
@@ -103,7 +113,7 @@ describe('📋 listar plantillas', () => {
       version: version({ daysPerWeek: 5, level: 'advanced', equipment: 'Solo una toalla' }),
     });
 
-    const outcome = await listTemplates(VERSION_ID, CHAT, deps);
+    const outcome = await listTemplates(VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'listed', count: TEMPLATES.length });
     expect(idsDelTeclado(mensajes[0]!.keyboard)).toHaveLength(TEMPLATES.length);
@@ -114,7 +124,7 @@ describe('📋 listar plantillas', () => {
       version: version({ daysPerWeek: 4, level: 'intermediate', equipment: 'Gimnasio' }),
     });
 
-    await listTemplates(VERSION_ID, CHAT, deps);
+    await listTemplates(VERSION_ID, ENTRENADOR, deps);
 
     expect(idsDelTeclado(mensajes[0]!.keyboard)[0]).toBe('upper-lower-4d');
   });
@@ -124,7 +134,7 @@ describe('📋 listar plantillas', () => {
       version: version({ daysPerWeek: null, level: null, equipment: null }),
     });
 
-    const outcome = await listTemplates(VERSION_ID, CHAT, deps);
+    const outcome = await listTemplates(VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'listed', count: TEMPLATES.length });
     expect(mensajes[0]?.text).toContain('Carlos');
@@ -133,7 +143,7 @@ describe('📋 listar plantillas', () => {
   it('una versión que no existe se rechaza igual que una ajena', async () => {
     const { deps, pasos } = espia({ version: null });
 
-    expect(await listTemplates(VERSION_ID, CHAT, deps)).toMatchObject({ kind: 'rejected' });
+    expect(await listTemplates(VERSION_ID, ENTRENADOR, deps)).toMatchObject({ kind: 'rejected' });
     expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
   });
 });
@@ -142,7 +152,7 @@ describe('cargar la elegida', () => {
   it('CA-2 · queda con source=template y su id', async () => {
     const { deps, guardado } = espia();
 
-    const outcome = await loadTemplate('full-body-3d', VERSION_ID, CHAT, deps);
+    const outcome = await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'filled', source: 'template' });
     expect(guardado[0]).toMatchObject({ source: 'template', templateId: 'full-body-3d' });
@@ -153,7 +163,7 @@ describe('cargar la elegida', () => {
     // podría ni cargar la plantilla (regla 9).
     const { deps, guardado } = espia({ version: version({ hasLimitations: true }) });
 
-    const outcome = await loadTemplate('full-body-3d', VERSION_ID, CHAT, deps);
+    const outcome = await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'filled' });
     const contenido = guardado[0]!.content as { warnings: string[] };
@@ -163,7 +173,7 @@ describe('cargar la elegida', () => {
   it('enseña el borrador con los botones de decidir', async () => {
     const { deps, mensajes } = espia();
 
-    await loadTemplate('full-body-3d', VERSION_ID, CHAT, deps);
+    await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps);
 
     expect(mensajes.at(-1)?.keyboard).toBeDefined();
     expect(mensajes.at(-1)?.text).toContain('Carlos');
@@ -173,7 +183,7 @@ describe('cargar la elegida', () => {
     // El `callback_data` lo fabrica cualquiera: tener la forma no basta.
     const { deps, pasos } = espia();
 
-    const outcome = await loadTemplate('no-existe', VERSION_ID, CHAT, deps);
+    const outcome = await loadTemplate('no-existe', VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'rejected' });
     expect(pasos).toEqual(['sendMessage']);
@@ -182,7 +192,7 @@ describe('cargar la elegida', () => {
   it('sobre una versión que no existe, no se carga nada', async () => {
     const { deps, pasos } = espia({ version: null });
 
-    expect(await loadTemplate('full-body-3d', VERSION_ID, CHAT, deps)).toMatchObject({
+    expect(await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps)).toMatchObject({
       kind: 'rejected',
     });
     expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
@@ -195,7 +205,7 @@ describe('cargar la elegida', () => {
       version: version({ daysPerWeek: null, level: null, equipment: null }),
     });
 
-    const outcome = await loadTemplate('push-pull-legs-6d', VERSION_ID, CHAT, deps);
+    const outcome = await loadTemplate('push-pull-legs-6d', VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'filled' });
     expect((guardado[0]!.content as { days: unknown[] }).days).toHaveLength(6);
@@ -205,7 +215,7 @@ describe('cargar la elegida', () => {
     // Dos pulsaciones rápidas: la segunda encuentra otro estado.
     const { deps, mensajes } = espia({ llenarFalla: true });
 
-    const outcome = await loadTemplate('full-body-3d', VERSION_ID, CHAT, deps);
+    const outcome = await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'rejected' });
     expect(mensajes.at(-1)?.text).toContain('No puedo');
@@ -216,7 +226,7 @@ describe('cargar la elegida', () => {
     const plantilla = TEMPLATES.find((t) => t.id === id)!;
     const { deps } = espia({ version: version({ daysPerWeek: plantilla.daysPerWeek }) });
 
-    expect(await loadTemplate(id, VERSION_ID, CHAT, deps)).toMatchObject({ kind: 'filled' });
+    expect(await loadTemplate(id, VERSION_ID, ENTRENADOR, deps)).toMatchObject({ kind: 'filled' });
   });
 
   it('si la plantilla no encaja con los días pedidos, se dice', async () => {
@@ -224,7 +234,7 @@ describe('cargar la elegida', () => {
     // justo lo que `validateDraft` existe para detener.
     const { deps, mensajes, pasos } = espia({ version: version({ daysPerWeek: 6 }) });
 
-    const outcome = await loadTemplate('full-body-3d', VERSION_ID, CHAT, deps);
+    const outcome = await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'rejected', reason: 'invalid_draft' });
     expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
@@ -236,7 +246,7 @@ describe('✍️ empezar a mano', () => {
   it('CA-12 · deja un borrador vacío y explica los comandos', async () => {
     const { deps, guardado, mensajes } = espia();
 
-    const outcome = await startManual(VERSION_ID, CHAT, deps);
+    const outcome = await startManual(VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'filled', source: 'manual' });
     expect(guardado[0]).toMatchObject({ source: 'manual', templateId: null });
@@ -249,19 +259,96 @@ describe('✍️ empezar a mano', () => {
     // que quedar para poder editarla. La puerta está en aprobar.
     const { deps } = espia();
 
-    expect(await startManual(VERSION_ID, CHAT, deps)).toMatchObject({ kind: 'filled' });
+    expect(await startManual(VERSION_ID, ENTRENADOR, deps)).toMatchObject({ kind: 'filled' });
   });
 
   it('si otro se adelantó, no se pisa', async () => {
     const { deps } = espia({ llenarFalla: true });
 
-    expect(await startManual(VERSION_ID, CHAT, deps)).toMatchObject({ kind: 'rejected' });
+    expect(await startManual(VERSION_ID, ENTRENADOR, deps)).toMatchObject({ kind: 'rejected' });
   });
 
   it('una versión que no existe se rechaza', async () => {
     const { deps, pasos } = espia({ version: null });
 
-    expect(await startManual(VERSION_ID, CHAT, deps)).toMatchObject({ kind: 'rejected' });
+    expect(await startManual(VERSION_ID, ENTRENADOR, deps)).toMatchObject({ kind: 'rejected' });
     expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
+  });
+});
+
+// ─── SPEC-013 · lo que un `callback_data` fabricado NO consigue ─────────────
+
+describe('pertenencia (SPEC-013 CA-5, CA-7, CA-12)', () => {
+  /** Un cliente vinculado cualquiera, que no es dueño de nada. */
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 77,
+    telegramChatId: 77,
+  };
+
+  /** Otro entrenador: mismo rol, distinta cartera. */
+  const OTRO_ENTRENADOR: Identity = {
+    profileId: 'p-otro-trainer',
+    role: 'trainer',
+    telegramUserId: 88,
+    telegramChatId: 88,
+  };
+
+  it.each([
+    ['un cliente', CLIENTE],
+    ['otro entrenador', OTRO_ENTRENADOR],
+  ])('✍️ %s NO puede abrir un borrador en una versión ajena', async (_quien, intruso) => {
+    // Era el agujero: `startManual` escribía sin mirar de quién era.
+    const e = espia();
+
+    const resultado = await startManual(VERSION_ID, intruso, e.deps);
+
+    expect(resultado.kind).toBe('rejected');
+    expect(e.pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
+    expect(e.guardado).toEqual([]);
+  });
+
+  it.each([
+    ['un cliente', CLIENTE],
+    ['otro entrenador', OTRO_ENTRENADOR],
+  ])('📋 %s NO puede ni listar plantillas de una versión ajena', async (_quien, intruso) => {
+    const e = espia();
+
+    const resultado = await listTemplates(VERSION_ID, intruso, e.deps);
+
+    expect(resultado.kind).toBe('rejected');
+    // Y sobre todo: no se filtra el nombre del cliente de otro.
+    expect(e.mensajes.some((m) => m.text.includes('Carlos'))).toBe(false);
+  });
+
+  it('la segunda pulsación tampoco: cargar una plantilla ajena se rechaza', async () => {
+    const e = espia();
+
+    const resultado = await loadTemplate(TEMPLATES[0]!.id, VERSION_ID, CLIENTE, e.deps);
+
+    expect(resultado.kind).toBe('rejected');
+    expect(e.guardado).toEqual([]);
+  });
+
+  it('CA-12 · negar suena igual que no existir', async () => {
+    // Si el mensaje distinguiera un caso del otro, probar identificadores
+    // sería una forma de averiguar cuáles existen.
+    const ajena = espia();
+    const inexistente = espia({ version: null });
+
+    const rAjena = await startManual(VERSION_ID, CLIENTE, ajena.deps);
+    const rInexistente = await startManual(VERSION_ID, ENTRENADOR, inexistente.deps);
+
+    expect(rAjena.kind).toBe('rejected');
+    expect(rInexistente.kind).toBe('rejected');
+    expect(ajena.mensajes[0]?.text).toBe(inexistente.mensajes[0]?.text);
+  });
+
+  it('el dueño sí puede: la comprobación no rompe el camino normal', async () => {
+    const e = espia();
+
+    expect((await startManual(VERSION_ID, ENTRENADOR, e.deps)).kind).toBe('filled');
+    expect(e.pasos).toContain('fillVersion:manual');
   });
 });
