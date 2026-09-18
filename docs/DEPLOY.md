@@ -180,6 +180,11 @@ te llega a ti mismo como cliente si canjeaste el deep link.
 Los logs están en el panel: Edge Functions → la función → Logs. Todo lleva
 `request_id`, así que una petición se sigue de punta a punta.
 
+**Si el síntoma no está en esa tabla:** [`docs/RUNBOOK.md`](RUNBOOK.md) tiene
+los recorridos completos, con las consultas SQL ya escritas. La idea es que se
+empieza por la base —que es el índice— y con el `request_id` que salga de ahí
+se leen los logs.
+
 ---
 
 ## CI — `.github/workflows/ci.yml`
