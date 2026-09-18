@@ -88,15 +88,20 @@ bot en todo lo que sigue.
       `pending_update_count` alto o `last_error_message` con algo dentro
       significa que el bot no está atendiendo.
 
-- [ ] **7. Tally**, dos cosas en el mismo formulario:
+- [ ] **7. Tally — Integrations → Webhooks:**
+      `https://<ref>.supabase.co/functions/v1/tally-webhook`
 
-      · **Integrations → Webhooks:**
-        `https://<ref>.supabase.co/functions/v1/tally-webhook`
-
-      · **La pantalla final**, redirigiendo al deep link:
-        `https://t.me/<tu_bot>?start=` + el `link_token`.
-        Sin esto el cliente nunca se vincula, y su rutina se queda esperando
-        en `APPROVED` para siempre.
+      > ⚠️ **La pantalla final de Tally NO puede llevar el deep link.**
+      > Este documento decía que se configurara con
+      > `https://t.me/<tu_bot>?start=` + el `link_token`, y eso es imposible:
+      > la URL de redirección se configura **antes** de la respuesta, y el
+      > `link_token` lo genera el servidor **después**, al recibirla. Tally no
+      > tiene forma de conocerlo.
+      >
+      > Hoy el enlace se saca a mano de la base — está en **«El camino
+      > entero»**, más abajo. Cerrar ese hueco está pendiente de decidir:
+      > ponerlo en el aviso que ya recibe el entrenador, o pre-generar el
+      > token antes de mandar el formulario.
 
 - [ ] **8. Programar el check-in semanal.** En el SQL Editor de Supabase:
       pega `supabase/cron/weekly-checkin.sql` y ejecútalo —eso crea la
@@ -162,9 +167,42 @@ pasada:
 
 Sin la cabecera responde `401`, que es justo lo que tiene que pasar.
 
-**El camino entero:** rellena tu propio formulario de Tally con un correo de
-prueba. Deberías recibir el aviso, luego la rutina con botones, y al aprobarla
-te llega a ti mismo como cliente si canjeaste el deep link.
+**Una evaluación firmada, sin tocar Tally:**
+
+```bash
+TALLY_SIGNING_SECRET='...' SUPABASE_PROJECT_REF='...' \
+  ./scripts/simular-tally.sh "Carlos Prueba"
+```
+
+Manda el fixture real de `tests/fixtures/` con una firma válida y un `eventId`
+nuevo en cada disparo — sin eso, el segundo intento responde `duplicate`, que
+es correcto pero no es lo que quieres mientras pruebas.
+
+### El camino entero
+
+Dispara la evaluación (o rellena tu formulario). Te llega el aviso, eliges cómo
+preparar la rutina, y al aprobarla queda en `APPROVED`.
+
+Para que le llegue a alguien hacen falta **dos cosas más**:
+
+**1. Otra cuenta de Telegram.** `ensure_client_profile` devuelve `null` si el
+perfil ya es entrenador: **no puedes ser cliente y entrenador con la misma
+cuenta.** Es deliberado (SPEC-009 regla 1), pero significa que para probar la
+entrega necesitas una segunda cuenta.
+
+**2. El enlace del cliente, a mano por ahora.** Ningún mensaje lo entrega
+todavía: el `link_token` se crea y se guarda, pero no sale en el aviso ni en
+`/clientes`. Sácalo del SQL Editor:
+
+```sql
+select c.full_name,
+       'https://t.me/TU_BOT?start=' || c.link_token as enlace,
+       case when c.linked_at is null then 'sin vincular' else 'vinculado' end as estado
+  from clients c order by c.created_at desc limit 5;
+```
+
+Abre ese enlace desde la **otra** cuenta. Ahí sí: se vincula, y si ya había una
+rutina en `APPROVED`, le llega en ese momento.
 
 ## Si algo no responde
 
