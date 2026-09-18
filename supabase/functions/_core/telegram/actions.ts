@@ -17,11 +17,13 @@
  *   5. Aplicar              → y esa transición es la guarda contra el doble clic
  */
 import { canModifyVersion } from '../authorization.ts';
+import { describeErrors } from '../domain/draft.ts';
+import { validateDraft } from '../domain/validate-draft.ts';
 import type { Identity } from '../domain/identity.ts';
 import { nextState } from '../domain/state-machine.ts';
 import type { VersionEvent } from '../domain/state-machine.ts';
 import type { VersionState } from '../domain/version.ts';
-import type { ActionRepo } from '../ports/action-ports.ts';
+import type { ActionRepo, VersionForAction } from '../ports/action-ports.ts';
 import type { GenerationTrigger } from '../ports/generation-trigger.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import type { CallbackAction } from './callback-data.ts';
@@ -111,6 +113,19 @@ export async function handleAction(
     return { kind: 'not_implemented', action: request.action };
   }
 
+  // ── 3.5. Aprobar valida. Es la última puerta antes de que salga ────────
+  // Antes no lo hacía: solo `generate-version` llamaba a `validateDraft`, así
+  // que una rutina hecha a mano podía aprobarse y enviarse sin haber pasado
+  // nunca por ahí (SPEC-008 regla 11).
+  if (request.action === 'approve') {
+    const problema = porQueNoSePuedeAprobar(version);
+
+    if (problema !== null) {
+      await deps.sender.sendMessage(actor.telegramChatId, `No puedo aprobarla: ${problema}`);
+      return { kind: 'invalid_action', state: version.state, action: 'approve' };
+    }
+  }
+
   // ── 4. La máquina decide, no un `if` escrito aquí ──────────────────────
   const destino = nextState(version.state, evento);
   if (destino === null) {
@@ -193,4 +208,21 @@ async function generar(
   }
 
   return { kind: 'generating', versionId: version.versionId };
+}
+
+
+/**
+ * Por qué esta rutina no se puede aprobar, o `null` si sí se puede.
+ *
+ * Es la MISMA validación que se le exige a la IA: no hay un camino blando
+ * para lo que escribe el entrenador (SPEC-008 regla 4).
+ */
+function porQueNoSePuedeAprobar(version: VersionForAction): string | null {
+  if (version.content === null) return 'todavía no tiene contenido.';
+
+  // Sin evaluación se valida la forma, no el encaje con unos criterios que
+  // no existen: una rutina manual no tiene formulario detrás.
+  const validado = validateDraft({ source: 'manual', raw: version.content }, version.constraints);
+
+  return validado.ok ? null : describeErrors(validado.errors);
 }

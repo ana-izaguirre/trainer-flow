@@ -51,3 +51,21 @@ export interface ValidationError {
 export type ValidationResult =
   | { readonly ok: true; readonly workout: Workout }
   | { readonly ok: false; readonly errors: readonly ValidationError[] };
+
+
+/**
+ * Los errores de validación, en una frase que el entrenador pueda leer.
+ *
+ * Existe porque `errors.join('; ')` sobre objetos produce
+ * `[object Object]` — un mensaje que no dice nada y que no falla en ningún
+ * sitio hasta que alguien lo ve en Telegram.
+ *
+ * Se acota a los tres primeros: una rutina recién empezada produce un error
+ * por cada campo que falta, y un muro de texto no ayuda a arreglar nada.
+ */
+export function describeErrors(errors: readonly ValidationError[], max = 3): string {
+  const primeros = errors.slice(0, max).map((e) => e.message);
+  const resto = errors.length - primeros.length;
+
+  return resto > 0 ? `${primeros.join(' ')} (y ${resto} más)` : primeros.join(' ');
+}

@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIAL** — dominio completo y E2E-1 (S-07, S-08, S-10, S-11) |
+| **Estado** | **IMPLEMENTADA** |
 
 ## Resultado parcial
 
@@ -74,18 +74,57 @@ Manual     → WorkoutDraft { source: 'manual',   raw: unknown }  ─┘        
 
 **Un solo camino de validación.** El §4 dice que no queremos tres sistemas.
 
+### Elegir plantilla: dos pulsaciones, no una
+
+```
+📋 Plantilla  ──►  se listan las aplicables, ordenadas
+                          │
+                   [Torso / pierna · 4d]
+                   [Cuerpo completo · 3d]
+                   [Casa, peso corporal · 3d]
+                          │
+                   se carga y queda en DRAFT, con sus botones
+```
+
+El `callback_data` de la segunda pulsación es `tpl:<templateId>:<versionId>`.
+Prefijo propio porque no es una acción sobre la versión, sino la elección de
+**cuál** cargar; y los tres prefijos (`act:`, `chk:`, `tpl:`) viajan por el
+mismo canal.
+
+Caben en los 64 bytes de Telegram: el id más largo es `push-pull-legs-6d`,
+que deja `tpl:push-pull-legs-6d:<uuid>` en 58.
+
+**Nunca se carga una plantilla automáticamente** (regla 8), ni siquiera cuando
+solo hay una que encaje: el entrenador elige siempre.
+
+### Sobre qué versión actúa el editor
+
+Los comandos del editor no llevan cliente: `/add 1 Press 4x8` no dice de
+quién. **Se aplican al borrador que el entrenador tocó más recientemente.**
+
+Se eligió así, y no «el único borrador abierto», porque con dos clientes a la
+vez esa regla bloquearía los dos. Y no se añadió un argumento de cliente
+porque escribir `/add carlos 1 Press 4x8` desde el móvil, en cada comando, es
+exactamente la fricción que hace que el camino manual no se use.
+
+**A cambio, cada respuesta dice sobre quién se aplicó.** Si el entrenador
+tenía otro en mente, lo ve en el acto y no después de cuatro comandos.
+
+> **Limitación reconocida.** Con varios borradores abiertos hay que aprobar o
+> rechazar para cambiar de contexto. Es el mismo caso que las plantillas
+> resuelven: se edita sobre algo, no se construye desde cero.
+
 ### Comandos del editor
 
 | Comando | Efecto | Estado |
 |---|---|---|
-| `/nueva <cliente>` | Crea el plan y muestra: IA · plantilla · desde cero | ⏳ S-11 |
-| `/plantillas` | Lista las plantillas aplicables | ⏳ S-11 |
-| `/usar <template_id>` | Carga la plantilla en una versión `DRAFT` | ⏳ S-11 |
+| 📋 **Plantilla** (botón) | Lista las aplicables y carga la elegida | ✅ |
+| ✍️ **A mano** (botón) | Crea un borrador vacío y explica los comandos | ✅ |
 | `/dia <n> <foco>` | Añade o renombra un día | ✅ |
 | `/add <n> <nombre> <series>x<reps> [descanso]` | Añade ejercicio al día `n` | ✅ |
 | `/quitar <n> <índice>` | Elimina un ejercicio | ✅ |
 | `/nota <n> <índice> [texto]` | Edita la nota; sin texto, la borra | ✅ |
-| `/ver` | Muestra la versión actual formateada | ⏳ S-11 |
+| `/ver` | Muestra el borrador actual formateado | ✅ |
 
 **El parser tolera cómo escribe una persona en el móvil:** espacios de más,
 `X` mayúscula, la `s` de segundos (`90s`), nombres de varias palabras. El
@@ -127,6 +166,25 @@ explica la sintaxis esperada, no un error genérico.
    no podría ni cargarlo. Con él, pasa la misma validación que exigimos a la
    IA y el recordatorio queda a la vista. **Qué ajustar sigue siendo criterio
    del entrenador.**
+
+10. **Un borrador creado a mano nace vacío, y eso es correcto.** No se puede
+    aprobar —`validateDraft` lo rechaza sin ejercicios—, así que el mensaje
+    que lo crea explica los comandos en vez de dejar al entrenador mirando
+    una rutina sin nada.
+11. **La puerta de `validateDraft` está en APROBAR, no en cada edición.**
+
+    Un borrador a medias no puede pasarla y no debe: `/dia 1 Empuje` deja un
+    día sin ejercicios, y dos días de cuatro no cuadran con la evaluación. Si
+    se validara en cada edición, **no habría forma de construir una rutina
+    paso a paso**: el primer comando siempre fallaría.
+
+    Lo que sí corre en cada edición son los rangos del propio comando
+    —`sets` entre 1 y 10, día entre 1 y 7— que ya comprueba
+    `applyEditorCommand`.
+
+    **Y aprobar valida.** Antes no lo hacía: solo `generate-version` llamaba a
+    `validateDraft`, así que una rutina manual podía aprobarse y enviarse sin
+    haber pasado nunca por ahí. Eso contradecía la tabla de §6 y el punto 4.
 
 ## 5. Estados
 
@@ -177,6 +235,19 @@ DRAFT ── EDIT ──► DRAFT   (in-place)
   listan, ENTONCES se devuelven **todas**, nunca una lista vacía.
 - **CA-10** — DADO un cliente con limitaciones, CUANDO se carga una plantilla,
   ENTONCES el borrador incluye un aviso y pasa `validateDraft`.
+- **CA-11** — DADO el botón 📋, CUANDO se pulsa, ENTONCES se listan plantillas
+  y **ninguna se carga**: hace falta una segunda pulsación.
+- **CA-12** — DADO el botón ✍️, CUANDO se pulsa, ENTONCES queda un `DRAFT`
+  vacío y el mensaje explica los comandos del editor.
+- **CA-13** — DADO dos borradores abiertos, CUANDO se edita sin decir cliente,
+  ENTONCES se aplica al más reciente y la respuesta dice de quién es.
+- **CA-14** — DADO un comando del editor sin ningún borrador abierto, CUANDO
+  se envía, ENTONCES se dice que no hay nada que editar, sin tocar la base.
+- **CA-15** — DADO un borrador a medias (un día sin ejercicios), CUANDO se
+  edita, ENTONCES **se guarda igual**: la validación completa no bloquea la
+  construcción.
+- **CA-16** — DADO ese mismo borrador, CUANDO se intenta **aprobar**,
+  ENTONCES se rechaza diciendo qué falta, y la versión sigue en `DRAFT`.
 
 ## 9. Tests
 

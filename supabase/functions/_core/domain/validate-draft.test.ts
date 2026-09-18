@@ -5,7 +5,13 @@
  * de la IA, o una rutina mal escrita a mano, llegue a la base de datos.
  */
 import { describe, expect, it } from 'vitest';
-import type { DraftSource, ValidationErrorCode, WorkoutConstraints } from './draft.ts';
+import type {
+  DraftSource,
+  ValidationError,
+  ValidationErrorCode,
+  WorkoutConstraints,
+} from './draft.ts';
+import { describeErrors } from './draft.ts';
 import { validateDraft } from './validate-draft.ts';
 import { WORKOUT_LIMITS } from './workout.ts';
 
@@ -493,5 +499,42 @@ describe('valores null explícitos en campos obligatorios', () => {
       'x'.repeat(WORKOUT_LIMITS.text.reps + 1);
 
     expect(codigos(validar(raw))).toContain('TOO_LONG');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/** Un error de validación cualquiera: aquí solo importa su mensaje. */
+function unError(message: string): ValidationError {
+  return { path: 'days', code: 'EMPTY', message };
+}
+
+describe('describeErrors — los fallos, en palabras', () => {
+  it('junta los mensajes, no los objetos', () => {
+    // `errors.join('; ')` sobre objetos produce «[object Object]»: un mensaje
+    // que no dice nada y que no falla en ningún sitio hasta verlo en Telegram.
+    const texto = describeErrors([unError('Falta el día 1.'), unError('Falta el día 2.')]);
+
+    expect(texto).toBe('Falta el día 1. Falta el día 2.');
+    expect(texto).not.toContain('object');
+  });
+
+  it('con muchos, se acota y dice cuántos quedan', () => {
+    // Una rutina recién empezada produce un error por campo que falta; un
+    // muro de texto no ayuda a arreglar nada.
+    const texto = describeErrors([1, 2, 3, 4, 5].map((n) => unError(`Fallo ${n}.`)));
+
+    expect(texto).toContain('Fallo 3.');
+    expect(texto).not.toContain('Fallo 4.');
+    expect(texto).toContain('y 2 más');
+  });
+
+  it('justo en el límite no dice «y 0 más»', () => {
+    const texto = describeErrors([1, 2, 3].map((n) => unError(`Fallo ${n}.`)));
+    expect(texto).not.toContain('más');
+  });
+
+  it('sin errores devuelve vacío', () => {
+    expect(describeErrors([])).toBe('');
   });
 });

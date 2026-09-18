@@ -17,6 +17,7 @@ import type { Level } from '../_core/domain/assessment.ts';
 import type { VersionState } from '../_core/domain/version.ts';
 import type { Workout } from '../_core/domain/workout.ts';
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { CheckinAnswers } from '../_core/checkin/answers.ts';
 import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { ClientSummary, QueryRepo } from '../_core/ports/query-ports.ts';
@@ -484,6 +485,15 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
           trainerId: fila['trainer_id'] as string,
           profileId: (fila['client_profile_id'] as string | null) ?? null,
         },
+        // `null` si el plan no viene de Tally: entonces al aprobar se valida
+        // la forma, no el encaje con unos criterios que no existen.
+        constraints:
+          fila['days_per_week'] === null || fila['days_per_week'] === undefined
+            ? null
+            : {
+                daysPerWeek: Number(fila['days_per_week']),
+                hasLimitations: fila['has_limitations'] === true,
+              },
       };
     },
 
@@ -728,5 +738,89 @@ function leerResumen(fila: Record<string, unknown>): ClientSummary {
     versionNumber: toNumberOrNull(fila['version_number']),
     linked: fila['linked'] === true,
     pendingCheckinDays: toNumberOrNull(fila['pending_checkin_days']),
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Plantillas, creación manual y editor (SPEC-008)
+// -----------------------------------------------------------------------------
+
+/**
+ * Implementa el puerto `CreationRepo`.
+ *
+ * **Ninguna de estas operaciones conoce a ningún proveedor de IA.** Es lo que
+ * hace cierto que el sistema funcione completo sin ella: con Gemini caído,
+ * este camino sigue creando rutinas.
+ */
+export function createCreationRepo(db: Db, requestId: string): CreationRepo {
+  return {
+    async findVersion(versionId) {
+      // La misma consulta que usan los botones, más los criterios: lo que
+      // hace falta para ordenar plantillas y para `applyTemplate`.
+      const { data, error } = await db
+        .rpc('version_for_creation', { p_version_id: versionId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        versionId: fila['version_id'] as string,
+        state: fila['state'] as VersionState,
+        clientName: fila['client_name'] as string,
+        versionNumber: Number(fila['version_number']),
+        daysPerWeek: toNumberOrNull(fila['days_per_week']),
+        level: (fila['level'] as Level | null) ?? null,
+        equipment: (fila['equipment'] as string | null) ?? null,
+        hasLimitations: fila['has_limitations'] === true,
+      };
+    },
+
+    async fillVersion(versionId, expected, source, templateId, content) {
+      const { data, error } = await db.rpc('fill_version', {
+        p_version_id: versionId,
+        p_expected_state: expected,
+        p_source: source,
+        p_template_id: templateId,
+        p_content: content,
+        p_request_id: requestId,
+      });
+
+      if (error !== null) throw new Error(`No se pudo cargar el borrador: ${error.code}`);
+
+      return data === true;
+    },
+
+    async currentDraft(trainerId) {
+      const { data, error } = await db
+        .rpc('current_draft_for_trainer', { p_trainer_id: trainerId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer el borrador: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        versionId: fila['version_id'] as string,
+        versionNumber: Number(fila['version_number']),
+        clientName: fila['client_name'] as string,
+        content: fila['content'] as Workout,
+      };
+    },
+
+    async saveDraft(versionId, content) {
+      const { data, error } = await db.rpc('save_draft_content', {
+        p_version_id: versionId,
+        p_content: content,
+      });
+
+      if (error !== null) throw new Error(`No se pudo guardar la edición: ${error.code}`);
+
+      // `false` no es un fallo: se aprobó mientras el entrenador escribía.
+      return data === true;
+    },
   };
 }
