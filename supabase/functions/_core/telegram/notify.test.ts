@@ -47,9 +47,12 @@ function acciones(keyboard: InlineKeyboard | null): (string | undefined)[] {
     .map((b) => parseCallbackData(b.callback_data)?.action);
 }
 
+/** SPEC-014: el token lleva `-` y `_`, que en MarkdownV2 son especiales. */
+const ENLACE = 'https://t.me/mibot?start=kJ8x-Qm2v_N4pR';
+
 describe('llegó una evaluación', () => {
   it('dice de quién y lo que pidió', () => {
-    const { text } = buildAssessmentArrived(RESUMEN, VERSION);
+    const { text } = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
 
     expect(text).toContain('Carlos');
     expect(text).toContain('Ganancia muscular');
@@ -58,7 +61,7 @@ describe('llegó una evaluación', () => {
   });
 
   it('el nivel va en palabras, no como código interno', () => {
-    const { text } = buildAssessmentArrived(RESUMEN, VERSION);
+    const { text } = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
     expect(text.toLowerCase()).toContain('intermedio');
     expect(text).not.toContain('intermediate');
   });
@@ -70,6 +73,7 @@ describe('llegó una evaluación', () => {
     const { text } = buildAssessmentArrived(
       { ...RESUMEN, hasLimitations: true, limitationsDetail: 'Hernia discal L4-L5' },
       VERSION,
+      ENLACE,
     );
 
     expect(text).toContain('⚠️');
@@ -78,14 +82,14 @@ describe('llegó una evaluación', () => {
   });
 
   it('sin limitaciones no hay aviso de limitaciones', () => {
-    const { text } = buildAssessmentArrived(RESUMEN, VERSION);
+    const { text } = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
     expect(text).not.toContain('⚠️');
   });
 
   it('lleva los tres botones de crear', () => {
     // Antes no llevaba ninguno, y el texto decía «preparando el borrador»:
     // nadie lo preparaba. Ahora pregunta, y las tres respuestas son botones.
-    const aviso = buildAssessmentArrived(RESUMEN, VERSION);
+    const aviso = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
 
     expect(aviso.keyboard).not.toBeNull();
     expect(acciones(aviso.keyboard)).toEqual(['generate', 'template', 'manual']);
@@ -94,7 +98,11 @@ describe('llegó una evaluación', () => {
 
   it('escapa lo que pueda romper el formato', () => {
     // Un cliente que se llame «Ana (la del gym)» no puede tumbar el mensaje.
-    const { text } = buildAssessmentArrived({ ...RESUMEN, clientName: 'Ana (la del gym)' }, VERSION);
+    const { text } = buildAssessmentArrived(
+      { ...RESUMEN, clientName: 'Ana (la del gym)' },
+      VERSION,
+      ENLACE,
+    );
     expect(text).toContain('\\(');
   });
 });
@@ -165,5 +173,35 @@ describe('la IA no pudo', () => {
     );
 
     expect(new Set(textos).size).toBe(4);
+  });
+});
+
+// ─── SPEC-014 · el enlace que el entrenador reenvía ─────────────────────────
+
+describe('el enlace de vinculación', () => {
+  it('CA-1 · va en el aviso, con instrucciones de qué hacer con él', () => {
+    const { text } = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
+
+    // Sin esto el token se generaba, se guardaba, y no lo veía nadie: la
+    // rutina aprobada se quedaba en APPROVED para siempre.
+    // El `.` es especial en MarkdownV2, así que el enlace sale escapado.
+    // Telegram lo desescapa al renderizar y queda pulsable.
+    expect(text).toContain('t\\.me/mibot?start\\=');
+    expect(text).toContain('Mándale este enlace');
+    expect(text).toContain('Carlos');
+  });
+
+  it('CA-6 · escapado: base64url trae `-` y `_`, especiales en MarkdownV2', () => {
+    const { text } = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
+
+    expect(text).toContain('kJ8x\\-Qm2v\\_N4pR');
+  });
+
+  it('CA-2 · los tres botones siguen ahí', () => {
+    const { keyboard } = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
+
+    expect(JSON.stringify(keyboard)).toContain('generate');
+    expect(JSON.stringify(keyboard)).toContain('template');
+    expect(JSON.stringify(keyboard)).toContain('manual');
   });
 });

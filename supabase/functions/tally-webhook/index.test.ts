@@ -49,7 +49,7 @@ function espia(firmaValida = true): Espia {
     answerCallback: () => Promise.resolve(),
   };
 
-  return { deps: { verifier, repo: () => repo, sender: () => sender }, firmados, reclamados };
+  return { deps: { verifier, botUsername: 'mibot', repo: () => repo, sender: () => sender }, firmados, reclamados };
 }
 
 async function pedir(deps: HandlerDeps, request: Request): Promise<Response> {
@@ -184,4 +184,33 @@ Deno.test('CA-4 · una excepción FUERA del dominio deja línea de error y 500',
   // 500, igual que `failed`: Tally reintenta un número acotado de veces y
   // una evaluación perdida deja a un cliente sin rutina.
   assertEquals(response.status, 500);
+});
+
+Deno.test('CA-5 · falta TELEGRAM_BOT_USERNAME → lanza al arrancar', () => {
+  // SPEC-014 regla 2: sin esto saldría `t.me/undefined?start=...`, un enlace
+  // roto que nadie nota hasta que un cliente lo abre y no pasa nada.
+  const nombres = [
+    'TELEGRAM_BOT_TOKEN',
+    'TELEGRAM_BOT_USERNAME',
+    'TALLY_SIGNING_SECRET',
+    'SUPABASE_URL',
+  ];
+  const previos = nombres.map((n) => [n, Deno.env.get(n)] as const);
+  for (const [n] of previos) Deno.env.delete(n);
+
+  // Se ponen todos MENOS el que se prueba, para que el error nombre ese.
+  Deno.env.set('TELEGRAM_BOT_TOKEN', 'x');
+  Deno.env.set('TALLY_SIGNING_SECRET', 'x');
+  Deno.env.set('SUPABASE_URL', 'https://ejemplo.test');
+  Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', 'x');
+
+  try {
+    const error = assertThrows(() => readDeps()) as Error;
+    assertStringIncludes(error.message, 'TELEGRAM_BOT_USERNAME');
+  } finally {
+    for (const [n, v] of previos) {
+      if (v === undefined) Deno.env.delete(n);
+      else Deno.env.set(n, v);
+    }
+  }
 });

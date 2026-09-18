@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | APROBADA |
+| **Estado** | **IMPLEMENTADA** |
 | **Depende de** | SPEC-001, SPEC-005 |
 | **Sesiones** | S-29 |
 

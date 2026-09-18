@@ -23,6 +23,7 @@ import { createSignatureVerifier, readSignatureHeader } from '../_shared/tally/s
 
 export interface HandlerDeps {
   readonly verifier: SignatureVerifier;
+  readonly botUsername: string;
   readonly repo: (requestId: string) => TallyRepo;
   /** Para avisar al entrenador cuando una evaluación no se puede leer. */
   readonly sender: (log: ReturnType<typeof createLogger>) => TelegramSender;
@@ -39,10 +40,17 @@ export function readDeps(): HandlerDeps {
   // El aviso de la regla 9 sale por Telegram, así que este webhook también
   // necesita el bot.
   const botToken = requireEnv('TELEGRAM_BOT_TOKEN');
+
+  // SPEC-014 regla 2. Obligatorio y al arrancar: sin él saldría
+  // `t.me/undefined?start=...`, un enlace roto que nadie nota hasta que un
+  // cliente lo abre y no pasa nada. Falla al desplegar, no al primer
+  // formulario (la lección de SPEC-011).
+  const botUsername = requireEnv('TELEGRAM_BOT_USERNAME').replace(/^@/, '');
   const db = createDb();
 
   return {
     verifier,
+    botUsername,
     repo: (requestId) => createTallyRepo(db, requestId),
     sender: (log) => asSender(createTelegramClient(botToken, log)),
   };
@@ -64,6 +72,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
           verifier: deps.verifier,
           sender: deps.sender(log),
           newLinkToken,
+          botUsername: deps.botUsername,
           requestId,
         },
       );
