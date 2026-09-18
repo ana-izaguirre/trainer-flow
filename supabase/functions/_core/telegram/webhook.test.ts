@@ -239,6 +239,7 @@ function fakeCreation(opciones: { borrador?: boolean; version?: unknown } = {}) 
           ? {
               versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
               state: 'NEW' as const,
+              client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
               clientName: 'Carlos',
               versionNumber: 1,
               daysPerWeek: 3,
@@ -1216,5 +1217,76 @@ describe('CA-11 · el texto libre va a la última pregunta', () => {
 
     expect(await result).toMatchObject({ checkin: { kind: 'no_open_checkin' } });
     expect(changes.pasos).not.toContain('addComment');
+  });
+});
+
+
+// ─── SPEC-013 · el enrutado pasa la identidad, no solo el chat ──────────────
+
+describe('un callback fabricado no da acceso ajeno', () => {
+  /**
+   * Un cliente vinculado que manda un `callback_data` que nunca recibió.
+   *
+   * No hace falta nada sofisticado: `callback_data` viaja DESDE el cliente,
+   * y la API de bots no es la app oficial.
+   */
+  const ATACANTE: Identity = {
+    profileId: 'p-cliente-cualquiera',
+    role: 'client',
+    telegramUserId: 777,
+    telegramChatId: 777,
+  };
+
+  const AJENA = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  const botonDe = (data: string) => ({
+    update_id: 1,
+    callback_query: {
+      id: 'cb-1',
+      from: { id: ATACANTE.telegramUserId },
+      message: { message_id: 9, chat: { id: ATACANTE.telegramChatId } },
+      data,
+    },
+  });
+
+  function correr(data: string) {
+    const creation = fakeCreation();
+    const repo = fakeRepo({ findIdentity: () => Promise.resolve(ATACANTE) });
+
+    return {
+      creation,
+      result: handleTelegramWebhook(
+        { secretHeader: SECRET, body: botonDe(data) },
+        {
+          repo: repo.repo,
+          sender: fakeSender().sender,
+          expectedSecret: SECRET,
+          requestId: 'req-1',
+          delivery: fakeDelivery().deps,
+          checkins: fakeCheckins().deps,
+          commands: fakeCommands().deps,
+          creation: creation.deps,
+          changes: fakeChanges().deps,
+          actions: vacioActions(),
+        },
+      ),
+    };
+  }
+
+  it.each([
+    ['✍️ manual', `act:manual:${AJENA}`],
+    ['📋 plantillas', `act:template:${AJENA}`],
+    ['cargar una plantilla', `tpl:full-body-3d:${AJENA}`],
+  ])('%s sobre una versión ajena no escribe nada', async (_nombre, data) => {
+    const { creation, result } = correr(data);
+    await result;
+
+    expect(creation.pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
+  });
+
+  it('el update se atiende igual: no se cae ni delata', async () => {
+    const { result } = correr(`act:manual:${AJENA}`);
+
+    expect((await result).kind).toBe('handled');
   });
 });

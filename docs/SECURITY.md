@@ -246,7 +246,13 @@ Cada petición lleva un `request_id`, guardado también en `webhook_events`,
 | 10 | Datos inválidos rechazados por `CHECK` |
 | 11 | Ningún secreto aparece en logs ni en respuestas |
 
-Los casos 8, 9 y 10 ya están cubiertos en `tests/integration/schema.test.ts`.
+**Los 11 están en `tests/integration/security.test.ts`**, en ese orden, y se
+corren con `pnpm test:integration`. Los casos 1 y 2 tienen además su mitad HTTP
+en los tests de Deno, donde vive el handler.
+
+> **El caso 5 estaba roto.** `startManual` y `loadTemplate` escribían sobre la
+> versión cuyo id venía en el `callback_data` sin comprobar de quién era: un
+> cliente podía sobrescribir la rutina de otro. Corregido en SPEC-013.
 
 ---
 

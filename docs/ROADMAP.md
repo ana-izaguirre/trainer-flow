@@ -97,7 +97,7 @@ revés, el fallback siempre queda "para después".
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
 | **S-26** ✅ | Observabilidad | `request_id` + logs estructurados + `duration_ms` | **SPEC-012 cerrada.** La cadena no se corta en el salto asíncrono |
-| **S-27** | Seguridad | `tests/integration/security.test.ts` | Los 11 casos de `SECURITY.md` en verde. Cero secretos en git |
+| **S-27** ✅ | Seguridad | `tests/integration/security.test.ts` | **SPEC-013 cerrada.** Los 11 casos en verde, y uno estaba roto |
 | **S-28** | Deploy y prueba real | Funciones desplegadas + un cliente real | El entrenador aprueba una rutina y el cliente la recibe |
 
 ---

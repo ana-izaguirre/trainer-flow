@@ -782,6 +782,13 @@ export function createCreationRepo(db: Db, requestId: string): CreationRepo {
       return {
         versionId: fila['version_id'] as string,
         state: fila['state'] as VersionState,
+        // SPEC-013: sin esto, los tres flujos de creación no podían
+        // comprobar de quién era la versión sobre la que actuaban.
+        client: {
+          clientId: fila['client_id'] as string,
+          trainerId: fila['trainer_id'] as string,
+          profileId: (fila['client_profile_id'] as string | null) ?? null,
+        },
         clientName: fila['client_name'] as string,
         versionNumber: Number(fila['version_number']),
         daysPerWeek: toNumberOrNull(fila['days_per_week']),
