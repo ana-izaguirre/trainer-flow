@@ -67,6 +67,13 @@ export interface TallyDeps {
   readonly sender: TelegramSender;
   /** 32 bytes de CSPRNG en base64url. Lo genera `_shared`: `_core` no tiene crypto. */
   readonly newLinkToken: () => string;
+  /**
+   * El usuario del bot, sin `@`. Con él se arma el enlace de vinculación que
+   * el entrenador le reenvía al cliente (SPEC-014).
+   *
+   * Entra por dependencia y no se lee del entorno: `_core` no toca `Deno.env`.
+   */
+  readonly botUsername: string;
   readonly requestId: string;
 }
 
@@ -143,9 +150,14 @@ export async function handleTallyWebhook(
     }
 
     // ── 6. Las cuatro filas, en una sola operación ───────────────────────
+    // El token se guarda EN UNA VARIABLE porque ahora también hay que
+    // enseñárselo al entrenador. Antes se generaba dentro de la llamada y
+    // nadie volvía a verlo: ese era exactamente el hueco (SPEC-014 §2).
+    const linkToken = deps.newLinkToken();
+
     const ids = await deps.repo.ingestAssessment({
       trainerId: trainer.profileId,
-      linkToken: deps.newLinkToken(),
+      linkToken,
       rawPayload,
       ...parsed.value,
     });
@@ -158,11 +170,14 @@ export async function handleTallyWebhook(
     const aviso = buildAssessmentArrived(
       { ...parsed.value, clientName: parsed.value.fullName },
       ids.versionId,
+      `https://t.me/${deps.botUsername}?start=${linkToken}`,
     );
     await deps.sender.sendMessage(trainer.chatId, aviso.text, aviso.keyboard);
 
     await deps.repo.markProcessed(eventId);
 
+    // `ingested` NO lleva el token: el handler loguea `{ ...outcome }` y una
+    // credencial en un log es un incidente (SPEC-014 regla 1).
     return { kind: 'ingested', eventId, ...ids };
   } catch (error) {
     return {

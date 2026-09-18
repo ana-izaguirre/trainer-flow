@@ -66,6 +66,9 @@ configuración, no secretos. Pero viajan por el mismo mecanismo
 (`supabase secrets set`), porque es así como una Edge Function recibe
 variables de entorno. **Tampoco van a un `.env` del repositorio.**
 
+`TELEGRAM_BOT_USERNAME` tampoco es secreto: es el nombre público del bot.
+Es obligatorio porque sin él el enlace de vinculación sale roto (SPEC-014).
+
 ### Qué lo hace cumplir
 
 | Capa | Qué |

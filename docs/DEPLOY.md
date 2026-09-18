@@ -52,6 +52,7 @@ bot en todo lo que sigue.
       ```bash
       supabase link --project-ref <ref>
       supabase secrets set TELEGRAM_BOT_TOKEN='...'        # BotFather
+      supabase secrets set TELEGRAM_BOT_USERNAME='mibot'   # sin @, el de BotFather
       supabase secrets set TELEGRAM_WEBHOOK_SECRET='...'   # el del paso 3
       supabase secrets set TALLY_SIGNING_SECRET='...'      # panel de Tally
       supabase secrets set GEMINI_API_KEY='...'            # Google AI Studio

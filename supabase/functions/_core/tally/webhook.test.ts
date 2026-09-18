@@ -93,7 +93,14 @@ function espia(
   };
 
   return {
-    deps: { repo, verifier, sender, newLinkToken: () => 'token-de-32-caracteres-exactos-x', requestId: 'req-1' },
+    deps: {
+      repo,
+      verifier,
+      sender,
+      newLinkToken: () => 'token-de-32-caracteres-exactos-x',
+      botUsername: 'mibot',
+      requestId: 'req-1',
+    },
     llamadas,
     guardado,
     avisos,
@@ -346,5 +353,42 @@ describe('una evaluación que no se puede leer', () => {
     const { deps } = espia();
     const outcome = await handleTallyWebhook(entrada({ rawBody: SIN_NIVEL }), deps);
     expect(outcomeToStatus(outcome)).toBe(200);
+  });
+});
+
+// ─── SPEC-014 · el token es una credencial ─────────────────────────────────
+
+describe('el enlace de vinculación', () => {
+  it('CA-4 · el outcome NO lleva el token', async () => {
+    // El handler loguea `{ ...outcome }`. Un token ahí es un incidente, y no
+    // se depende de que la redacción por nombre de campo lo atrape: se
+    // depende de que no entre.
+    const e = espia();
+
+    const outcome = await handleTallyWebhook(entrada(), e.deps);
+
+    expect(JSON.stringify(outcome)).not.toContain('token-de-32-caracteres-exactos-x');
+  });
+
+  it('CA-1 · el aviso al entrenador SÍ lo lleva', async () => {
+    const e = espia();
+
+    await handleTallyWebhook(entrada(), e.deps);
+
+    expect(e.avisos.join('\n')).toContain('t\\.me/mibot?start\\=');
+  });
+
+  it('CA-3 · una evaluación ilegible NO lleva enlace', async () => {
+    // No hay ficha de cliente que vincular: mandar un enlace sería mandar el
+    // de nadie. `SIN_NIVEL` es el mismo cuerpo que usa el test de la regla 9.
+    const e = espia();
+
+    const outcome = await handleTallyWebhook(entrada({ rawBody: SIN_NIVEL }), e.deps);
+
+    expect(outcome.kind).toBe('invalid');
+    // Escapado, que es como sale de verdad: buscar `t.me/` no lo encontraría
+    // nunca y el test pasaría sin probar nada.
+    expect(e.avisos.join('\n')).not.toContain('t\\.me/');
+    expect(e.avisos.join('\n')).not.toContain('token-de-32-caracteres-exactos-x');
   });
 });
