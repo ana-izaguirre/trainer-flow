@@ -22,6 +22,7 @@
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { GenerationTrigger } from '../_core/ports/generation-trigger.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
@@ -33,6 +34,7 @@ import { asSender, createTelegramClient } from '../_shared/telegram/client.ts';
 import {
   createActionRepo,
   createCheckinRepo,
+  createCreationRepo,
   createDb,
   createDeliveryRepo,
   createQueryRepo,
@@ -57,6 +59,7 @@ export interface HandlerDeps {
   readonly checkinRepo: () => CheckinRepo;
   readonly queryRepo: () => QueryRepo;
   readonly generation: (log: Logger) => GenerationTrigger;
+  readonly creationRepo: (requestId: string) => CreationRepo;
 }
 
 /**
@@ -79,6 +82,7 @@ export function readDeps(): HandlerDeps {
     checkinRepo: () => createCheckinRepo(db),
     queryRepo: () => createQueryRepo(db),
     generation: (log) => createGenerationTrigger(log),
+    creationRepo: (requestId) => createCreationRepo(db, requestId),
   };
 }
 
@@ -118,6 +122,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
         delivery: { repo: deps.deliveryRepo(), sender },
         checkins: { repo: deps.checkinRepo(), sender },
         commands: { repo: deps.queryRepo(), sender },
+        creation: { repo: deps.creationRepo(requestId), sender },
       },
     );
 

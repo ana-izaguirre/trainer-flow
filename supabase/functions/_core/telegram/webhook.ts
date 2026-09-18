@@ -32,6 +32,19 @@ import type { UserRole } from '../domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import { parseCheckinCallback } from '../checkin/answers.ts';
 import {
+  listTemplates,
+  loadTemplate,
+  startManual,
+  type CreationDeps,
+  type CreationOutcome,
+} from '../creation/flows.ts';
+import {
+  handleEditorCommand,
+  isEditorCommand,
+  type EditorDeps,
+  type EditorOutcome,
+} from '../creation/editor-session.ts';
+import {
   handleCommand,
   type CommandDeps,
   type CommandOutcome,
@@ -52,6 +65,7 @@ import {
   type LinkOutcome,
 } from './delivery.ts';
 import { parseStartToken } from './start.ts';
+import { parseTemplateCallback } from './template-callback.ts';
 import { parseUpdate } from './update.ts';
 import { constantTimeEquals } from '../security/constant-time.ts';
 
@@ -83,6 +97,10 @@ export type WebhookOutcome =
       readonly checkin?: ReplyOutcome;
       /** Qué pasó con el comando, cuando el update era uno. */
       readonly command?: CommandOutcome;
+      /** Qué pasó al elegir plantilla o empezar a mano. */
+      readonly creation?: CreationOutcome;
+      /** Qué pasó con un comando del editor. */
+      readonly editor?: EditorOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -107,6 +125,8 @@ export interface WebhookDeps {
   readonly delivery: DeliveryDeps;
   readonly checkins: ReplyDeps;
   readonly commands: CommandDeps;
+  /** Plantillas, creación manual y el editor: el camino que no usa la IA. */
+  readonly creation: CreationDeps & EditorDeps;
 }
 
 /**
@@ -186,26 +206,54 @@ export async function handleTelegramWebhook(
     let action: ActionOutcome | undefined;
     let checkin: ReplyOutcome | undefined;
     let command: CommandOutcome | undefined;
+    let creation: CreationOutcome | undefined;
+    let editor: EditorOutcome | undefined;
 
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
     if (update.kind === 'command') {
-      command = await handleCommand(update.command, update.args, identity, deps.commands);
+      // Los del editor van primero: son del entrenador y actúan sobre el
+      // borrador en curso, no sobre la cartera.
+      editor = isEditorCommand(update.command)
+        ? await editarSiEsEntrenador(update.command, update.args, identity, deps)
+        : undefined;
+
+      if (editor === undefined) {
+        command = await handleCommand(update.command, update.args, identity, deps.commands);
+      }
     }
 
     if (update.kind === 'callback') {
       // Los dos prefijos viajan por el mismo canal, así que se prueban en
       // orden. `chk:` no puede confundirse con `act:`: son literales.
       const respuesta = parseCheckinCallback(update.data);
-      const payload = respuesta === null ? parseCallbackData(update.data) : null;
+      const plantilla = respuesta === null ? parseTemplateCallback(update.data) : null;
+      const payload =
+        respuesta === null && plantilla === null ? parseCallbackData(update.data) : null;
 
-      if (respuesta !== null) {
+      if (plantilla !== null) {
+        // La segunda pulsación de 📋: ya se sabe CUÁL cargar.
+        creation = await loadTemplate(
+          plantilla.templateId,
+          plantilla.versionId,
+          identity.telegramChatId,
+          deps.creation,
+        );
+      } else if (respuesta !== null) {
         checkin = await handleCheckinAnswer(
           respuesta.checkinId,
           { field: respuesta.field, value: respuesta.value },
           identity,
           deps.checkins,
         );
+      } else if (payload !== null && (payload.action === 'template' || payload.action === 'manual')) {
+        // Los dos caminos sin IA. Van aparte de `handleAction` porque no son
+        // una transición sobre la versión: una lista plantillas y la otra
+        // escribe contenido.
+        creation =
+          payload.action === 'template'
+            ? await listTemplates(payload.versionId, identity.telegramChatId, deps.creation)
+            : await startManual(payload.versionId, identity.telegramChatId, deps.creation);
       } else if (payload !== null) {
         action = await handleAction(
           {
@@ -249,6 +297,8 @@ export async function handleTelegramWebhook(
       ...(delivery === undefined ? {} : { delivery }),
       ...(checkin === undefined ? {} : { checkin }),
       ...(command === undefined ? {} : { command }),
+      ...(creation === undefined ? {} : { creation }),
+      ...(editor === undefined ? {} : { editor }),
     };
   } catch (error) {
     return {
@@ -256,4 +306,28 @@ export async function handleTelegramWebhook(
       message: error instanceof Error ? error.message : 'Error desconocido.',
     };
   }
+}
+
+
+/**
+ * Un comando del editor solo lo atiende el entrenador.
+ *
+ * Devuelve `undefined` si no es suyo, para que el update siga su camino y
+ * acabe en la respuesta genérica de SPEC-007 en vez de en un silencio.
+ */
+function editarSiEsEntrenador(
+  command: string,
+  args: string,
+  identity: { profileId: string; role: UserRole; telegramChatId: number },
+  deps: WebhookDeps,
+): Promise<EditorOutcome | undefined> {
+  if (identity.role !== 'trainer') return Promise.resolve(undefined);
+
+  return handleEditorCommand(
+    command,
+    args,
+    identity.profileId,
+    identity.telegramChatId,
+    deps.creation,
+  );
 }

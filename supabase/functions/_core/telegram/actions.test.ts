@@ -43,6 +43,9 @@ function version(state: VersionState = 'DRAFT'): VersionForAction {
     clientName: 'Carlos',
     versionNumber: 1,
     content: RUTINA,
+    // La rutina de prueba tiene un día; los criterios encajan para que los
+    // tests de aprobar midan la autorización, no la validación.
+    constraints: { daysPerWeek: 1, hasLimitations: false },
   };
 }
 
@@ -354,5 +357,82 @@ describe('🤖 el botón de generar', () => {
 
     expect(outcome).toEqual({ kind: 'unauthorized' });
     expect(pasos).not.toContain('trigger:v1');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+
+describe('🔴 aprobar valida: la última puerta antes de que salga', () => {
+  const VACIA = { summary: 'En preparación', days: [], warnings: [] };
+
+  it('CA-16 · una rutina vacía NO se aprueba', async () => {
+    // Antes sí se podía: solo `generate-version` llamaba a `validateDraft`,
+    // así que una hecha a mano llegaba al cliente sin pasar nunca por ahí.
+    const { deps, pasos, mensajes } = espia({
+      version: { ...version('DRAFT'), content: VACIA },
+    });
+
+    const outcome = await handleAction(pulsar('approve'), TRAINER, deps);
+
+    expect(outcome).toMatchObject({ kind: 'invalid_action', action: 'approve' });
+    expect(pasos.some((p) => p.includes('->APPROVED'))).toBe(false);
+    expect(mensajes.at(-1)).toContain('No puedo aprobarla');
+  });
+
+  it('un día sin ejercicios tampoco', async () => {
+    const { deps, pasos } = espia({
+      version: {
+        ...version('DRAFT'),
+        content: { summary: 'x', days: [{ dayNumber: 1, focus: 'Empuje', exercises: [] }], warnings: [] },
+      },
+    });
+
+    await handleAction(pulsar('approve'), TRAINER, deps);
+
+    expect(pasos.some((p) => p.includes('->APPROVED'))).toBe(false);
+  });
+
+  it('una versión sin contenido tampoco', async () => {
+    const { deps, pasos } = espia({ version: { ...version('DRAFT'), content: null } });
+
+    await handleAction(pulsar('approve'), TRAINER, deps);
+
+    expect(pasos.some((p) => p.includes('->APPROVED'))).toBe(false);
+  });
+
+  it('si no cuadra con los días que pidió el cliente, no se aprueba', async () => {
+    const { deps, pasos, mensajes } = espia({
+      version: {
+        ...version('DRAFT'),
+        constraints: { daysPerWeek: 4, hasLimitations: false },
+      },
+    });
+
+    await handleAction(pulsar('approve'), TRAINER, deps);
+
+    expect(pasos.some((p) => p.includes('->APPROVED'))).toBe(false);
+    // Dice QUÉ falla, no «no puedo» a secas.
+    expect(mensajes.at(-1)).toContain('4');
+  });
+
+  it('sin evaluación se valida la forma, y una rutina buena SÍ se aprueba', async () => {
+    // Una manual no tiene formulario detrás: no hay criterios contra los que
+    // comparar, pero la forma se exige igual.
+    const { deps, pasos } = espia({ version: { ...version('DRAFT'), constraints: null } });
+
+    const outcome = await handleAction(pulsar('approve'), TRAINER, deps);
+
+    expect(outcome).toMatchObject({ kind: 'approved' });
+    expect(pasos).toContain('transition:DRAFT->APPROVED');
+  });
+
+  it('rechazar NO valida: se rechaza justamente lo que no vale', async () => {
+    const { deps, pasos } = espia({ version: { ...version('DRAFT'), content: VACIA } });
+
+    const outcome = await handleAction(pulsar('reject'), TRAINER, deps);
+
+    expect(outcome).toMatchObject({ kind: 'rejected' });
+    expect(pasos).toContain('transition:DRAFT->REJECTED');
   });
 });

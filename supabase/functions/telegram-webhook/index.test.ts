@@ -16,6 +16,7 @@ import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
 import { createHandler, readDeps, type HandlerDeps } from './index.ts';
 
@@ -95,6 +96,16 @@ function espia(identity: Identity | null = null): Espia {
     staleCheckins: () => Promise.resolve([]),
   };
 
+  const creationRepo: CreationRepo = {
+    findVersion: () => Promise.resolve(null),
+    fillVersion: () => Promise.resolve(false),
+    currentDraft: () => {
+      usosDelRepo.push('currentDraft');
+      return Promise.resolve(null);
+    },
+    saveDraft: () => Promise.resolve(false),
+  };
+
   return {
     deps: {
       expectedSecret: SECRETO,
@@ -104,6 +115,7 @@ function espia(identity: Identity | null = null): Espia {
       deliveryRepo: () => deliveryRepo,
       checkinRepo: () => checkinRepo,
       queryRepo: () => queryRepo,
+      creationRepo: () => creationRepo,
       generation: () => ({
         trigger: (versionId) => {
           usosDelRepo.push(`trigger:${versionId}`);

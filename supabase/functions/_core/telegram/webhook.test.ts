@@ -10,12 +10,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
+import type { CreationRepo } from '../ports/creation-ports.ts';
 import type { QueryRepo } from '../ports/query-ports.ts';
 import type { DeliveryRepo } from '../ports/delivery-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
 import type { ActionDeps } from './actions.ts';
 import type { ReplyDeps } from '../checkin/reply.ts';
 import type { CommandDeps } from '../commands/router.ts';
+import type { CreationDeps } from '../creation/flows.ts';
+import type { EditorDeps } from '../creation/editor-session.ts';
 import type { DeliveryDeps } from './delivery.ts';
 import { handleTelegramWebhook, outcomeToStatus } from './webhook.ts';
 
@@ -118,6 +121,77 @@ function fakeCommands(opciones: { clientes?: { clientId: string; fullName: strin
   };
 
   const deps: CommandDeps = {
+    repo,
+    sender: {
+      sendMessage: (chatId) => {
+        pasos.push(`sendMessage:${chatId}`);
+        return Promise.resolve();
+      },
+      answerCallback: () => Promise.resolve(),
+    },
+  };
+
+  return { deps, pasos };
+}
+
+const RUTINA_MINIMA = {
+  summary: 'Fuerza',
+  days: [
+    {
+      dayNumber: 1,
+      focus: 'Empuje',
+      exercises: [{ name: 'Press', sets: 4, reps: '8', restSeconds: 90, notes: null }],
+    },
+  ],
+  warnings: [],
+};
+
+/** Plantillas, manual y editor. Por defecto hay un borrador abierto. */
+function fakeCreation(opciones: { borrador?: boolean; version?: unknown } = {}) {
+  const pasos: string[] = [];
+
+  const repo: CreationRepo = {
+    findVersion: () => {
+      pasos.push('findVersion');
+      return Promise.resolve(
+        opciones.version === undefined
+          ? {
+              versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+              state: 'NEW' as const,
+              clientName: 'Carlos',
+              versionNumber: 1,
+              daysPerWeek: 3,
+              level: 'beginner' as const,
+              equipment: 'Gimnasio',
+              hasLimitations: false,
+            }
+          : (opciones.version as null),
+      );
+    },
+    fillVersion: (_v, _e, source) => {
+      pasos.push(`fillVersion:${source}`);
+      return Promise.resolve(true);
+    },
+    currentDraft: () => {
+      pasos.push('currentDraft');
+      return Promise.resolve(
+        opciones.borrador === false
+          ? null
+          : {
+              versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+              versionNumber: 1,
+              clientName: 'Carlos',
+              content: RUTINA_MINIMA,
+            },
+      );
+    },
+    saveDraft: () => {
+      pasos.push('saveDraft');
+      return Promise.resolve(true);
+    },
+  };
+
+  const deps: CreationDeps & EditorDeps = {
     repo,
     sender: {
       sendMessage: (chatId) => {
@@ -272,6 +346,7 @@ function ejecutar(
     delivery?: DeliveryDeps;
     checkins?: ReturnType<typeof fakeCheckins>;
     commands?: ReturnType<typeof fakeCommands>;
+    creation?: ReturnType<typeof fakeCreation>;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -290,6 +365,7 @@ function ejecutar(
         delivery: opts.delivery ?? fakeDelivery().deps,
         checkins: (opts.checkins ?? fakeCheckins()).deps,
         commands: (opts.commands ?? fakeCommands()).deps,
+        creation: (opts.creation ?? fakeCreation()).deps,
         actions: opts.actions ?? vacioActions(),
       },
     ),
@@ -597,7 +673,22 @@ describe('los botones se enrutan', () => {
             client: { clientId: 'c1', trainerId: ENTRENADOR.profileId, profileId: null },
             clientName: 'Carlos',
             versionNumber: 1,
-            content: null,
+            // Una rutina que SÍ se puede aprobar: estos tests miden el
+            // enrutado, no la validación.
+            content: {
+              summary: 'Fuerza',
+              days: [
+                {
+                  dayNumber: 1,
+                  focus: 'Empuje',
+                  exercises: [
+                    { name: 'Press', sets: 4, reps: '8', restSeconds: 90, notes: null },
+                  ],
+                },
+              ],
+              warnings: [],
+            },
+            constraints: { daysPerWeek: 1, hasLimitations: false },
           });
         },
         transition: (_v, from, to) => {
@@ -781,5 +872,120 @@ describe('el check-in se enruta', () => {
 
     await result;
     expect(checkins.pasos).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('el camino sin IA se enruta', () => {
+  const VERSION_TPL = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  const boton = (data: string) => ({
+    update_id: 1,
+    callback_query: {
+      id: 'cb-1',
+      from: FROM,
+      message: { message_id: 9, chat: { id: 500 } },
+      data,
+    },
+  });
+
+  it('📋 lista plantillas, y NO carga ninguna', async () => {
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(boton(`act:template:${VERSION_TPL}`), { creation });
+
+    expect(await result).toMatchObject({ creation: { kind: 'listed' } });
+    expect(creation.pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
+  });
+
+  it('la segunda pulsación SÍ carga', async () => {
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(boton(`tpl:full-body-3d:${VERSION_TPL}`), { creation });
+
+    expect((await result).kind).toBe('handled');
+    expect(creation.pasos).toContain('fillVersion:template');
+  });
+
+  it('✍️ deja un borrador vacío', async () => {
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(boton(`act:manual:${VERSION_TPL}`), { creation });
+
+    expect(await result).toMatchObject({ creation: { kind: 'filled' } });
+    expect(creation.pasos).toContain('fillVersion:manual');
+  });
+
+  it('un `tpl:` NO se confunde con un `act:`', async () => {
+    // Los tres prefijos viajan por el mismo canal.
+    const creation = fakeCreation();
+    const tocadas: string[] = [];
+
+    const actions: ActionDeps = {
+      repo: {
+        findVersion: () => {
+          tocadas.push('findVersion');
+          return Promise.resolve(null);
+        },
+        transition: () => Promise.resolve(false),
+      },
+      sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
+      generation: { trigger: () => Promise.resolve() },
+      requestId: 'req-1',
+    };
+
+    const { result } = ejecutar(boton(`tpl:full-body-3d:${VERSION_TPL}`), { creation, actions });
+
+    await result;
+    expect(tocadas, 'no puede pasar por las acciones del entrenador').toEqual([]);
+  });
+
+  it('un comando del editor llega al borrador en curso', async () => {
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(comando('/add 1 Remo 3x10'), { creation });
+
+    expect(await result).toMatchObject({ editor: { kind: 'edited' } });
+    expect(creation.pasos).toContain('currentDraft');
+  });
+
+  it('`/ver` sin borrador abierto lo dice', async () => {
+    const creation = fakeCreation({ borrador: false });
+
+    const { result } = ejecutar(comando('/ver'), { creation });
+
+    expect(await result).toMatchObject({ editor: { kind: 'no_draft' } });
+  });
+
+  it('un CLIENTE que escribe /add no toca ningún borrador', async () => {
+    // El editor es del entrenador. Su comando sigue camino y acaba en la
+    // respuesta genérica de SPEC-007, no en un silencio.
+    const repo = fakeRepo({
+      findIdentity: async () => ({
+        profileId: 'p-cliente',
+        role: 'client' as const,
+        telegramUserId: 500,
+        telegramChatId: 500,
+      }),
+    });
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(comando('/add 1 Remo 3x10'), { repo, creation });
+
+    const outcome = await result;
+    expect(creation.pasos).not.toContain('currentDraft');
+    expect(outcome).toMatchObject({ command: { kind: 'forbidden' } });
+  });
+
+  it('un comando que NO es del editor sigue a los comandos normales', async () => {
+    const creation = fakeCreation();
+    const commands = fakeCommands();
+
+    const { result } = ejecutar(comando('/clientes'), { creation, commands });
+
+    await result;
+    expect(creation.pasos).toEqual([]);
+    expect(commands.pasos).toContain('clients');
   });
 });

@@ -9,6 +9,15 @@ export interface VersionForAction extends VersionRef {
   readonly versionNumber: number;
   /** Para volver a pintar la rutina cuando hace falta. */
   readonly content: Workout | null;
+  /**
+   * Lo que el cliente pidió. Hace falta para validar AL APROBAR: es la última
+   * puerta antes de que una rutina salga, y la única por la que pasa una
+   * hecha a mano (SPEC-008 regla 11).
+   *
+   * `null` en un plan sin evaluación de Tally: entonces se valida la forma,
+   * no el encaje con unos criterios que no existen.
+   */
+  readonly constraints: { readonly daysPerWeek: number; readonly hasLimitations: boolean } | null;
 }
 
 export interface ActionRepo {
