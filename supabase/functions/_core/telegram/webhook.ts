@@ -66,6 +66,7 @@ import {
   type ReplyOutcome,
 } from '../checkin/reply.ts';
 import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
+import { showIntake, type IntakeOutcome, type IntakeDeps } from '../assessment/intake.ts';
 import { parseCallbackData } from './callback-data.ts';
 import {
   deliverVersion,
@@ -101,6 +102,7 @@ export type WebhookOutcome =
       readonly updateKind: 'command' | 'text' | 'callback';
       /** Qué pasó con el botón, cuando el update era uno. */
       readonly action?: ActionOutcome;
+      readonly intake?: IntakeOutcome;
       /** Qué pasó con la entrega, cuando el botón fue Aprobar. */
       readonly delivery?: DeliverOutcome;
       /** Qué pasó con el check-in, cuando el update era una respuesta. */
@@ -134,6 +136,7 @@ export interface WebhookDeps {
    * deep link y con los botones, y no falló nada hasta usarlo de verdad.
    */
   readonly actions: ActionDeps;
+  readonly intake: IntakeDeps;
   readonly delivery: DeliveryDeps;
   readonly checkins: ReplyDeps;
   readonly commands: CommandDeps;
@@ -225,6 +228,7 @@ export async function handleTelegramWebhook(
     let creation: CreationOutcome | undefined;
     let editor: EditorOutcome | undefined;
     let change: ChangeOutcome | undefined;
+    let intake: IntakeOutcome | undefined;
 
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
@@ -277,6 +281,10 @@ export async function handleTelegramWebhook(
         // Los botones de SPEC-010. `accept` y `change` los pulsa el CLIENTE;
         // `revise`, el entrenador. Cada flujo comprueba su pertenencia.
         change = await enrutarSolicitud(payload.action, payload.versionId, identity, deps);
+      } else if (payload !== null && payload.action === 'intake') {
+        // SPEC-015. Va aparte de `handleAction` porque no es una transición:
+        // es la única lectura del sistema, y no escribe nada.
+        intake = await showIntake(payload.versionId, identity, deps.intake);
       } else if (payload !== null && (payload.action === 'template' || payload.action === 'manual')) {
         // Los dos caminos sin IA. Van aparte de `handleAction` porque no son
         // una transición sobre la versión: una lista plantillas y la otra
@@ -351,6 +359,7 @@ export async function handleTelegramWebhook(
       role: identity.role,
       updateKind: update.kind,
       ...(action === undefined ? {} : { action }),
+      ...(intake === undefined ? {} : { intake }),
       ...(delivery === undefined ? {} : { delivery }),
       ...(checkin === undefined ? {} : { checkin }),
       ...(command === undefined ? {} : { command }),

@@ -34,6 +34,7 @@ const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
   accept: '👍 Me sirve',
   change: '✏️ Pedir un cambio',
   revise: '✏️ Crear v2',
+  intake: '📄 Ver evaluación',
 };
 
 /**
@@ -43,7 +44,12 @@ const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
  * `WorkoutDraft` y pasan por la misma validación. Que la IA sea la primera no
  * la hace especial — es la que más tarda, nada más.
  */
-export const NEW_ACTIONS: readonly CallbackAction[] = ['generate', 'template', 'manual'];
+export const NEW_ACTIONS: readonly CallbackAction[] = [
+  'intake',
+  'generate',
+  'template',
+  'manual',
+];
 
 /**
  * Lo que el entrenador puede hacer con un borrador.

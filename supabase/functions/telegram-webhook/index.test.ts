@@ -132,6 +132,7 @@ function espia(identity: Identity | null = null): Espia {
       queryRepo: () => queryRepo,
       creationRepo: () => creationRepo,
       changeRepo: () => changeRepo,
+      intakeRepo: () => ({ findIntake: () => Promise.resolve(null) }),
       generation: () => ({
         trigger: (versionId) => {
           usosDelRepo.push(`trigger:${versionId}`);

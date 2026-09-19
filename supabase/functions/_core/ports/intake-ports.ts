@@ -1,0 +1,40 @@
+/**
+ * SPEC-015 — Lo que la ficha de admisión necesita del exterior.
+ *
+ * ┌─ ESTE PUERTO NO PUEDE ESCRIBIR ────────────────────────────────────────┐
+ * │ Un solo método, y es de lectura. «Leer la evaluación no cambia nada»   │
+ * │ no es una nota en la spec: es que aquí no hay con qué cambiarlo.       │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
+import type { Level } from '../domain/assessment.ts';
+import type { ClientRef, VersionState } from '../domain/version.ts';
+
+export interface IntakeForVersion {
+  readonly versionId: string;
+  readonly state: VersionState;
+  /** De quién es. Sin esto no se puede autorizar (SPEC-013). */
+  readonly client: ClientRef;
+  readonly clientName: string;
+  readonly goal: string;
+  readonly level: Level;
+  readonly daysPerWeek: number;
+  readonly sessionMinutes: number;
+  readonly equipment: string;
+  readonly hasLimitations: boolean;
+  /**
+   * El detalle SÍ viaja aquí, al revés que en el aviso.
+   *
+   * Es el motivo de la spec: sin esto no se lee en ningún sitio hasta que la
+   * rutina existe. Va a un mensaje que el entrenador pide pulsando un botón,
+   * no a uno que le llega solo a la pantalla de bloqueo.
+   */
+  readonly limitationsDetail: string | null;
+  readonly lifestyle: string | null;
+  readonly notes: string | null;
+  readonly submittedAt: Date;
+}
+
+export interface IntakeRepo {
+  /** `null` si la versión no existe o no hubo formulario detrás. */
+  findIntake(versionId: string): Promise<IntakeForVersion | null>;
+}

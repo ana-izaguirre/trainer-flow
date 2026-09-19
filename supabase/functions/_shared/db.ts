@@ -19,6 +19,7 @@ import type { Workout } from '../_core/domain/workout.ts';
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { ChangeReason } from '../_core/domain/change-request.ts';
+import type { IntakeRepo } from '../_core/ports/intake-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { CheckinAnswers } from '../_core/checkin/answers.ts';
 import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
@@ -765,6 +766,48 @@ function leerResumen(fila: Record<string, unknown>): ClientSummary {
  * hace cierto que el sistema funcione completo sin ella: con Gemini caído,
  * este camino sigue creando rutinas.
  */
+/**
+ * SPEC-015 — La evaluación completa, para el botón 📄.
+ *
+ * Es el único repo de solo lectura del sistema: no expone nada con lo que
+ * escribir, así que «leer no transiciona» lo garantiza el tipo.
+ */
+export function createIntakeRepo(db: Db): IntakeRepo {
+  return {
+    async findIntake(versionId) {
+      const { data, error } = await db
+        .rpc('assessment_for_version', { p_version_id: versionId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer la evaluación: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        versionId: fila['version_id'] as string,
+        state: fila['state'] as VersionState,
+        client: {
+          clientId: fila['client_id'] as string,
+          trainerId: fila['trainer_id'] as string,
+          profileId: (fila['client_profile_id'] as string | null) ?? null,
+        },
+        clientName: fila['client_name'] as string,
+        goal: fila['goal'] as string,
+        level: fila['level'] as Level,
+        daysPerWeek: Number(fila['days_per_week']),
+        sessionMinutes: Number(fila['session_minutes']),
+        equipment: fila['equipment'] as string,
+        hasLimitations: fila['has_limitations'] === true,
+        limitationsDetail: (fila['limitations_detail'] as string | null) ?? null,
+        lifestyle: (fila['lifestyle'] as string | null) ?? null,
+        notes: (fila['notes'] as string | null) ?? null,
+        submittedAt: new Date(fila['submitted_at'] as string),
+      };
+    },
+  };
+}
+
 export function createCreationRepo(db: Db, requestId: string): CreationRepo {
   return {
     async findVersion(versionId) {

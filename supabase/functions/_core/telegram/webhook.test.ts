@@ -12,6 +12,7 @@ import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
 import type { ChangeRequestRepo } from '../ports/change-request-ports.ts';
 import type { CreationRepo } from '../ports/creation-ports.ts';
+import type { IntakeRepo } from '../ports/intake-ports.ts';
 import type { QueryRepo } from '../ports/query-ports.ts';
 import type { DeliveryRepo } from '../ports/delivery-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../ports/telegram-ports.ts';
@@ -420,6 +421,33 @@ function comando(text: string, updateId = 1) {
   };
 }
 
+/** SPEC-015: una ficha que no encuentra nada, para los tests que no la miran. */
+function fakeIntake(intake: unknown = undefined) {
+  const pasos: string[] = [];
+  return {
+    pasos,
+    deps: {
+      repo: {
+        findIntake: () => {
+          pasos.push('findIntake');
+          return Promise.resolve(
+            intake === undefined
+              ? null
+              : (intake as Awaited<ReturnType<IntakeRepo['findIntake']>>),
+          );
+        },
+      },
+      sender: {
+        sendMessage: (_c: number, text: string) => {
+          pasos.push(`sendMessage:${text.slice(0, 20)}`);
+          return Promise.resolve();
+        },
+        answerCallback: () => Promise.resolve(),
+      },
+    },
+  };
+}
+
 function ejecutar(
   body: unknown,
   opts: {
@@ -453,6 +481,7 @@ function ejecutar(
         creation: (opts.creation ?? fakeCreation()).deps,
         changes: (opts.changes ?? fakeChanges()).deps,
         actions: opts.actions ?? vacioActions(),
+        intake: fakeIntake().deps,
       },
     ),
   };
@@ -1268,6 +1297,7 @@ describe('un callback fabricado no da acceso ajeno', () => {
           creation: creation.deps,
           changes: fakeChanges().deps,
           actions: vacioActions(),
+          intake: fakeIntake().deps,
         },
       ),
     };
@@ -1288,5 +1318,84 @@ describe('un callback fabricado no da acceso ajeno', () => {
     const { result } = correr(`act:manual:${AJENA}`);
 
     expect((await result).kind).toBe('handled');
+  });
+});
+
+// ─── SPEC-015 · el botón 📄 llega al flujo ──────────────────────────────────
+
+describe('la ficha de admisión', () => {
+  const FICHA_ID = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  const botonFicha = (data: string) => ({
+    update_id: 1,
+    callback_query: {
+      id: 'cb-1',
+      from: FROM,
+      message: { message_id: 9, chat: { id: 500 } },
+      data,
+    },
+  });
+
+  it('CA-6 · `act:intake:` consulta la evaluación', async () => {
+    // El cableado, no el dominio. Seis veces ya un flujo quedó construido y
+    // sin enchufar: esto comprueba que el botón llega a algún sitio.
+    const intake = fakeIntake();
+
+    await handleTelegramWebhook(
+      { secretHeader: SECRET, body: botonFicha(`act:intake:${FICHA_ID}`) },
+      {
+        repo: fakeRepo().repo,
+        sender: fakeSender().sender,
+        expectedSecret: SECRET,
+        requestId: 'req-1',
+        delivery: fakeDelivery().deps,
+        checkins: fakeCheckins().deps,
+        commands: fakeCommands().deps,
+        creation: fakeCreation().deps,
+        changes: fakeChanges().deps,
+        actions: vacioActions(),
+        intake: intake.deps,
+      },
+    );
+
+    expect(intake.pasos).toContain('findIntake');
+  });
+
+  it('CA-2 · leer NO transiciona: no toca las acciones', async () => {
+    const acciones: string[] = [];
+    const intake = fakeIntake();
+
+    await handleTelegramWebhook(
+      { secretHeader: SECRET, body: botonFicha(`act:intake:${FICHA_ID}`) },
+      {
+        repo: fakeRepo().repo,
+        sender: fakeSender().sender,
+        expectedSecret: SECRET,
+        requestId: 'req-1',
+        delivery: fakeDelivery().deps,
+        checkins: fakeCheckins().deps,
+        commands: fakeCommands().deps,
+        creation: fakeCreation().deps,
+        changes: fakeChanges().deps,
+        actions: {
+          repo: {
+            findVersion: () => {
+              acciones.push('findVersion');
+              return Promise.resolve(null);
+            },
+            transition: () => {
+              acciones.push('transition');
+              return Promise.resolve(false);
+            },
+          },
+          sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
+          generation: { trigger: () => Promise.resolve() },
+          requestId: 'req-1',
+        },
+        intake: intake.deps,
+      },
+    );
+
+    expect(acciones).toEqual([]);
   });
 });
