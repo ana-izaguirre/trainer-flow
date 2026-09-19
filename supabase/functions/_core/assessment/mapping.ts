@@ -30,4 +30,24 @@ export const TALLY_MAPPING: FieldMapping = {
   hasLimitations: { label: 'Lesiones, dolor o limitaciones', falseWhen: ['Ninguna'] },
   limitationsDetail: { label: 'Cuéntanos brevemente qué debemos tener en cuenta.' },
   notes: { label: '¿Hay algo más que tu entrenador deba saber?' },
+
+  // ── SPEC-016 ────────────────────────────────────────────────────────────
+  //
+  // ┌─ ESTAS ETIQUETAS HAY QUE CONFIRMARLAS ─────────────────────────────┐
+  // │ El mapeo busca por etiqueta (prefijo, sin acentos ni mayúsculas).  │
+  // │ Estas van como mejor conjetura: si en Tally se llaman distinto, el │
+  // │ dato se pierde EN SILENCIO.                                        │
+  // │                                                                    │
+  // │ Por eso el webhook emite `tally.campos_ausentes` con los nombres   │
+  // │ de los que no encontró. Un envío de prueba con                     │
+  // │ `scripts/simular-tally.sh` dice cuáles ajustar.                    │
+  // └────────────────────────────────────────────────────────────────────┘
+  gender: { label: 'Género' },
+  age: { label: 'Edad', numeric: true },
+  weightKg: { label: 'Peso' },
+  heightCm: { label: 'Altura' },
+  lastWeighed: { label: 'Última vez que te pesaste' },
+  quitReasons: { label: 'Por qué has desistido de entrenar' },
+  menopauseStage: { label: 'En qué etapa estás' },
+  chronicConditions: { label: 'Enfermedades crónicas' },
 };

@@ -38,6 +38,12 @@ export function createTestGenerationRepo(db: Client, requestId: string): Generat
         request: {
           goal: fila['goal'] as string,
           level: fila['level'] as Level,
+          gender: (fila['gender'] as string | null) ?? null,
+          age: fila['age'] === null ? null : Number(fila['age']),
+          weightKg: fila['weight_kg'] === null ? null : Number(fila['weight_kg']),
+          heightCm: fila['height_cm'] === null ? null : Number(fila['height_cm']),
+          quitReasons: (fila['quit_reasons'] as string | null) ?? null,
+          menopauseStage: (fila['menopause_stage'] as string | null) ?? null,
           daysPerWeek,
           sessionMinutes: Number(fila['session_minutes']),
           equipment: fila['equipment'] as string,

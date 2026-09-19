@@ -79,3 +79,15 @@ describe('formatLogLine', () => {
     expect(() => formatLogLine(circular as never)).not.toThrow();
   });
 });
+
+it('SPEC-016 · las enfermedades crónicas salen redactadas', () => {
+  const linea = formatLogLine({
+    event: 'x',
+    level: 'info',
+    requestId: 'r-1',
+    chronicConditions: 'Diabetes tipo 2, padre con cardiopatía',
+  });
+
+  expect(linea).not.toContain('Diabetes');
+  expect(JSON.parse(linea)['chronicConditions']).toBe('[redactado]');
+});

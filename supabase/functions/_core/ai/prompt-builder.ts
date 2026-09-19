@@ -99,6 +99,26 @@ export function buildPrompt(request: AIRequest): string {
     `- Material disponible: ${request.equipment}`,
   ];
 
+  // SPEC-016. Se omiten los que no llegaron: una línea «Edad: null» gasta
+  // tokens y confunde al modelo.
+  if (request.gender !== null) partes.push(`- Género: ${request.gender}`);
+  if (request.age !== null) partes.push(`- Edad: ${request.age} años`);
+  if (request.weightKg !== null) partes.push(`- Peso: ${request.weightKg} kg`);
+  if (request.heightCm !== null) partes.push(`- Altura: ${request.heightCm} cm`);
+
+  if (request.menopauseStage !== null) {
+    partes.push(`- Etapa: ${request.menopauseStage}`);
+  }
+
+  if (request.quitReasons !== null) {
+    partes.push(
+      '',
+      `POR QUÉ ABANDONÓ ANTES: ${request.quitReasons}`,
+      'Ten esto en cuenta al dimensionar la rutina: la que se cumple es mejor',
+      'que la óptima.',
+    );
+  }
+
   if (request.limitations !== null) {
     partes.push(
       '',

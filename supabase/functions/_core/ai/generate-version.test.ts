@@ -38,6 +38,12 @@ function version(overrides: Partial<VersionForGeneration> = {}): VersionForGener
     request: {
       goal: 'Fuerza',
       level: 'intermediate',
+      gender: null,
+      age: null,
+      weightKg: null,
+      heightCm: null,
+      quitReasons: null,
+      menopauseStage: null,
       daysPerWeek: 1,
       sessionMinutes: 60,
       equipment: 'Barra',

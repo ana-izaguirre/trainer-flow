@@ -32,6 +32,23 @@ export interface IntakeForVersion {
   readonly lifestyle: string | null;
   readonly notes: string | null;
   readonly submittedAt: Date;
+
+  // ── SPEC-016 ────────────────────────────────────────────────────────────
+  readonly gender: string | null;
+  readonly age: number | null;
+  readonly weightKg: number | null;
+  readonly heightCm: number | null;
+  readonly lastWeighed: string | null;
+  readonly quitReasons: string | null;
+  readonly menopauseStage: string | null;
+  /**
+   * El ÚNICO sitio del sistema donde este dato aparece.
+   *
+   * No está en `AIRequest`, así que no puede llegar al proveedor. Aquí sí,
+   * porque esta ficha la pide el entrenador pulsando un botón y es él quien
+   * tiene que decidir qué hacer con ella (SPEC-016 §3.2).
+   */
+  readonly chronicConditions: string | null;
 }
 
 export interface IntakeRepo {

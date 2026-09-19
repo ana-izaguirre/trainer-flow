@@ -179,6 +179,15 @@ async function ingestAssessment(
       p_lifestyle: input.lifestyle,
       p_notes: input.notes,
       p_request_id: requestId,
+      // SPEC-016
+      p_gender: input.gender,
+      p_age: input.age,
+      p_weight_kg: input.weightKg,
+      p_height_cm: input.heightCm,
+      p_last_weighed: input.lastWeighed,
+      p_quit_reasons: input.quitReasons,
+      p_menopause_stage: input.menopauseStage,
+      p_chronic_conditions: input.chronicConditions,
     })
     .single();
 
@@ -317,6 +326,14 @@ async function findVersionForGeneration(
       limitations,
       // Generar desde cero, no editar. La edición llega en el bloque 7.
       instruction: null,
+      // SPEC-016. `chronicConditions` no está aquí porque `AIRequest` no lo
+      // tiene, y `version_for_generation` tampoco lo devuelve.
+      gender: (fila['gender'] as string | null) ?? null,
+      age: fila['age'] === null ? null : Number(fila['age']),
+      weightKg: fila['weight_kg'] === null ? null : Number(fila['weight_kg']),
+      heightCm: fila['height_cm'] === null ? null : Number(fila['height_cm']),
+      quitReasons: (fila['quit_reasons'] as string | null) ?? null,
+      menopauseStage: (fila['menopause_stage'] as string | null) ?? null,
     },
     constraints: {
       daysPerWeek: fila['days_per_week'] as number,
@@ -803,6 +820,16 @@ export function createIntakeRepo(db: Db): IntakeRepo {
         lifestyle: (fila['lifestyle'] as string | null) ?? null,
         notes: (fila['notes'] as string | null) ?? null,
         submittedAt: new Date(fila['submitted_at'] as string),
+        gender: (fila['gender'] as string | null) ?? null,
+        age: fila['age'] === null ? null : Number(fila['age']),
+        // `numeric` llega como string por PostgREST: sin el Number, el peso se
+        // pintaría bien por casualidad y fallaría en cuanto alguien lo sume.
+        weightKg: fila['weight_kg'] === null ? null : Number(fila['weight_kg']),
+        heightCm: fila['height_cm'] === null ? null : Number(fila['height_cm']),
+        lastWeighed: (fila['last_weighed'] as string | null) ?? null,
+        quitReasons: (fila['quit_reasons'] as string | null) ?? null,
+        menopauseStage: (fila['menopause_stage'] as string | null) ?? null,
+        chronicConditions: (fila['chronic_conditions'] as string | null) ?? null,
       };
     },
   };

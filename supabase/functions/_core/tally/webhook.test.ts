@@ -172,7 +172,9 @@ describe('idempotencia', () => {
 
     const outcome = await handleTallyWebhook(entrada(), deps);
 
-    expect(outcome).toEqual({
+    // `toMatchObject` y no `toEqual`: `camposAusentes` depende de qué traiga
+    // el cuerpo de prueba, y lo que este test comprueba es la idempotencia.
+    expect(outcome).toMatchObject({
       kind: 'ingested',
       eventId: 'evt-1',
       clientId: 'c1',
@@ -390,5 +392,26 @@ describe('el enlace de vinculación', () => {
     // nunca y el test pasaría sin probar nada.
     expect(e.avisos.join('\n')).not.toContain('t\\.me/');
     expect(e.avisos.join('\n')).not.toContain('token-de-32-caracteres-exactos-x');
+  });
+});
+
+describe('SPEC-016 · campos que el mapeo no encontró', () => {
+  it('CA-3 · se anotan por NOMBRE, nunca por valor', async () => {
+    // Si una etiqueta de `mapping.ts` no coincide con la de Tally, el dato se
+    // pierde en silencio. Esta lista es la única forma de enterarse.
+    const e = espia();
+
+    const outcome = await handleTallyWebhook(entrada(), e.deps);
+
+    expect(outcome.kind).toBe('ingested');
+    if (outcome.kind !== 'ingested') return;
+
+    // El cuerpo de prueba no trae los de SPEC-016, así que salen aquí.
+    expect(outcome.camposAusentes).toContain('chronicConditions');
+    expect(outcome.camposAusentes).toContain('age');
+
+    // Y NINGÚN valor: el handler loguea el outcome entero.
+    expect(JSON.stringify(outcome)).not.toContain('Diabetes');
+    expect(outcome.camposAusentes.every((c) => typeof c === 'string')).toBe(true);
   });
 });

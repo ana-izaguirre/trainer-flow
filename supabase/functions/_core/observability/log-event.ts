@@ -40,6 +40,8 @@ const SENSITIVE_FRAGMENTS = [
   'apikey',
   'linktoken',
   'limitation',
+  // SPEC-016: enfermedades crónicas propias y de familia. Nunca en un log.
+  'chronic',
   'comment',
   'answers',
 ] as const;

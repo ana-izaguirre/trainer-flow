@@ -27,6 +27,29 @@ export interface ParsedAssessment {
   readonly limitationsDetail: string | null;
   readonly lifestyle: string | null;
   readonly notes: string | null;
+
+  // ── SPEC-016. Todos opcionales: un formulario viejo entra igual ─────────
+  readonly gender: string | null;
+  readonly age: number | null;
+  readonly weightKg: number | null;
+  readonly heightCm: number | null;
+  readonly lastWeighed: string | null;
+  readonly quitReasons: string | null;
+  readonly menopauseStage: string | null;
+  /**
+   * Enfermedades crónicas propias y de familia cercana.
+   *
+   * ┌─ ESTE CAMPO NO VIAJA AL PROVEEDOR DE IA ────────────────────────────┐
+   * │ Traducir «diabetes tipo 2» en «intensidad moderada, sin series al   │
+   * │ fallo» es criterio clínico: es el trabajo del entrenador y su       │
+   * │ responsabilidad. Solo se le enseña a él, en la ficha 📄.            │
+   * │                                                                     │
+   * │ Hay un test en `prompt-builder.test.ts` que lo hace cumplir, porque │
+   * │ una regla que solo vive en un comentario se rompe en el siguiente   │
+   * │ PR (SPEC-016 §3.2).                                                 │
+   * └─────────────────────────────────────────────────────────────────────┘
+   */
+  readonly chronicConditions: string | null;
 }
 
 export interface AssessmentError {
@@ -46,6 +69,10 @@ export const ASSESSMENT_LIMITS = {
   freeText: 2000,
   daysPerWeek: { min: 1, max: 7 },
   sessionMinutes: { min: 15, max: 180 },
+  /** Rangos que atrapan un dedazo, no que juzguen a nadie. */
+  age: { min: 10, max: 120 },
+  weightKg: { min: 20, max: 400 },
+  heightCm: { min: 80, max: 250 },
 } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -126,6 +153,37 @@ function readInt(
   }
 
   return parsed;
+}
+
+/**
+ * Un número opcional. Acepta coma decimal: «78,5» y «78.5» son el mismo peso
+ * (SPEC-016 regla 5).
+ *
+ * ┌─ FUERA DE RANGO SE DESCARTA, NO INVALIDA ──────────────────────────────┐
+ * │ Estos campos son opcionales. Un «250» en la edad es un dedazo, y      │
+ * │ tirar la evaluación entera por eso dejaría al cliente sin rutina por  │
+ * │ un dato que ni siquiera hacía falta.                                  │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
+function readOptionalNumber(
+  value: unknown,
+  range: { readonly min: number; readonly max: number },
+  decimals = 0,
+): number | null {
+  let parsed: number | null = null;
+
+  if (typeof value === 'number') {
+    parsed = value;
+  } else if (typeof value === 'string') {
+    // La coma decimal primero: `Number()` la rechazaría.
+    const limpio = value.trim().replace(',', '.');
+    if (/^\d+(\.\d+)?$/.test(limpio)) parsed = Number(limpio);
+  }
+
+  if (parsed === null || !Number.isFinite(parsed)) return null;
+  if (parsed < range.min || parsed > range.max) return null;
+
+  return decimals === 0 ? Math.round(parsed) : Number(parsed.toFixed(decimals));
 }
 
 export function validateAssessment(raw: unknown): AssessmentResult {
@@ -209,6 +267,17 @@ export function validateAssessment(raw: unknown): AssessmentResult {
       limitationsDetail,
       lifestyle: readFreeText(raw['lifestyle']),
       notes: readFreeText(raw['notes']),
+
+      // SPEC-016. Ninguno puede invalidar la evaluación: si no llega o no se
+      // entiende, queda en `null` y el entrenador lo ve vacío en la ficha.
+      gender: readFreeText(raw['gender']),
+      age: readOptionalNumber(raw['age'], ASSESSMENT_LIMITS.age),
+      weightKg: readOptionalNumber(raw['weightKg'], ASSESSMENT_LIMITS.weightKg, 2),
+      heightCm: readOptionalNumber(raw['heightCm'], ASSESSMENT_LIMITS.heightCm),
+      lastWeighed: readFreeText(raw['lastWeighed']),
+      quitReasons: readFreeText(raw['quitReasons']),
+      menopauseStage: readFreeText(raw['menopauseStage']),
+      chronicConditions: readFreeText(raw['chronicConditions']),
     },
   };
 }

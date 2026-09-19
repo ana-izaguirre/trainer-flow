@@ -58,20 +58,64 @@ describe('el formulario real, de punta a punta', () => {
       hasLimitations: true,
       limitationsDetail: 'Nada',
       notes: 'No',
+      gender: null,
+      age: null,
+      weightKg: null,
+      heightCm: null,
+      lastWeighed: null,
+      quitReasons: null,
+      menopauseStage: null,
+      chronicConditions: null,
     });
   });
 
-  it('toda etiqueta del MAPPING existe en el formulario', () => {
+  /**
+   * Los campos de SPEC-016, cuyas preguntas todavía no existen en el
+   * formulario real.
+   *
+   * Sus etiquetas en `mapping.ts` son una CONJETURA. Cuando el entrenador
+   * añada las preguntas en Tally y se actualice el fixture con un envío de
+   * verdad, el test de abajo avisa de cuáles ya cuadran para sacarlas de
+   * aquí. Mientras estén en esta lista, ese dato NO se está recogiendo.
+   */
+  const PENDIENTES_DE_CONFIRMAR = new Set([
+    'gender',
+    'age',
+    'weightKg',
+    'heightCm',
+    'lastWeighed',
+    'quitReasons',
+    'menopauseStage',
+    'chronicConditions',
+  ]);
+
+  it('toda etiqueta CONFIRMADA existe en el formulario', () => {
     // Renombrar una pregunta en Tally es el único cambio que desconecta un
     // campo. Esto lo convierte en un test rojo en vez de en un envío perdido.
     const { sobre } = procesar();
     const delFormulario = new Set(sobre.fields.map((f) => f.label));
 
     const huerfanas = Object.entries(MAPPING)
+      .filter(([campo]) => !PENDIENTES_DE_CONFIRMAR.has(campo))
       .filter(([, regla]) => !delFormulario.has(regla.label))
       .map(([campo, regla]) => `${campo} → "${regla.label}"`);
 
     expect(huerfanas).toEqual([]);
+  });
+
+  it('avisa cuando una etiqueta pendiente ya cuadra', () => {
+    // Este test existe para apagarse solo. En cuanto el formulario real traiga
+    // una de estas preguntas con la etiqueta que espera `mapping.ts`, falla
+    // pidiendo que se saque de la lista — y así la lista no miente.
+    const { sobre } = procesar();
+    const delFormulario = new Set(sobre.fields.map((f) => f.label));
+
+    const yaCuadran = [...PENDIENTES_DE_CONFIRMAR].filter((campo) => {
+      const regla = MAPPING[campo as keyof typeof MAPPING];
+      return regla !== undefined && delFormulario.has(regla.label);
+    });
+
+    expect(yaCuadran).toEqual([]);
   });
 
   it('los campos aplanados de las casillas se ignoran', () => {
@@ -80,7 +124,11 @@ describe('el formulario real, de punta a punta', () => {
     const { sobre, campos } = procesar();
 
     expect(sobre.fields.length).toBeGreaterThan(Object.keys(campos).length);
-    expect(Object.keys(campos).toSorted()).toEqual(Object.keys(MAPPING).toSorted());
+
+    // Los de SPEC-016 no están todavía en el formulario: se comparan solo los
+    // confirmados, que son los que este fixture puede traer.
+    const esperados = Object.keys(MAPPING).filter((c) => !PENDIENTES_DE_CONFIRMAR.has(c));
+    expect(Object.keys(campos).toSorted()).toEqual(esperados.toSorted());
   });
 
   it('las URLs con credencial se detectan para redactarlas', () => {

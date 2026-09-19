@@ -73,6 +73,35 @@ export function formatIntake(intake: IntakeForVersion): string {
     lines.push('', '✅ *Sin limitaciones declaradas*');
   }
 
+  // SPEC-016: lo más importante primero. Si tiene una enfermedad crónica, es
+  // lo que decide cómo se programa todo lo demás.
+  if (intake.chronicConditions !== null && intake.chronicConditions.trim() !== '') {
+    lines.push(
+      '',
+      '🩺 *Enfermedades crónicas o familiares*',
+      escapeMarkdownV2(intake.chronicConditions),
+    );
+  }
+
+  // Los datos físicos, en una línea: se leen juntos o no se leen.
+  const fisicos = [
+    intake.age === null ? null : `${intake.age} años`,
+    intake.weightKg === null ? null : `${intake.weightKg} kg`,
+    intake.heightCm === null ? null : `${intake.heightCm} cm`,
+  ].filter((x): x is string => x !== null);
+
+  if (fisicos.length > 0 || intake.gender !== null) {
+    const partes = intake.gender === null ? fisicos : [intake.gender, ...fisicos];
+    lines.push('', `👤 ${escapeMarkdownV2(partes.join(' · '))}`);
+
+    // Dice si el peso es fiable. Va pegado a los datos, no suelto.
+    if (intake.lastWeighed !== null && intake.lastWeighed.trim() !== '') {
+      lines.push(`_Último pesaje: ${escapeMarkdownV2(intake.lastWeighed)}_`);
+    }
+  }
+
+  lines.push(...bloque('Etapa', intake.menopauseStage));
+  lines.push(...bloque('Por qué abandonó antes', intake.quitReasons));
   lines.push(...bloque('Estilo de vida', intake.lifestyle));
   lines.push(...bloque('Lo que quiere que sepas', intake.notes));
 

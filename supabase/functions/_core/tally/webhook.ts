@@ -40,6 +40,14 @@ export type TallyOutcome =
       readonly clientId: string;
       readonly planId: string;
       readonly versionId: string;
+      /**
+       * Campos del mapeo que el formulario no traía (SPEC-016 regla 2).
+       *
+       * Son NOMBRES, nunca valores: el handler loguea el outcome entero.
+       * Si aquí sale `age` y la pregunta existe en Tally, la etiqueta de
+       * `mapping.ts` no coincide y el dato se está perdiendo en silencio.
+       */
+      readonly camposAusentes: readonly string[];
     }
   /**
    * El sobre estaba bien pero las respuestas no. El evento queda guardado y
@@ -135,7 +143,13 @@ export async function handleTallyWebhook(
     if (!isNew) return { kind: 'duplicate', eventId };
 
     // ── 5. Del formulario al dominio ─────────────────────────────────────
-    const parsed = validateAssessment(mapFormFields(sobre.value.fields, TALLY_MAPPING));
+    const mapeados = mapFormFields(sobre.value.fields, TALLY_MAPPING);
+
+    // `mapFormFields` omite lo que no encontró, así que la diferencia con el
+    // mapeo son las etiquetas que no cuadraron.
+    const camposAusentes = Object.keys(TALLY_MAPPING).filter((k) => !(k in mapeados));
+
+    const parsed = validateAssessment(mapeados);
 
     if (!parsed.ok) {
       // Regla 9: el payload ya está guardado. Lo que falta es que alguien se
@@ -178,7 +192,7 @@ export async function handleTallyWebhook(
 
     // `ingested` NO lleva el token: el handler loguea `{ ...outcome }` y una
     // credencial en un log es un incidente (SPEC-014 regla 1).
-    return { kind: 'ingested', eventId, ...ids };
+    return { kind: 'ingested', eventId, ...ids, camposAusentes };
   } catch (error) {
     return {
       kind: 'failed',
