@@ -22,6 +22,8 @@ export const CALLBACK_ACTIONS = [
   'accept',
   'change',
   'revise',
+  /** SPEC-015: leer la evaluación. Es la única que NO escribe nada. */
+  'intake',
 ] as const;
 
 export type CallbackAction = (typeof CALLBACK_ACTIONS)[number];

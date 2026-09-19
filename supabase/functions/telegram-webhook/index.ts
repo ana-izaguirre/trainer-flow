@@ -22,6 +22,7 @@
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { IntakeRepo } from '../_core/ports/intake-ports.ts';
 import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { GenerationTrigger } from '../_core/ports/generation-trigger.ts';
@@ -38,6 +39,7 @@ import {
   createCheckinRepo,
   createCreationRepo,
   createDb,
+  createIntakeRepo,
   createDeliveryRepo,
   createQueryRepo,
   createTelegramRepo,
@@ -63,6 +65,8 @@ export interface HandlerDeps {
   readonly generation: (log: Logger) => GenerationTrigger;
   readonly creationRepo: (requestId: string) => CreationRepo;
   readonly changeRepo: (requestId: string) => ChangeRequestRepo;
+  /** SPEC-015: solo lectura, así que no necesita `requestId` para auditar. */
+  readonly intakeRepo: () => IntakeRepo;
 }
 
 /**
@@ -87,6 +91,7 @@ export function readDeps(): HandlerDeps {
     generation: (log) => createGenerationTrigger(log),
     creationRepo: (requestId) => createCreationRepo(db, requestId),
     changeRepo: (requestId) => createChangeRequestRepo(db, requestId),
+    intakeRepo: () => createIntakeRepo(db),
   };
 }
 
@@ -129,6 +134,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
           commands: { repo: deps.queryRepo(), sender },
           creation: { repo: deps.creationRepo(requestId), sender },
           changes: { repo: deps.changeRepo(requestId), sender },
+        intake: { repo: deps.intakeRepo(), sender },
         },
       );
 

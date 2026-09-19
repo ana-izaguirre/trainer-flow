@@ -92,7 +92,8 @@ describe('llegó una evaluación', () => {
     const aviso = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
 
     expect(aviso.keyboard).not.toBeNull();
-    expect(acciones(aviso.keyboard)).toEqual(['generate', 'template', 'manual']);
+    // SPEC-015: 📄 va primero — se lee antes de decidir.
+    expect(acciones(aviso.keyboard)).toEqual(['intake', 'generate', 'template', 'manual']);
     expect(aviso.text).toContain('¿Cómo preparamos la rutina?');
   });
 
