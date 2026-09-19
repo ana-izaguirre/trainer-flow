@@ -21,6 +21,17 @@ export interface AssessmentToIngest {
   readonly limitationsDetail: string | null;
   readonly lifestyle: string | null;
   readonly notes: string | null;
+
+  // ── SPEC-016 ────────────────────────────────────────────────────────────
+  readonly gender: string | null;
+  readonly age: number | null;
+  readonly weightKg: number | null;
+  readonly heightCm: number | null;
+  readonly lastWeighed: string | null;
+  readonly quitReasons: string | null;
+  readonly menopauseStage: string | null;
+  /** Se guarda, pero no está en `AIRequest`: nunca llega al proveedor. */
+  readonly chronicConditions: string | null;
 }
 
 export interface IngestedIds {

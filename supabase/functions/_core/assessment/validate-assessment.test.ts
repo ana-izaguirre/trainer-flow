@@ -51,6 +51,14 @@ describe('evaluación válida', () => {
       limitationsDetail: 'Molestia de hombro derecho',
       lifestyle: 'Trabajo sentado',
       notes: null,
+      gender: null,
+      age: null,
+      weightKg: null,
+      heightCm: null,
+      lastWeighed: null,
+      quitReasons: null,
+      menopauseStage: null,
+      chronicConditions: null,
     });
   });
 
@@ -241,5 +249,75 @@ describe('los errores son útiles para depurar', () => {
     for (const error of result.errors) {
       expect(error.message).not.toContain('hernia');
     }
+  });
+});
+
+// ─── SPEC-016 · los campos nuevos ──────────────────────────────────────────
+
+describe('campos opcionales de SPEC-016', () => {
+  const base = {
+    fullName: 'Carlos',
+    goal: 'Fuerza',
+    level: 'beginner',
+    daysPerWeek: 3,
+    sessionMinutes: 60,
+    equipment: 'Gimnasio',
+    hasLimitations: false,
+  };
+
+  it('CA-6 · el peso acepta coma decimal', () => {
+    // «78,5» y «78.5» tienen que ser el mismo dato.
+    const coma = validateAssessment({ ...base, weightKg: '78,5' });
+    const punto = validateAssessment({ ...base, weightKg: '78.5' });
+
+    expect(coma.ok && coma.value.weightKg).toBe(78.5);
+    expect(punto.ok && punto.value.weightKg).toBe(78.5);
+  });
+
+  it('CA-2 · sin ningún campo nuevo, la evaluación entra igual', () => {
+    const r = validateAssessment(base);
+
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.value.age).toBeNull();
+    expect(r.ok && r.value.chronicConditions).toBeNull();
+  });
+
+  it('un dedazo se descarta, NO invalida la evaluación', () => {
+    // Tirar la evaluación entera por un «250» en la edad dejaría al cliente
+    // sin rutina por un dato que ni siquiera hacía falta.
+    const r = validateAssessment({ ...base, age: '250', heightCm: '3' });
+
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.value.age).toBeNull();
+    expect(r.ok && r.value.heightCm).toBeNull();
+  });
+
+  it('un número con texto pegado no cuela', () => {
+    const r = validateAssessment({ ...base, weightKg: '78 kg', age: 'treinta' });
+
+    expect(r.ok && r.value.weightKg).toBeNull();
+    expect(r.ok && r.value.age).toBeNull();
+  });
+
+  it('CA-1 · con todos los campos, se guardan todos', () => {
+    const r = validateAssessment({
+      ...base,
+      gender: 'Mujer',
+      age: 47,
+      weightKg: 62,
+      heightCm: 165,
+      lastWeighed: 'Hace un mes',
+      quitReasons: 'Falta de tiempo, falta de motivación',
+      menopauseStage: 'Perimenopausia',
+      chronicConditions: 'Hipertensión. Madre con diabetes.',
+    });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.gender).toBe('Mujer');
+    expect(r.value.age).toBe(47);
+    expect(r.value.weightKg).toBe(62);
+    expect(r.value.menopauseStage).toBe('Perimenopausia');
+    expect(r.value.chronicConditions).toContain('Hipertensión');
   });
 });

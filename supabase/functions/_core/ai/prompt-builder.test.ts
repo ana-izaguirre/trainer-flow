@@ -20,6 +20,12 @@ function peticion(overrides: Partial<AIRequest> = {}): AIRequest {
     daysPerWeek: 4,
     sessionMinutes: 60,
     equipment: 'Mancuernas, banco',
+    gender: null,
+    age: null,
+    weightKg: null,
+    heightCm: null,
+    quitReasons: null,
+    menopauseStage: null,
     limitations: null,
     instruction: null,
     ...overrides,
@@ -117,5 +123,50 @@ describe('el texto del cliente es dato no confiable', () => {
     expect(prompt.indexOf('JSON')).toBeGreaterThan(-1);
     // Las reglas se repiten al final, después de todo texto del cliente.
     expect(prompt.lastIndexOf('JSON')).toBeGreaterThan(prompt.indexOf(ataque));
+  });
+});
+
+// ─── SPEC-016 · qué llega a la IA y qué NO ─────────────────────────────────
+
+describe('los campos de SPEC-016', () => {
+  it('edad, peso, altura y género van al prompt', () => {
+    const p = buildPrompt(
+      peticion({ gender: 'Mujer', age: 42, weightKg: 68.5, heightCm: 165 }),
+    );
+
+    expect(p).toContain('Mujer');
+    expect(p).toContain('42 años');
+    expect(p).toContain('68.5 kg');
+    expect(p).toContain('165 cm');
+  });
+
+  it('por qué abandonó va, y con instrucción de qué hacer con ello', () => {
+    const p = buildPrompt(peticion({ quitReasons: 'Falta de tiempo' }));
+
+    expect(p).toContain('Falta de tiempo');
+    expect(p).toContain('la que se cumple es mejor');
+  });
+
+  it('la etapa menopáusica va: es variable de programación (§3.1)', () => {
+    expect(buildPrompt(peticion({ menopauseStage: 'Postmenopausia' }))).toContain(
+      'Postmenopausia',
+    );
+  });
+
+  it('un campo ausente no gasta tokens ni confunde al modelo', () => {
+    const p = buildPrompt(peticion());
+
+    expect(p).not.toContain('Edad');
+    expect(p).not.toContain('null');
+    expect(p).not.toContain('undefined');
+  });
+
+  it('CA-4 · las enfermedades crónicas NO tienen dónde entrar', () => {
+    // No es que el prompt las filtre: es que `AIRequest` no tiene campo para
+    // ellas. El tipo hace imposible mandarlas (SPEC-016 §3.2).
+    const claves = Object.keys(peticion());
+
+    expect(claves).not.toContain('chronicConditions');
+    expect(claves).not.toContain('lastWeighed');
   });
 });

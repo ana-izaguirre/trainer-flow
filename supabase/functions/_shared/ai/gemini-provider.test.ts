@@ -19,6 +19,12 @@ const PETICION = {
   equipment: 'Barra',
   limitations: 'Molestia en el hombro derecho',
   instruction: null,
+  gender: null,
+  age: null,
+  weightKg: null,
+  heightCm: null,
+  quitReasons: null,
+  menopauseStage: null,
 } as const;
 
 interface Llamada {

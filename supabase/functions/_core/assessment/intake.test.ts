@@ -37,6 +37,14 @@ function ficha(extra: Partial<IntakeForVersion> = {}): IntakeForVersion {
     lifestyle: 'Trabajo de oficina, poco movimiento',
     notes: 'Quiero llegar bien al verano',
     submittedAt: new Date('2026-03-14T10:00:00Z'),
+    gender: 'Hombre',
+    age: 34,
+    weightKg: 78.5,
+    heightCm: 180,
+    lastWeighed: 'Hace una semana',
+    quitReasons: 'Falta de tiempo, falta de motivación',
+    menopauseStage: null,
+    chronicConditions: 'Diabetes tipo 2. Padre con hipertensión.',
     ...extra,
   };
 }
@@ -146,4 +154,70 @@ describe('showIntake', () => {
 
     expect(ajena.enviados[0]).toBe(inexistente.enviados[0]);
   });
+});
+
+// ─── SPEC-016 · los campos nuevos en la ficha ──────────────────────────────
+
+describe('los campos de SPEC-016 en la ficha', () => {
+  it('CA-5 · las enfermedades crónicas SÍ se ven aquí', () => {
+    // Es el único sitio del sistema donde aparecen.
+    const texto = formatIntake(ficha());
+
+    expect(texto).toContain('Diabetes tipo 2');
+    expect(texto).toContain('hipertensión');
+    expect(texto).toContain('🩺');
+  });
+
+  it('los datos físicos van juntos, en una línea', () => {
+    const texto = formatIntake(ficha());
+
+    expect(texto).toContain('Hombre · 34 años · 78\\.5 kg · 180 cm');
+  });
+
+  it('el último pesaje va pegado a los datos: dice si el peso es fiable', () => {
+    expect(formatIntake(ficha())).toContain('Último pesaje: Hace una semana');
+  });
+
+  it('por qué abandonó, y la etapa cuando la hay', () => {
+    const texto = formatIntake(ficha({ menopauseStage: 'Perimenopausia' }));
+
+    expect(texto).toContain('Falta de tiempo');
+    expect(texto).toContain('Perimenopausia');
+  });
+
+  it('CA-3 · una evaluación vieja, sin ningún campo nuevo, se pinta igual', () => {
+    const texto = formatIntake(
+      ficha({
+        gender: null,
+        age: null,
+        weightKg: null,
+        heightCm: null,
+        lastWeighed: null,
+        quitReasons: null,
+        menopauseStage: null,
+        chronicConditions: null,
+      }),
+    );
+
+    expect(texto).toContain('Carlos Pérez');
+    expect(texto).not.toContain('🩺');
+    expect(texto).not.toContain('👤');
+    expect(texto).not.toContain('null');
+  });
+
+  it('un intruso tampoco ve las enfermedades', async () => {
+    const e = espia();
+
+    await showIntake(VERSION_ID, CLIENTE, e.deps);
+
+    expect(e.enviados.join('')).not.toContain('Diabetes');
+  });
+});
+
+it('sin género pero con peso: la línea sale igual, sin separador huérfano', () => {
+  // Pasa de verdad: «Género» es opcional y el peso no.
+  const texto = formatIntake(ficha({ gender: null }));
+
+  expect(texto).toContain('👤 34 años · 78\\.5 kg · 180 cm');
+  expect(texto).not.toContain('·  ·');
 });

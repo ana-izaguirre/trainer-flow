@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | APROBADA |
+| **Estado** | **IMPLEMENTADA** |
 | **Depende de** | SPEC-001, SPEC-015 |
 | **Sesiones** | S-31 |
 
@@ -79,11 +79,13 @@ ficha de SPEC-015.
    que prefiere no contestar, tiene que poder entrar igual.
 2. **Un campo opcional que no llega NO es un error**, pero sí se anota: si el
    mapeo no encuentra una etiqueta —porque en Tally se llama distinto— el
-   dato se pierde en silencio. Se emite `tally.campos_ausentes` con los
-   NOMBRES de los campos, nunca sus valores.
-3. **`chronicConditions` no entra en `prompt-builder.ts`.** Hay un test que
-   lo comprueba, porque una regla que solo vive en un comentario se rompe en
-   el siguiente PR.
+   dato se pierde en silencio. El outcome `ingested` lleva `camposAusentes`
+   con los NOMBRES, nunca los valores, y el handler ya loguea el outcome
+   entero: una línea en vez de dos, bajo el mismo `requestId`.
+3. **`chronicConditions` no puede llegar al proveedor**, y no por un filtro:
+   `AIRequest` **no tiene ese campo** y `version_for_generation` **no lo
+   devuelve**. Dos capas donde el dato no cabe, en vez de un `if` que alguien
+   pueda quitar. Hay test de las dos.
 4. **Nada de esto va al aviso de nueva evaluación.** Ese se lee en la
    pantalla de bloqueo y sigue siendo un resumen.
 5. **`weightKg` y `heightCm` se guardan como números**, no como texto: un
