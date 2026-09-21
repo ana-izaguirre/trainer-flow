@@ -47,6 +47,7 @@ function version(overrides: Partial<VersionForGeneration> = {}): VersionForGener
       lastWeighed: null,
       chronicConditions: null,
       medications: null,
+      equipmentDetail: null,
       lifestyle: null,
       notes: null,
       daysPerWeek: 1,

@@ -32,7 +32,9 @@ const MAPPING: FieldMapping = {
   lifestyle:      { label: 'Estilo de vida' },
   equipment:      { label: 'Equipamiento disponible' },
   hasLimitations: { label: 'Lesiones, dolor o limitaciones', falseWhen: ['Ninguna'] },
-  limitationsDetail: { label: 'Cuéntanos brevemente qué debemos tener en cuenta.' },
+  limitationsDetail: { label: ['Lesiones, dolor o limitaciones',
+                              'Cuéntanos brevemente qué debemos tener en cuenta.'],
+                       omitWhen: ['Ninguna'] },
   notes:          { label: '¿Hay algo más que tu entrenador deba saber?' },
 };
 ```
@@ -53,21 +55,37 @@ hacia el de menos, sí.
 | `Ninguna` + `Rodilla` | **`true`** |
 | nada | `false` |
 
-> ### ⚠️ Sigue abierto: qué parte del cuerpo
+> ### ✅ Resuelto: qué parte del cuerpo — **opción B**
 >
-> Las casillas dicen **dónde** duele (`Rodilla`, `Hombro`), pero hoy solo
-> alimentan el booleano. Si el cliente marca `Rodilla` y deja el texto libre
-> vacío, `limitationsDetail` queda en `null` y **la IA nunca se entera de que
-> es la rodilla**: genera sentadillas con un aviso genérico.
+> Las casillas dicen **dónde** duele (`Rodilla`, `Hombro`). Alimentando solo
+> el booleano, un cliente que marcaba `Rodilla` y dejaba el texto libre vacío
+> producía `limitationsDetail: null`: **la IA no se enteraba de que era la
+> rodilla** y generaba sentadillas con un aviso genérico.
 >
-> Es el dato más valioso que tenemos para la seguridad y lo estamos tirando.
-> Tres salidas, y hay que elegir una antes de S-14:
+> | | Coste | |
+> |---|---|---|
+> | **A** · `ParsedAssessment` gana `limitationAreas: string[]` | columna nueva + migración | descartada |
+> | **B** · Las casillas alimentan también `limitationsDetail` | regla nueva en el mapeo | **elegida** |
+> | **C** · En Tally, el texto libre pasa a obligatorio si marcó algo | cero código, pero el dato sigue sin estructurar | descartada |
 >
-> | | Coste |
-> |---|---|
-> | **A** · `ParsedAssessment` gana `limitationAreas: string[]` | columna nueva + migración |
-> | **B** · Las casillas alimentan también `limitationsDetail` | regla nueva en el mapeo |
-> | **C** · En Tally, el texto libre pasa a obligatorio si marcó algo | cero código, pero el dato sigue sin estructurar |
+> **Cómo quedó:** una regla puede declarar **varias etiquetas**, y las
+> respuestas se unen en el orden en que el formulario las manda. Las dos
+> preguntas de la lesión caen en `limitationsDetail`:
+>
+> ```
+> Casillas:    "Espalda baja, Otra"
+> Texto libre: "Me duele al agacharme"
+> ─────────────────────────────────────────────────────────
+> limitationsDetail: "Espalda baja, Otra, Me duele al agacharme"
+> ```
+>
+> `omitWhen: ['Ninguna']` evita que la palabra «Ninguna» viaje como si fuera
+> un detalle. Y el booleano no cambia: sigue saliendo de la misma pregunta,
+> porque una respuesta puede alimentar más de un campo del dominio.
+>
+> **Una etiqueta repetida en el formulario NO se une:** eso es un accidente,
+> no una petición, y ahí sigue ganando la última respuesta no vacía. Juntar
+> solo cuando la regla lo pide es lo que separa las dos cosas.
 
 Cambiar el texto de una pregunta en el formulario es cambiar una línea aquí,
 no tocar el parser. La comparación ignora mayúsculas, acentos y espacios

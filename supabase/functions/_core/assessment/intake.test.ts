@@ -46,6 +46,7 @@ function ficha(extra: Partial<IntakeForVersion> = {}): IntakeForVersion {
     menopauseStage: null,
     chronicConditions: 'Diabetes tipo 2. Padre con hipertensión.',
     medications: 'Metformina 850 mg, 2 al día',
+    equipmentDetail: 'Un par de mancuernas de 8 kg',
     birthDate: '1992-03-12',
     ...extra,
   };
@@ -233,4 +234,16 @@ it('sin fecha de nacimiento, la edad sale sola', () => {
 
   expect(texto).toContain('34 años');
   expect(texto).not.toContain('(1992');
+});
+
+
+it('la ficha muestra los pesos bajo el material', () => {
+  expect(formatIntake(ficha())).toContain('Un par de mancuernas de 8 kg');
+});
+
+it('sin pesos, el material sale solo', () => {
+  const texto = formatIntake(ficha({ equipmentDetail: null }));
+
+  expect(texto).toContain('Material:');
+  expect(texto).not.toContain('mancuernas de 8 kg');
 });

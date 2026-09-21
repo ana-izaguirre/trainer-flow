@@ -28,6 +28,7 @@ const PETICION = {
   lastWeighed: null,
   chronicConditions: null,
   medications: null,
+  equipmentDetail: null,
   lifestyle: null,
   notes: null,
 } as const;

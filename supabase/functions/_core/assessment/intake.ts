@@ -58,7 +58,9 @@ export function formatIntake(intake: IntakeForVersion): string {
     `🎯 *Objetivo:* ${escapeMarkdownV2(intake.goal)}`,
     `📊 *Nivel:* ${NIVEL[intake.level]}`,
     `📅 *Frecuencia:* ${intake.daysPerWeek} días · ${intake.sessionMinutes} min por sesión`,
-    `🏋️ *Material:* ${escapeMarkdownV2(intake.equipment)}`,
+    intake.equipmentDetail === null || intake.equipmentDetail.trim() === ''
+      ? `🏋️ *Material:* ${escapeMarkdownV2(intake.equipment)}`
+      : `🏋️ *Material:* ${escapeMarkdownV2(intake.equipment)}\n_${escapeMarkdownV2(intake.equipmentDetail)}_`,
   ];
 
   // El detalle va justo debajo de la bandera, que es donde se busca.
@@ -78,7 +80,7 @@ export function formatIntake(intake: IntakeForVersion): string {
   if (intake.chronicConditions !== null && intake.chronicConditions.trim() !== '') {
     lines.push(
       '',
-      '🩺 *Enfermedades crónicas o familiares*',
+      '🩺 *Condiciones crónicas*',
       escapeMarkdownV2(intake.chronicConditions),
     );
   }

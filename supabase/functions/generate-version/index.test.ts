@@ -33,6 +33,7 @@ const VERSION: VersionForGeneration = {
     lastWeighed: null,
     chronicConditions: null,
     medications: null,
+    equipmentDetail: null,
     lifestyle: null,
     notes: null,
   },

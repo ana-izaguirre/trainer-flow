@@ -147,7 +147,12 @@ export async function handleTallyWebhook(
 
     // `mapFormFields` omite lo que no encontró, así que la diferencia con el
     // mapeo son las etiquetas que no cuadraron.
-    const camposAusentes = Object.keys(TALLY_MAPPING).filter((k) => !(k in mapeados));
+    //
+    // Los condicionales quedan fuera: faltan en cada envío de quien no ve esa
+    // pregunta, y esa falsa alarma enseñaría a ignorar el aviso.
+    const camposAusentes = Object.entries(TALLY_MAPPING)
+      .filter(([k, regla]) => !(k in mapeados) && regla.conditional !== true)
+      .map(([k]) => k);
 
     const parsed = validateAssessment(mapeados);
 

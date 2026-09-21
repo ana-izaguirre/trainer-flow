@@ -29,6 +29,7 @@ function peticion(overrides: Partial<AIRequest> = {}): AIRequest {
     lastWeighed: null,
     chronicConditions: null,
     medications: null,
+    equipmentDetail: null,
     lifestyle: null,
     notes: null,
     limitations: null,
@@ -246,4 +247,20 @@ it('el pesaje va pegado al peso, no suelto en otro bloque', () => {
   const p = buildPrompt(peticion({ weightKg: 82.5, lastWeighed: 'Hace una semana' }));
 
   expect(p).toContain('Peso: 82.5 kg (pesado hace una semana)');
+});
+
+it('los pesos van pegados al material, que es a lo que se refieren', () => {
+  // «Mancuernas» sin kg deja a la IA programando a ciegas: «press 3x8 con
+  // mancuernas» significa cosas muy distintas con 5 kg que con 25.
+  const p = buildPrompt(
+    peticion({ equipment: 'Mancuernas, Banco', equipmentDetail: 'Un par de 8 kg' }),
+  );
+
+  expect(p).toContain('Material disponible: Mancuernas, Banco — Un par de 8 kg');
+});
+
+it('sin detalle, el material se pinta como siempre', () => {
+  expect(buildPrompt(peticion({ equipment: 'Gimnasio' }))).toContain(
+    '- Material disponible: Gimnasio',
+  );
 });

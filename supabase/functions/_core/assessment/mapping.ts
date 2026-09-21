@@ -28,7 +28,20 @@ export const TALLY_MAPPING: FieldMapping = {
   // «Ninguna» convive con las partes del cuerpo y Tally deja marcar las dos.
   // Ante la contradicción, `true`: este campo dispara el aviso de seguridad.
   hasLimitations: { label: 'Lesiones, dolor o limitaciones', falseWhen: ['Ninguna'] },
-  limitationsDetail: { label: 'Cuéntanos brevemente qué debemos tener en cuenta.' },
+  /**
+   * El detalle sale de DOS preguntas y las dos hacen falta:
+   *
+   * - La misma que `hasLimitations`, porque esa respuesta es dos cosas —el
+   *   sí/no y QUÉ parte del cuerpo—. Sin esto «Espalda baja» se perdía y la
+   *   IA sabía que había una limitación pero no cuál.
+   * - La de texto libre, que es donde el cliente cuenta qué le pasa.
+   *
+   * Quedarse con una sola pierde la otra en silencio.
+   */
+  limitationsDetail: {
+    label: ['Lesiones, dolor o limitaciones', 'Cuéntanos brevemente qué debemos tener en cuenta.'],
+    omitWhen: ['Ninguna'],
+  },
   notes: { label: '¿Hay algo más que tu entrenador deba saber?' },
 
   // ── SPEC-016 ────────────────────────────────────────────────────────────
@@ -43,13 +56,18 @@ export const TALLY_MAPPING: FieldMapping = {
   // │ `scripts/simular-tally.sh` dice cuáles ajustar.                    │
   // └────────────────────────────────────────────────────────────────────┘
   gender: { label: 'Género' },
-  age: { label: 'Edad', numeric: true },
+  // Respaldo por si un formulario pregunta la edad directa en vez de la
+  // fecha. `conditional` porque su ausencia es lo NORMAL y reportarla sería
+  // una falsa alarma en cada envío.
+  age: { label: 'Edad', numeric: true, conditional: true },
   weightKg: { label: 'Peso' },
   heightCm: { label: 'Altura' },
   lastWeighed: { label: 'Última vez que te pesaste' },
-  quitReasons: { label: 'Qué te cuesta más para mejorar' },
-  menopauseStage: { label: 'En qué etapa estás' },
-  chronicConditions: { label: 'Enfermedades crónicas' },
+  quitReasons: { label: '¿Qué es lo que más te frena?' },
+  // Solo se le muestra a quien marcó «Mujer» en Género: por eso `conditional`.
+  menopauseStage: { label: '¿En qué etapa hormonal te encuentras?', conditional: true },
+  chronicConditions: { label: '¿Tienes alguna de estas condiciones?' },
+  equipmentDetail: { label: '¿Qué pesos tienes disponibles?', conditional: true },
   birthDate: { label: 'Fecha de nacimiento' },
   medications: { label: 'Tomas algún fármaco' },
 };

@@ -21,6 +21,8 @@ export interface AIRequest {
   readonly daysPerWeek: number;
   readonly sessionMinutes: number;
   readonly equipment: string;
+  /** Los pesos concretos: «Mancuernas» sin kg deja programar a ciegas. */
+  readonly equipmentDetail: string | null;
   /** Información de salud. Va al prompt, **nunca a un log**. */
   readonly limitations: string | null;
   /** Para editar una versión existente. `null` al generar desde cero. */

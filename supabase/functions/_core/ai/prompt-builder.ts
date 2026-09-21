@@ -96,7 +96,9 @@ export function buildPrompt(request: AIRequest): string {
     `- Nivel: ${NIVEL_EN_PALABRAS[request.level]}`,
     `- Días por semana: ${request.daysPerWeek}`,
     `- Minutos por sesión: ${request.sessionMinutes}`,
-    `- Material disponible: ${request.equipment}`,
+    request.equipmentDetail === null
+      ? `- Material disponible: ${request.equipment}`
+      : `- Material disponible: ${request.equipment} — ${request.equipmentDetail}`,
   ];
 
   // SPEC-016. Se omiten los que no llegaron: una línea «Edad: null» gasta
@@ -136,7 +138,7 @@ export function buildPrompt(request: AIRequest): string {
   const clinico = [
     request.chronicConditions === null
       ? null
-      : `- Enfermedades propias o de familia cercana: ${request.chronicConditions}`,
+      : `- Condiciones que tiene el cliente: ${request.chronicConditions}`,
     request.medications === null ? null : `- Fármacos que toma: ${request.medications}`,
   ].filter((x): x is string => x !== null);
 

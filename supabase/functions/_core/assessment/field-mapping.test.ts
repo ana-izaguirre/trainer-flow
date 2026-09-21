@@ -222,6 +222,8 @@ describe('datos hostiles', () => {
   });
 
   it('si dos campos comparten etiqueta, gana el último no vacío', () => {
+    // La regla declara UNA pregunta: que el formulario la mande dos veces es
+    // un accidente, no una petición de juntar las dos respuestas.
     const result = mapFormFields(
       [campo('Detalle del objetivo', '@viejo'), campo('Detalle del objetivo', '@nuevo')],
       MAPPING,
@@ -388,5 +390,114 @@ describe('sí/no leído de una lista de casillas', () => {
   it('el campo siempre existe: un sí/no no admite ausencia', () => {
     const r = mapFormFields([campo('Lesiones', null)], LESIONES);
     expect('hasLimitations' in r).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('una pregunta que alimenta dos campos', () => {
+  // El caso real: «Lesiones, dolor o limitaciones» ofrece partes del cuerpo.
+  // Esa respuesta es DOS cosas —el sí/no que dispara el aviso de seguridad y
+  // el detalle de QUÉ le duele—, y antes solo sobrevivía la primera.
+  const LESIONES: FieldMapping = {
+    hasLimitations: { label: 'Lesiones', falseWhen: ['Ninguna'] },
+    limitationsDetail: { label: 'Lesiones', omitWhen: ['Ninguna'] },
+  };
+
+  const opciones = [
+    { id: 'u-ninguna', text: 'Ninguna' },
+    { id: 'u-cuello', text: 'Cuello' },
+    { id: 'u-espalda', text: 'Espalda baja' },
+  ];
+
+  const lesiones = (value: unknown) =>
+    mapFormFields([campo('Lesiones', value, { type: 'CHECKBOXES', options: opciones })], LESIONES);
+
+  it('la parte del cuerpo llega al detalle, no solo al sí/no', () => {
+    expect(lesiones(['u-cuello'])).toEqual({
+      hasLimitations: true,
+      limitationsDetail: 'Cuello',
+    });
+  });
+
+  it('varias partes se juntan en un texto', () => {
+    expect(lesiones(['u-cuello', 'u-espalda'])).toEqual({
+      hasLimitations: true,
+      limitationsDetail: 'Cuello, Espalda baja',
+    });
+  });
+
+  it('«Ninguna» no es un detalle: el campo se omite', () => {
+    const r = lesiones(['u-ninguna']);
+    expect(r['hasLimitations']).toBe(false);
+    expect('limitationsDetail' in r).toBe(false);
+  });
+
+  it('«Ninguna» junto a una lesión deja solo la lesión', () => {
+    // Tally permite la contradicción. El sí/no se va hacia el aviso, y el
+    // detalle se queda con lo que sí es información.
+    expect(lesiones(['u-ninguna', 'u-cuello'])).toEqual({
+      hasLimitations: true,
+      limitationsDetail: 'Cuello',
+    });
+  });
+
+  it('sin contestar no inventa detalle', () => {
+    const r = lesiones([]);
+    expect(r['hasLimitations']).toBe(false);
+    expect('limitationsDetail' in r).toBe(false);
+  });
+
+  it('dos preguntas de texto se unen en el orden en que llegan', () => {
+    // El caso real del formulario: la parte del cuerpo y, aparte, lo que el
+    // cliente escribe. Las dos son el detalle; quedarse con una pierde la otra.
+    const DOS: FieldMapping = {
+      limitationsDetail: { label: ['Lesiones', 'Cuéntanos más'], omitWhen: ['Ninguna'] },
+    };
+
+    const r = mapFormFields(
+      [
+        campo('Lesiones', ['u-cuello'], { type: 'CHECKBOXES', options: opciones }),
+        campo('Cuéntanos más', 'Me duele al girar la cabeza'),
+      ],
+      DOS,
+    );
+
+    expect(r['limitationsDetail']).toBe('Cuello, Me duele al girar la cabeza');
+  });
+
+  it('si una de las dos no viene, sale la otra sola', () => {
+    const DOS: FieldMapping = {
+      limitationsDetail: { label: ['Lesiones', 'Cuéntanos más'], omitWhen: ['Ninguna'] },
+    };
+
+    expect(mapFormFields([campo('Cuéntanos más', 'Me duele')], DOS)).toEqual({
+      limitationsDetail: 'Me duele',
+    });
+  });
+
+  it('lo que no es texto no se une: gana la primera respuesta', () => {
+    // Un mapeo así está mal escrito. Sumar dos números o dos sí/no haría
+    // parecer intencionado el error, y esconderlo es peor que no tocarlo.
+    const DOS: FieldMapping = {
+      daysPerWeek: { label: ['Días', 'Días (otra vez)'], numeric: true },
+    };
+
+    const r = mapFormFields([campo('Días', '3 días'), campo('Días (otra vez)', '5 días')], DOS);
+    expect(r['daysPerWeek']).toBe(3);
+  });
+
+  it('el orden del mapeo no cambia el resultado', () => {
+    // Las dos reglas escriben campos distintos: ninguna puede pisar a la otra.
+    const alReves: FieldMapping = {
+      limitationsDetail: { label: 'Lesiones', omitWhen: ['Ninguna'] },
+      hasLimitations: { label: 'Lesiones', falseWhen: ['Ninguna'] },
+    };
+    const campoLesiones = campo('Lesiones', ['u-cuello'], {
+      type: 'CHECKBOXES',
+      options: opciones,
+    });
+
+    expect(mapFormFields([campoLesiones], alReves)).toEqual(mapFormFields([campoLesiones], LESIONES));
   });
 });
