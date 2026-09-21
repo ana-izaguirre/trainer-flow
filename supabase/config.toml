@@ -45,3 +45,35 @@ policy = "oneshot"
 
 [analytics]
 enabled = false
+
+# ── Quién puede llamar a cada función ────────────────────────────────────────
+#
+# ┌─ SIN ESTO, EL WEBHOOK NUNCA CORRE ─────────────────────────────────────┐
+# │ Por defecto la pasarela de Supabase exige un JWT ANTES de ejecutar la  │
+# │ función. Telegram, Tally y pg_cron no mandan ninguno: la petición se   │
+# │ queda en un 401 de la pasarela y el código no llega a verla.           │
+# │                                                                         │
+# │ Y ese 401 es indistinguible del que devuelve la propia función cuando  │
+# │ la firma no cuadra. Sin esta sección se pierde una tarde revisando un  │
+# │ secreto que estaba bien.                                                │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# Apagarlo NO deja la función abierta: cada una trae su propia autenticación,
+# y es MÁS estricta que un JWT porque va atada a quien debe llamarla.
+
+# Tally firma el cuerpo; `createSignatureVerifier` lo comprueba.
+[functions.tally-webhook]
+verify_jwt = false
+
+# Telegram manda `X-Telegram-Bot-Api-Secret-Token`, que solo conocen los dos.
+[functions.telegram-webhook]
+verify_jwt = false
+
+# pg_cron manda `x-checkin-cron-secret` y nada más: ni siquiera puede firmar.
+[functions.weekly-checkin]
+verify_jwt = false
+
+# Esta SÍ lo lleva: la dispara `generation-trigger.ts` con la service role key
+# en la cabecera. Es interna, nadie de fuera tiene por qué alcanzarla.
+[functions.generate-version]
+verify_jwt = true
