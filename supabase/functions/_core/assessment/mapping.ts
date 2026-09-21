@@ -43,15 +43,19 @@ export const TALLY_MAPPING: FieldMapping = {
   // │ `scripts/simular-tally.sh` dice cuáles ajustar.                    │
   // └────────────────────────────────────────────────────────────────────┘
   gender: { label: 'Género' },
-  age: { label: 'Edad', numeric: true },
+  // Respaldo por si un formulario pregunta la edad directa en vez de la
+  // fecha. `conditional` porque su ausencia es lo NORMAL y reportarla sería
+  // una falsa alarma en cada envío.
+  age: { label: 'Edad', numeric: true, conditional: true },
   weightKg: { label: 'Peso' },
   heightCm: { label: 'Altura' },
   lastWeighed: { label: 'Última vez que te pesaste' },
-  quitReasons: { label: 'Qué te cuesta más para mejorar' },
+  quitReasons: { label: '¿Qué es lo que más te frena?' },
   // Solo se le muestra a quien marcó «Mujer» en Género: por eso `conditional`.
   menopauseStage: { label: '¿En qué etapa hormonal te encuentras?', conditional: true },
   chronicConditions: { label: '¿Tienes alguna de estas condiciones?' },
   familyConditions: { label: '¿Y en tu familia cercana?' },
+  equipmentDetail: { label: '¿Qué pesos tienes disponibles?', conditional: true },
   birthDate: { label: 'Fecha de nacimiento' },
   medications: { label: 'Tomas algún fármaco' },
 };

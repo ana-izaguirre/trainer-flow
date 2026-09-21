@@ -51,6 +51,7 @@ export interface IntakeForVersion {
   readonly chronicConditions: string | null;
   readonly medications: string | null;
   readonly familyConditions: string | null;
+  readonly equipmentDetail: string | null;
   /** `AAAA-MM-DD`. La edad de arriba se deriva de aquí. */
   readonly birthDate: string | null;
 }

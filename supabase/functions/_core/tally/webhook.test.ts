@@ -407,8 +407,9 @@ describe('SPEC-016 · campos que el mapeo no encontró', () => {
     if (outcome.kind !== 'ingested') return;
 
     // El cuerpo de prueba no trae los de SPEC-016, así que salen aquí.
+    // `age` no sale: es respaldo de `birthDate` y su ausencia es lo normal.
     expect(outcome.camposAusentes).toContain('chronicConditions');
-    expect(outcome.camposAusentes).toContain('age');
+    expect(outcome.camposAusentes).toContain('medications');
 
     // Y NINGÚN valor: el handler loguea el outcome entero.
     expect(JSON.stringify(outcome)).not.toContain('Diabetes');

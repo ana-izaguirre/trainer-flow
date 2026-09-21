@@ -55,6 +55,8 @@ export interface ParsedAssessment {
   readonly medications: string | null;
   /** Condiciones de familiares. Factor de riesgo, no diagnóstico propio. */
   readonly familyConditions: string | null;
+  /** Los pesos que tiene, en sus palabras. Lo lee la IA. */
+  readonly equipmentDetail: string | null;
 }
 
 export interface AssessmentError {
@@ -307,6 +309,7 @@ export function validateAssessment(raw: unknown): AssessmentResult {
       birthDate: readIsoDate(raw['birthDate']),
       medications: readFreeText(raw['medications']),
       familyConditions: readFreeText(raw['familyConditions']),
+      equipmentDetail: readFreeText(raw['equipmentDetail']),
     },
   };
 }

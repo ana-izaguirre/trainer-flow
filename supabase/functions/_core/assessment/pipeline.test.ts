@@ -69,6 +69,7 @@ describe('el formulario real, de punta a punta', () => {
       birthDate: null,
       medications: null,
       familyConditions: null,
+      equipmentDetail: null,
     });
   });
 
@@ -93,6 +94,7 @@ describe('el formulario real, de punta a punta', () => {
     'birthDate',
     'medications',
     'familyConditions',
+    'equipmentDetail',
   ]);
 
   it('toda etiqueta CONFIRMADA existe en el formulario', () => {

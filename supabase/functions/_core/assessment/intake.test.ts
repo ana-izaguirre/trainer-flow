@@ -47,6 +47,7 @@ function ficha(extra: Partial<IntakeForVersion> = {}): IntakeForVersion {
     chronicConditions: 'Diabetes tipo 2. Padre con hipertensión.',
     medications: 'Metformina 850 mg, 2 al día',
     familyConditions: 'Padre con diabetes tipo 2',
+    equipmentDetail: 'Un par de mancuernas de 8 kg',
     birthDate: '1992-03-12',
     ...extra,
   };
@@ -246,4 +247,15 @@ it('la ficha separa lo propio de lo familiar', () => {
 
 it('sin antecedentes familiares, ese bloque no aparece', () => {
   expect(formatIntake(ficha({ familyConditions: null }))).not.toContain('👪');
+});
+
+it('la ficha muestra los pesos bajo el material', () => {
+  expect(formatIntake(ficha())).toContain('Un par de mancuernas de 8 kg');
+});
+
+it('sin pesos, el material sale solo', () => {
+  const texto = formatIntake(ficha({ equipmentDetail: null }));
+
+  expect(texto).toContain('Material:');
+  expect(texto).not.toContain('mancuernas de 8 kg');
 });

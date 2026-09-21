@@ -29,6 +29,7 @@ const PETICION = {
   chronicConditions: null,
   medications: null,
   familyConditions: null,
+  equipmentDetail: null,
   lifestyle: null,
   notes: null,
 } as const;

@@ -30,6 +30,7 @@ function peticion(overrides: Partial<AIRequest> = {}): AIRequest {
     chronicConditions: null,
     medications: null,
     familyConditions: null,
+    equipmentDetail: null,
     lifestyle: null,
     notes: null,
     limitations: null,
@@ -259,4 +260,20 @@ it('lo propio y lo familiar van SEPARADOS en el prompt', () => {
   expect(p).toContain('Condiciones que tiene el cliente: Hipertensión');
   expect(p).toContain('factor de riesgo, no diagnóstico suyo');
   expect(p).toContain('Padre con diabetes');
+});
+
+it('los pesos van pegados al material, que es a lo que se refieren', () => {
+  // «Mancuernas» sin kg deja a la IA programando a ciegas: «press 3x8 con
+  // mancuernas» significa cosas muy distintas con 5 kg que con 25.
+  const p = buildPrompt(
+    peticion({ equipment: 'Mancuernas, Banco', equipmentDetail: 'Un par de 8 kg' }),
+  );
+
+  expect(p).toContain('Material disponible: Mancuernas, Banco — Un par de 8 kg');
+});
+
+it('sin detalle, el material se pinta como siempre', () => {
+  expect(buildPrompt(peticion({ equipment: 'Gimnasio' }))).toContain(
+    '- Material disponible: Gimnasio',
+  );
 });
