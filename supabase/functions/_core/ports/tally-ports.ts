@@ -30,8 +30,9 @@ export interface AssessmentToIngest {
   readonly lastWeighed: string | null;
   readonly quitReasons: string | null;
   readonly menopauseStage: string | null;
-  /** Se guarda, pero no está en `AIRequest`: nunca llega al proveedor. */
   readonly chronicConditions: string | null;
+  readonly birthDate: string | null;
+  readonly medications: string | null;
 }
 
 export interface IngestedIds {

@@ -31,12 +31,13 @@ esta spec porque no hay nada que construir.
 
 | Campo | Al prompt | A la ficha 📄 | Por qué |
 |---|---|---|---|
-| Edad, peso, altura | ✅ | ✅ | Cambian volumen y selección de ejercicios |
-| Última vez que se pesó | ❌ | ✅ | Dice si el peso es fiable — eso lo juzga él |
+| Fecha de nacimiento → edad derivada | ✅ | ✅ | Una edad se queda vieja; una fecha no |
+| Peso, altura, último pesaje | ✅ | ✅ | Cambian volumen y selección |
 | Género | ✅ | ✅ | Afecta la programación |
-| Por qué desistió | ✅ | ✅ | Una rutina para quien abandonó por falta de tiempo no se parece a una para quien abandonó por falta de equipo |
+| Qué le cuesta más para mejorar | ✅ | ✅ | La rutina que se cumple es mejor que la óptima |
 | Etapa menopáusica | ✅ | ✅ | Ver §3.1 |
-| **Enfermedades crónicas y familiares** | ❌ | ✅ | Ver §3.2 |
+| **Enfermedades crónicas y familiares** | ✅ | ✅ | Ver §3.2 |
+| **Fármacos** | ✅ | ✅ | Ver §3.2 |
 
 ### 3.1 Por qué la etapa menopáusica sí
 
@@ -47,20 +48,27 @@ recuperación, que es práctica establecida y está en cualquier manual.
 Sigue siendo dato íntimo hacia un proveedor externo. Si se quiere cambiar, es
 **una línea** en `prompt-builder.ts`.
 
-### 3.2 Por qué las enfermedades crónicas NO
+### 3.2 El contexto clínico SÍ va a la IA
 
-Decisión de Ana, y coincide con el principio del proyecto.
+**Decisión de Ana, tomada después de plantearle la alternativa.** La primera
+versión de esta spec dejaba fuera las enfermedades y los fármacos; se cambió
+a que la IA reciba todo.
 
-**La IA no necesita saber «diabetes» para escribir una rutina.** Traducir
-«diabetes tipo 2» en «intensidad moderada, sin series al fallo» es criterio
-clínico, y es el trabajo del entrenador — y su responsabilidad profesional.
-Que un modelo lo haga solo es exactamente lo que este sistema está construido
-para impedir.
+**El seguro no se toca.** `DRAFT → SENT` sigue sin existir, así que el
+entrenador aprueba cada rutina antes de que salga. Lo que cambia es que el
+borrador que él revisa llega ya con el contexto tenido en cuenta.
 
-Además, «familia cercana» son datos de **terceros**: el padre del cliente
-nunca llenó un formulario.
+Lo que hace que eso sea revisable y no una caja negra es el prompt: obliga al
+modelo a **declarar en `warnings` una línea por cada cosa que tuvo en cuenta
+y qué decidió por ella**. El entrenador pasa de auditar una rutina a revisar
+decisiones.
 
-Se guardan, se le enseñan a él en la ficha con su aviso, y él decide.
+Y le pone un límite explícito: *no des consejo médico, no sugieras cambiar ni
+dejar un fármaco, no interpretes síntomas; solo programas entrenamiento.*
+
+Sigue siendo dato sensible hacia un proveedor externo, y «familia cercana»
+son datos de terceros. Queda escrito aquí para que la decisión sea visible, no
+implícita.
 
 ## 4. Alcance
 
@@ -82,12 +90,15 @@ ficha de SPEC-015.
    dato se pierde en silencio. El outcome `ingested` lleva `camposAusentes`
    con los NOMBRES, nunca los valores, y el handler ya loguea el outcome
    entero: una línea en vez de dos, bajo el mismo `requestId`.
-3. **`chronicConditions` no puede llegar al proveedor**, y no por un filtro:
-   `AIRequest` **no tiene ese campo** y `version_for_generation` **no lo
-   devuelve**. Dos capas donde el dato no cabe, en vez de un `if` que alguien
-   pueda quitar. Hay test de las dos.
+3. **El contexto clínico llega al prompt acompañado de qué hacer con él.**
+   «Diabetes» a secas deja que el modelo improvise. Hay test de que la
+   sección aparece, de que exige declarar en `warnings`, y de que prohíbe dar
+   consejo médico.
 4. **Nada de esto va al aviso de nueva evaluación.** Ese se lee en la
-   pantalla de bloqueo y sigue siendo un resumen.
+   pantalla de bloqueo y sigue siendo un resumen. La ficha 📄 se pide.
+
+4 bis. **La fecha de nacimiento manda sobre `age`.** La edad se deriva en SQL
+   con `age` de respaldo, así que aguas abajo llega un solo valor.
 5. **`weightKg` y `heightCm` se guardan como números**, no como texto: un
    «78,5 kg» y un «78.5» tienen que ser el mismo dato.
 6. **La edad es una foto.** Se guarda junto a la fecha de la evaluación, que
@@ -130,8 +141,9 @@ además habla de personas que no son el cliente.
   evaluación se ingiere igual.
 - **CA-3** — DADO que faltan campos opcionales mapeados, CUANDO se procesa,
   ENTONCES sale `tally.campos_ausentes` con sus nombres y **ningún valor**.
-- **CA-4** — DADO una evaluación con enfermedades, CUANDO se arma el prompt,
-  ENTONCES **no** aparecen por ningún lado.
+- **CA-4** — DADO una evaluación con enfermedades o fármacos, CUANDO se arma
+  el prompt, ENTONCES aparecen, con la instrucción de adaptar, declarar en
+  `warnings` y no dar consejo médico.
 - **CA-5** — DADO esa misma, CUANDO el entrenador pulsa 📄, ENTONCES **sí**
   las ve, con su aviso.
 - **CA-6** — DADO `peso: "78,5"`, CUANDO se mapea, ENTONCES se guarda `78.50`.

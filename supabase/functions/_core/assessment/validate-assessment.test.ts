@@ -59,6 +59,8 @@ describe('evaluación válida', () => {
       quitReasons: null,
       menopauseStage: null,
       chronicConditions: null,
+      birthDate: null,
+      medications: null,
     });
   });
 

@@ -66,6 +66,8 @@ describe('el formulario real, de punta a punta', () => {
       quitReasons: null,
       menopauseStage: null,
       chronicConditions: null,
+      birthDate: null,
+      medications: null,
     });
   });
 
@@ -87,6 +89,8 @@ describe('el formulario real, de punta a punta', () => {
     'quitReasons',
     'menopauseStage',
     'chronicConditions',
+    'birthDate',
+    'medications',
   ]);
 
   it('toda etiqueta CONFIRMADA existe en el formulario', () => {

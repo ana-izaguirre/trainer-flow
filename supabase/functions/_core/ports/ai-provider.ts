@@ -39,18 +39,23 @@ export interface AIRequest {
    */
   readonly menopauseStage: string | null;
 
-  // ┌─ LO QUE NO ESTÁ AQUÍ, Y NO ES UN OLVIDO ────────────────────────────┐
-  // │ `chronicConditions` NO tiene campo en este tipo, y por eso no puede │
-  // │ llegar al proveedor: no hay dónde escribirlo.                       │
+  /** Cuándo se pesó por última vez: dice si el peso es fiable. */
+  readonly lastWeighed: string | null;
+
+  // ┌─ CONTEXTO CLÍNICO ──────────────────────────────────────────────────┐
+  // │ Enfermedades propias o familiares, y fármacos.                      │
   // │                                                                     │
-  // │ La IA no necesita saber «diabetes» para escribir una rutina.        │
-  // │ Traducir eso en intensidad segura es criterio clínico, y es el      │
-  // │ trabajo del entrenador — y su responsabilidad. Lo ve él en la       │
-  // │ ficha 📄 y decide (SPEC-016 §3.2).                                  │
+  // │ Decisión de Ana: la IA recibe todo el contexto. El seguro no        │
+  // │ cambia — `DRAFT → SENT` no existe, así que el entrenador aprueba    │
+  // │ cada rutina antes de que salga.                                     │
   // │                                                                     │
-  // │ `lastWeighed` tampoco: dice si el peso es fiable, y eso lo juzga    │
-  // │ una persona.                                                        │
+  // │ Lo que hace que esto funcione es que el prompt OBLIGA al modelo a   │
+  // │ declarar en `warnings` qué tuvo en cuenta y qué decidió por ello.   │
+  // │ Así el entrenador revisa decisiones, no tiene que adivinar por qué  │
+  // │ la rutina salió como salió (SPEC-016 §3.2).                         │
   // └─────────────────────────────────────────────────────────────────────┘
+  readonly chronicConditions: string | null;
+  readonly medications: string | null;
 }
 
 export type AIFailureReason = 'RATE_LIMITED' | 'TIMEOUT' | 'API_ERROR' | 'INVALID_OUTPUT';

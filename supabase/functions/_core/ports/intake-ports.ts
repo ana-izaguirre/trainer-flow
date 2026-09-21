@@ -42,13 +42,16 @@ export interface IntakeForVersion {
   readonly quitReasons: string | null;
   readonly menopauseStage: string | null;
   /**
-   * El ÚNICO sitio del sistema donde este dato aparece.
+   * Enfermedades propias y de familia cercana.
    *
-   * No está en `AIRequest`, así que no puede llegar al proveedor. Aquí sí,
-   * porque esta ficha la pide el entrenador pulsando un botón y es él quien
-   * tiene que decidir qué hacer con ella (SPEC-016 §3.2).
+   * Va también al prompt (decisión de Ana), pero aquí se lee entero: el
+   * entrenador revisa el contexto Y los `warnings` con los que la IA dice
+   * qué tuvo en cuenta, antes de aprobar nada.
    */
   readonly chronicConditions: string | null;
+  readonly medications: string | null;
+  /** `AAAA-MM-DD`. La edad de arriba se deriva de aquí. */
+  readonly birthDate: string | null;
 }
 
 export interface IntakeRepo {

@@ -26,6 +26,9 @@ function peticion(overrides: Partial<AIRequest> = {}): AIRequest {
     heightCm: null,
     quitReasons: null,
     menopauseStage: null,
+    lastWeighed: null,
+    chronicConditions: null,
+    medications: null,
     limitations: null,
     instruction: null,
     ...overrides,
@@ -161,12 +164,37 @@ describe('los campos de SPEC-016', () => {
     expect(p).not.toContain('undefined');
   });
 
-  it('CA-4 · las enfermedades crónicas NO tienen dónde entrar', () => {
-    // No es que el prompt las filtre: es que `AIRequest` no tiene campo para
-    // ellas. El tipo hace imposible mandarlas (SPEC-016 §3.2).
-    const claves = Object.keys(peticion());
+  it('CA-4 · el contexto clínico SÍ va, y con instrucciones de qué hacer', () => {
+    // Decisión de Ana: la IA recibe todo. El seguro no cambia — el entrenador
+    // aprueba cada rutina antes de que salga.
+    const p = buildPrompt(
+      peticion({
+        chronicConditions: 'Hipertensión. Padre con diabetes.',
+        medications: 'Enalapril 10 mg',
+      }),
+    );
 
-    expect(claves).not.toContain('chronicConditions');
-    expect(claves).not.toContain('lastWeighed');
+    expect(p).toContain('Hipertensión');
+    expect(p).toContain('Enalapril');
+  });
+
+  it('lo que hace revisable la adaptación: le exige declarar por qué', () => {
+    // Sin esto, el entrenador tendría que adivinar por qué la rutina salió
+    // como salió. Con esto revisa decisiones, no audita ejercicios.
+    const p = buildPrompt(peticion({ chronicConditions: 'Hipertensión' }));
+
+    expect(p).toContain('Declara en `warnings`');
+    expect(p).toContain('más conservadora');
+  });
+
+  it('y le prohíbe salirse de su terreno', () => {
+    const p = buildPrompt(peticion({ medications: 'Enalapril 10 mg' }));
+
+    expect(p).toContain('NO des consejo médico');
+    expect(p).toContain('Solo programas entrenamiento');
+  });
+
+  it('sin contexto clínico, esa sección no aparece', () => {
+    expect(buildPrompt(peticion())).not.toContain('CONTEXTO CLÍNICO');
   });
 });

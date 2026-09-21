@@ -47,7 +47,9 @@ export const TALLY_MAPPING: FieldMapping = {
   weightKg: { label: 'Peso' },
   heightCm: { label: 'Altura' },
   lastWeighed: { label: 'Última vez que te pesaste' },
-  quitReasons: { label: 'Por qué has desistido de entrenar' },
+  quitReasons: { label: 'Qué te cuesta más para mejorar' },
   menopauseStage: { label: 'En qué etapa estás' },
   chronicConditions: { label: 'Enfermedades crónicas' },
+  birthDate: { label: 'Fecha de nacimiento' },
+  medications: { label: 'Tomas algún fármaco' },
 };
