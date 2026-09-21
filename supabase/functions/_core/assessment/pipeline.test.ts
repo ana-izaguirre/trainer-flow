@@ -27,6 +27,11 @@ function procesar() {
   return { sobre: sobre.value, campos: mapFormFields(sobre.value.fields, MAPPING) };
 }
 
+/** Una regla puede declarar una etiqueta o varias. */
+function etiquetasDe(regla: { label: string | readonly string[] }): readonly string[] {
+  return typeof regla.label === 'string' ? [regla.label] : regla.label;
+}
+
 // ---------------------------------------------------------------------------
 
 describe('el formulario real, de punta a punta', () => {
@@ -56,7 +61,8 @@ describe('el formulario real, de punta a punta', () => {
       equipment: 'Sin equipamiento, Banco, Cardio (cinta, bicicleta, elíptica, etc.)',
       // Marcadas «Ninguna» Y «Espalda baja» Y «Otra». Ante la duda, se avisa.
       hasLimitations: true,
-      limitationsDetail: 'Nada',
+      // Parte del cuerpo + texto libre: las dos preguntas, un solo campo.
+      limitationsDetail: 'Espalda baja, Otra, Nada',
       notes: 'No',
       gender: null,
       age: null,
@@ -103,8 +109,11 @@ describe('el formulario real, de punta a punta', () => {
 
     const huerfanas = Object.entries(MAPPING)
       .filter(([campo]) => !PENDIENTES_DE_CONFIRMAR.has(campo))
-      .filter(([, regla]) => !delFormulario.has(regla.label))
-      .map(([campo, regla]) => `${campo} → "${regla.label}"`);
+      .flatMap(([campo, regla]) =>
+        etiquetasDe(regla)
+          .filter((etiqueta) => !delFormulario.has(etiqueta))
+          .map((etiqueta) => `${campo} → "${etiqueta}"`),
+      );
 
     expect(huerfanas).toEqual([]);
   });
@@ -118,7 +127,7 @@ describe('el formulario real, de punta a punta', () => {
 
     const yaCuadran = [...PENDIENTES_DE_CONFIRMAR].filter((campo) => {
       const regla = MAPPING[campo as keyof typeof MAPPING];
-      return regla !== undefined && delFormulario.has(regla.label);
+      return regla !== undefined && etiquetasDe(regla).every((e) => delFormulario.has(e));
     });
 
     expect(yaCuadran).toEqual([]);

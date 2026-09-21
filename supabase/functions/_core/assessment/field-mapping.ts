@@ -32,8 +32,17 @@ export interface FormField {
 }
 
 export interface FieldRule {
-  /** El texto de la pregunta, tal cual aparece en el formulario. */
-  readonly label: string;
+  /**
+   * El texto de la pregunta, tal cual aparece en el formulario.
+   *
+   * ┌─ VARIAS PREGUNTAS, UN SOLO CAMPO ──────────────────────────────────┐
+   * │ Una lista de etiquetas une las respuestas en un texto, en el orden │
+   * │ en que el formulario las manda. «Lesiones» pregunta DOS veces —qué │
+   * │ parte del cuerpo, y luego qué debemos tener en cuenta—, y las dos  │
+   * │ son el mismo dato del dominio.                                     │
+   * └────────────────────────────────────────────────────────────────────┘
+   */
+  readonly label: string | readonly string[];
   /**
    * La pregunta solo se le muestra a algunas personas.
    *
@@ -72,6 +81,13 @@ export interface FieldRule {
    * colarse como si fuera una duración.
    */
   readonly numeric?: boolean;
+  /**
+   * Opciones que NO son un valor: «Ninguna» marcada sola significa que no hay
+   * detalle que guardar, no que el detalle sea la palabra «Ninguna».
+   *
+   * Si todo lo marcado está en esta lista, el campo se omite.
+   */
+  readonly omitWhen?: readonly string[];
   /**
    * Traduce el texto de la opción al valor que espera el dominio:
    * `"Principiante (Menos de 6 meses)"` → `"beginner"`.
@@ -162,19 +178,102 @@ function isFormField(value: unknown): value is FormField {
 }
 
 /**
+ * Aplica UNA regla a un campo. `undefined` significa «no hay valor que
+ * guardar», y es el único centinela: `false` y `0` son valores legítimos.
+ */
+function applyRule(field: FormField, rule: FieldRule): unknown {
+  const text = toText(field.value, field.options);
+
+  if (rule.trueWhen !== undefined) {
+    // Una pregunta sí/no sin respuesta es «no», no «sin contestar»: en el
+    // dominio `hasLimitations` no admite ausencia.
+    if (typeof field.value === 'boolean') return field.value;
+
+    const affirmatives = rule.trueWhen.map(normalize);
+    return text !== null && affirmatives.includes(normalize(text));
+  }
+
+  if (rule.falseWhen !== undefined) {
+    const negations = rule.falseWhen.map(normalize);
+    // `.some` sobre una lista vacía es `false`: sin marcar nada, no hay
+    // limitación declarada. Y basta UNA marca fuera de las negaciones para
+    // que sea `true`, aunque también esté marcada «Ninguna».
+    return toTextList(field.value, field.options).some(
+      (selected) => !negations.includes(normalize(selected)),
+    );
+  }
+
+  if (rule.numeric === true) {
+    // Una respuesta sin número se omite igual que una ausente: no hay valor
+    // que inventar, y la validación dirá cuál falta.
+    return firstInteger(text) ?? undefined;
+  }
+
+  // Un valor vacío no pisa uno que ya se había resuelto, y tampoco crea la
+  // clave: la ausencia se representa omitiendo el campo.
+  if (text === null) return undefined;
+
+  if (rule.omitWhen !== undefined) {
+    const vacias = rule.omitWhen.map(normalize);
+    const utiles = toTextList(field.value, field.options).filter(
+      (selected) => !vacias.includes(normalize(selected)),
+    );
+    return utiles.length === 0 ? undefined : utiles.join(', ');
+  }
+
+  if (rule.valueMap !== undefined) return translate(text, rule.valueMap);
+
+  // Todo lo demás sale como texto, incluido un número o un booleano que
+  // llegue del formulario. Quien necesite el número lo declara con
+  // `numeric: true`: tener dos caminos para eso es lo que hacía ambiguo el
+  // tipo del resultado.
+  return text;
+}
+
+/**
+ * Junta dos respuestas de una regla que declara varias preguntas.
+ *
+ * Dos textos se unen. Cualquier otra cosa se queda con la primera: no hay
+ * forma sensata de sumar dos números ni dos sí/no, y elegir una haría parecer
+ * intencionado lo que sería un mapeo mal escrito.
+ */
+function unir(previo: unknown, nuevo: unknown): unknown {
+  if (previo === undefined) return nuevo;
+  if (typeof previo === 'string' && typeof nuevo === 'string') return `${previo}, ${nuevo}`;
+  return previo;
+}
+
+/**
  * Aplica el mapeo y devuelve un objeto plano listo para `validateAssessment`.
  *
  * Los campos sin respuesta se **omiten** en vez de quedar en `null`: así la
  * validación distingue «no contestó» de «contestó algo inválido».
+ *
+ * ┌─ UNA PREGUNTA PUEDE ALIMENTAR VARIOS CAMPOS ───────────────────────────┐
+ * │ «Lesiones, dolor o limitaciones» ofrece partes del cuerpo, y esa misma │
+ * │ respuesta es DOS cosas: el sí/no que dispara el aviso de seguridad, y  │
+ * │ el detalle de qué le duele.                                           │
+ * │                                                                        │
+ * │ Antes cada etiqueta alimentaba un solo campo, así que la regla del     │
+ * │ booleano se quedaba con la respuesta y «Cuello» se perdía: la IA sabía │
+ * │ que había una limitación y no cuál.                                    │
+ * └────────────────────────────────────────────────────────────────────────┘
  */
 export function mapFormFields(
   fields: readonly FormField[],
   mapping: FieldMapping,
 ): Record<string, unknown> {
   // Índice por etiqueta normalizada, para no recorrer el mapeo por cada campo.
-  const byLabel = new Map<string, { domainField: string; rule: FieldRule }>();
+  // Una lista por etiqueta: varios campos pueden salir de la misma pregunta.
+  const byLabel = new Map<string, { domainField: string; rule: FieldRule }[]>();
   for (const [domainField, rule] of Object.entries(mapping)) {
-    byLabel.set(normalize(rule.label), { domainField, rule });
+    const etiquetas = typeof rule.label === 'string' ? [rule.label] : rule.label;
+    for (const etiqueta of etiquetas) {
+      const clave = normalize(etiqueta);
+      const lista = byLabel.get(clave) ?? [];
+      lista.push({ domainField, rule });
+      byLabel.set(clave, lista);
+    }
   }
 
   const result: Record<string, unknown> = {};
@@ -182,57 +281,16 @@ export function mapFormFields(
   for (const field of fields) {
     if (!isFormField(field)) continue;
 
-    const target = byLabel.get(normalize(field.label));
-    if (target === undefined) continue;
+    for (const { domainField, rule } of byLabel.get(normalize(field.label)) ?? []) {
+      const value = applyRule(field, rule);
+      if (value === undefined) continue;
 
-    const text = toText(field.value, field.options);
-
-    if (target.rule.trueWhen !== undefined) {
-      // Una pregunta sí/no sin respuesta es «no», no «sin contestar»: en el
-      // dominio `hasLimitations` no admite ausencia.
-      if (typeof field.value === 'boolean') {
-        result[target.domainField] = field.value;
-        continue;
-      }
-
-      const affirmatives = target.rule.trueWhen.map(normalize);
-      result[target.domainField] = text !== null && affirmatives.includes(normalize(text));
-      continue;
+      // Unir solo cuando la regla PIDE varias preguntas. Una etiqueta repetida
+      // en el formulario es un accidente, y ahí sigue ganando la última: juntar
+      // «@viejo, @nuevo» inventaría un valor que nadie escribió.
+      result[domainField] =
+        typeof rule.label === 'string' ? value : unir(result[domainField], value);
     }
-
-    if (target.rule.falseWhen !== undefined) {
-      const negations = target.rule.falseWhen.map(normalize);
-      // `.some` sobre una lista vacía es `false`: sin marcar nada, no hay
-      // limitación declarada. Y basta UNA marca fuera de las negaciones para
-      // que sea `true`, aunque también esté marcada «Ninguna».
-      result[target.domainField] = toTextList(field.value, field.options).some(
-        (selected) => !negations.includes(normalize(selected)),
-      );
-      continue;
-    }
-
-    if (target.rule.numeric === true) {
-      const parsed = firstInteger(text);
-      // Una respuesta sin número se omite igual que una ausente: no hay valor
-      // que inventar, y la validación dirá cuál falta.
-      if (parsed !== null) result[target.domainField] = parsed;
-      continue;
-    }
-
-    // Un valor vacío no pisa uno que ya se había resuelto, y tampoco crea la
-    // clave: la ausencia se representa omitiendo el campo.
-    if (text === null) continue;
-
-    if (target.rule.valueMap !== undefined) {
-      result[target.domainField] = translate(text, target.rule.valueMap);
-      continue;
-    }
-
-    // Todo lo demás sale como texto, incluido un número o un booleano que
-    // llegue del formulario. Quien necesite el número lo declara con
-    // `numeric: true`: tener dos caminos para eso es lo que hacía ambiguo el
-    // tipo del resultado.
-    result[target.domainField] = text;
   }
 
   return result;

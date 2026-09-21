@@ -28,7 +28,20 @@ export const TALLY_MAPPING: FieldMapping = {
   // «Ninguna» convive con las partes del cuerpo y Tally deja marcar las dos.
   // Ante la contradicción, `true`: este campo dispara el aviso de seguridad.
   hasLimitations: { label: 'Lesiones, dolor o limitaciones', falseWhen: ['Ninguna'] },
-  limitationsDetail: { label: 'Cuéntanos brevemente qué debemos tener en cuenta.' },
+  /**
+   * El detalle sale de DOS preguntas y las dos hacen falta:
+   *
+   * - La misma que `hasLimitations`, porque esa respuesta es dos cosas —el
+   *   sí/no y QUÉ parte del cuerpo—. Sin esto «Espalda baja» se perdía y la
+   *   IA sabía que había una limitación pero no cuál.
+   * - La de texto libre, que es donde el cliente cuenta qué le pasa.
+   *
+   * Quedarse con una sola pierde la otra en silencio.
+   */
+  limitationsDetail: {
+    label: ['Lesiones, dolor o limitaciones', 'Cuéntanos brevemente qué debemos tener en cuenta.'],
+    omitWhen: ['Ninguna'],
+  },
   notes: { label: '¿Hay algo más que tu entrenador deba saber?' },
 
   // ── SPEC-016 ────────────────────────────────────────────────────────────
