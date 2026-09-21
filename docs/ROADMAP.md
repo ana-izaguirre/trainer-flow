@@ -100,6 +100,58 @@ revés, el fallback siempre queda "para después".
 | **S-27** ✅ | Seguridad | `tests/integration/security.test.ts` | **SPEC-013 cerrada.** Los 11 casos en verde, y uno estaba roto |
 | **S-28** | Deploy y prueba real | Funciones desplegadas + un cliente real | El entrenador aprueba una rutina y el cliente la recibe |
 
+## Después del MVP — pedido por el entrenador al usarlo
+
+Estas tres salieron de usar el sistema, no de planificarlo. Tienen spec
+escrita y esperan turno.
+
+| Spec | Qué resuelve | Por qué no es urgente |
+|---|---|---|
+| **SPEC-017** | Plantillas editables desde la base | Hoy se cambian con un despliegue. Primero conviene ver **cuánto** las cambia |
+| **SPEC-018** | Sus preferencias en cada prompt | Es lo que hace que las rutinas se parezcan a **las suyas** |
+| **SPEC-019** | Ilustración por ejercicio | Ver abajo |
+
+### SPEC-019 — la decisión que ya está tomada
+
+La librería [workout-guide](https://github.com/bryllim/workout-guide) trae
+302 ejercicios ilustrados (PNG y SVG, CC BY-SA 4.0) con metadatos.
+
+**Que la IA genere links de YouTube está descartado.** El coste en tokens es
+irrelevante —unos 180 por rutina— pero el modelo **se inventa los
+identificadores de vídeo**: produce URLs con buena pinta que son 404 o, peor,
+un vídeo real que no corresponde. Comprobarlo obligaría al entrenador a abrir
+doce links por rutina.
+
+El diseño acordado, en dos capas:
+
+```
+¿El ejercicio está en la librería?
+   SÍ  → ilustración real
+   NO  → link de BÚSQUEDA en YouTube (armado con el nombre, no generado)
+```
+
+Así ningún cliente se queda sin referencia, y no hay nada que inventar. A la
+IA se le dan los 302 slugs y se le obliga a elegir uno o `null`, y el slug se
+valida contra la lista: uno inventado no llega nunca al cliente.
+
+**¿Y no se puede verificar un link de YouTube?** Que EXISTA, sí: el endpoint
+`youtube.com/oembed` devuelve 404 si el vídeo no está y 200 con su título si
+está. Doce peticiones por rutina, un segundo.
+
+Pero eso solo atrapa los muertos. **Un ID válido que apunta a un vídeo de
+cocina pasa la verificación perfectamente**, y lo único que queda es el
+título, que no dice si la técnica está bien enseñada ni si está en español.
+Verificar convierte «doce links rotos» en «ocho que abren y cuatro que
+faltan», y entre esos ocho algunos apuntan a lo que no es.
+
+Los otros dos caminos no necesitan verificación porque no hay nada que
+inventar. Ese es el punto: el problema no es que verificar sea caro, es que
+desaparece si el modelo no genera identificadores.
+
+**Se empieza por las plantillas**: 38 ejercicios, mapeo hecho a mano una vez,
+cobertura completa y riesgo cero. Lo que genera la IA va después, cuando haya
+datos de si acierta eligiendo.
+
 ---
 
 ## Regla de cierre de sesión
