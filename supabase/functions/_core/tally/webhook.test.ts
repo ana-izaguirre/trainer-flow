@@ -415,3 +415,20 @@ describe('SPEC-016 · campos que el mapeo no encontró', () => {
     expect(outcome.camposAusentes.every((c) => typeof c === 'string')).toBe(true);
   });
 });
+
+describe('una pregunta condicional no se reporta como ausente', () => {
+  it('la etapa hormonal no sale en camposAusentes', async () => {
+    // Solo se le muestra a quien marcó «Mujer», así que falta en CADA envío
+    // de hombre. Reportarla enseñaría a ignorar el aviso justo cuando sirve.
+    const e = espia();
+
+    const outcome = await handleTallyWebhook(entrada(), e.deps);
+
+    expect(outcome.kind).toBe('ingested');
+    if (outcome.kind !== 'ingested') return;
+
+    expect(outcome.camposAusentes).not.toContain('menopauseStage');
+    // Los demás sí: son los que de verdad pueden estar mal escritos.
+    expect(outcome.camposAusentes).toContain('chronicConditions');
+  });
+});

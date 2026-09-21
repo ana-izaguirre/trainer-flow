@@ -48,7 +48,8 @@ export const TALLY_MAPPING: FieldMapping = {
   heightCm: { label: 'Altura' },
   lastWeighed: { label: 'Última vez que te pesaste' },
   quitReasons: { label: 'Qué te cuesta más para mejorar' },
-  menopauseStage: { label: 'En qué etapa estás' },
+  // Solo se le muestra a quien marcó «Mujer» en Género: por eso `conditional`.
+  menopauseStage: { label: '¿En qué etapa hormonal te encuentras?', conditional: true },
   chronicConditions: { label: 'Enfermedades crónicas' },
   birthDate: { label: 'Fecha de nacimiento' },
   medications: { label: 'Tomas algún fármaco' },

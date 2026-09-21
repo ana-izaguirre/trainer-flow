@@ -35,6 +35,18 @@ export interface FieldRule {
   /** El texto de la pregunta, tal cual aparece en el formulario. */
   readonly label: string;
   /**
+   * La pregunta solo se le muestra a algunas personas.
+   *
+   * ┌─ PARA QUÉ SIRVE ESTA MARCA ─────────────────────────────────────────┐
+   * │ `camposAusentes` avisa de las etiquetas que el mapeo no encontró,   │
+   * │ para descubrir que una está mal escrita. Una pregunta condicional   │
+   * │ falta en CADA envío de quien no la ve —la etapa hormonal en todos   │
+   * │ los hombres—, y esa falsa alarma enseña a ignorar el aviso justo    │
+   * │ cuando sirve para algo.                                             │
+   * └─────────────────────────────────────────────────────────────────────┘
+   */
+  readonly conditional?: boolean;
+  /**
    * Textos que significan «sí». Si está presente, el campo se convierte a
    * booleano; si no, se deja como texto.
    */
