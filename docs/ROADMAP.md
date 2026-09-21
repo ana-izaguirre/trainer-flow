@@ -109,7 +109,7 @@ escrita y esperan turno.
 |---|---|---|
 | **SPEC-017** | Plantillas editables desde la base | Hoy se cambian con un despliegue. Primero conviene ver **cuánto** las cambia |
 | **SPEC-018** | Sus preferencias en cada prompt | Es lo que hace que las rutinas se parezcan a **las suyas** |
-| **SPEC-019** | Ilustración por ejercicio | Ver abajo |
+| **SPEC-019** | Ilustración por ejercicio | Ver abajo. **111 de 302 son bodyweight**: la categoría mejor cubierta |
 
 ### SPEC-019 — la decisión que ya está tomada
 
