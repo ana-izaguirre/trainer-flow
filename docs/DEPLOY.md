@@ -211,13 +211,57 @@ rutina en `APPROVED`, le llega en ese momento.
 |---|---|
 | No contesta a nada | `getWebhookInfo` → `last_error_message` |
 | Contesta «no te tengo registrado» | Falta el paso 9, o el `telegram_user_id` no es el tuyo |
-| Tally no entra | Logs de `tally-webhook`. Suele ser `TALLY_SIGNING_SECRET` |
+| Tally devuelve **401** | Hay dos 401 distintos y no se parecen en nada: ver abajo |
 | La función revienta al arrancar | Falta un secreto del paso 4. El log dice **cuál** |
 | El cliente no recibe su rutina | ¿Canjeó el deep link? Sin vincular se queda en `APPROVED` |
 | El check-in no sale | `select * from cron.job` — ¿existe el job del paso 8? |
 
 Los logs están en el panel: Edge Functions → la función → Logs. Todo lleva
 `request_id`, así que una petición se sigue de punta a punta.
+
+### Los dos 401, y cómo distinguirlos
+
+Un webhook que devuelve 401 puede estar fallando en **dos sitios que no se
+parecen**, y desde fuera se ven idénticos:
+
+```
+Tally ──► pasarela de Supabase ──► función ──► base
+             ▲                        ▲
+          401 (A)                  401 (B)
+       falta el JWT            la firma no cuadra
+```
+
+**Se distinguen por los logs**, en Edge Functions → la función → Logs:
+
+| | ¿Hay línea en los logs? | Qué pasó |
+|---|---|---|
+| **A** | **No**, ninguna | La pasarela cortó antes. La función ni se enteró |
+| **B** | **Sí** | La función corrió y rechazó la firma |
+
+**El caso A es el que muerde en el primer despliegue.** Por defecto Supabase
+exige un JWT antes de ejecutar la función, y ni Tally, ni Telegram, ni
+`pg_cron` mandan uno. Se apaga por función en `supabase/config.toml`:
+
+```toml
+[functions.tally-webhook]
+verify_jwt = false
+```
+
+Eso no las deja abiertas: cada una comprueba lo suyo —la firma de Tally, el
+`secret_token` de Telegram, el `x-checkin-cron-secret` del cron— y esa
+comprobación va atada a quien debe llamarla, cosa que un JWT genérico no hace.
+`generate-version` sí lo conserva: es interna y se la llama con la service
+role key.
+
+Si ya está desplegada sin eso, no hace falta esperar a un merge:
+
+```bash
+supabase functions deploy tally-webhook --no-verify-jwt
+```
+
+**El caso B** sí es el secreto: el de `supabase secrets set
+TALLY_SIGNING_SECRET` tiene que ser, carácter por carácter, el que muestra
+Tally en su panel del webhook.
 
 **Si el síntoma no está en esa tabla:** [`docs/RUNBOOK.md`](RUNBOOK.md) tiene
 los recorridos completos, con las consultas SQL ya escritas. La idea es que se
