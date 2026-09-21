@@ -83,9 +83,17 @@ export function formatIntake(intake: IntakeForVersion): string {
     );
   }
 
+  lines.push(...bloque('💊 Fármacos', intake.medications));
+
   // Los datos físicos, en una línea: se leen juntos o no se leen.
   const fisicos = [
-    intake.age === null ? null : `${intake.age} años`,
+    intake.age === null
+      ? null
+      : intake.birthDate === null
+        ? `${intake.age} años`
+        : // La fecha al lado de la edad: dentro de dos años la edad sola
+          // mentiría, y con la fecha se ve de cuándo es el dato.
+          `${intake.age} años (${intake.birthDate})`,
     intake.weightKg === null ? null : `${intake.weightKg} kg`,
     intake.heightCm === null ? null : `${intake.heightCm} cm`,
   ].filter((x): x is string => x !== null);

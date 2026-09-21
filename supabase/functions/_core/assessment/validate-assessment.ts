@@ -50,6 +50,9 @@ export interface ParsedAssessment {
    * └─────────────────────────────────────────────────────────────────────┘
    */
   readonly chronicConditions: string | null;
+  /** La fuente de verdad de la edad: una edad se queda vieja, una fecha no. */
+  readonly birthDate: string | null;
+  readonly medications: string | null;
 }
 
 export interface AssessmentError {
@@ -186,6 +189,27 @@ function readOptionalNumber(
   return decimals === 0 ? Math.round(parsed) : Number(parsed.toFixed(decimals));
 }
 
+/**
+ * Una fecha en `AAAA-MM-DD`, que es lo que manda un campo de fecha de Tally.
+ *
+ * No se convierte a `Date`: viaja como texto hasta la base, que es quien tiene
+ * el tipo `date`. Interpretarla aquí metería la zona horaria del servidor en
+ * una fecha de nacimiento, y un 1 de enero se volvería 31 de diciembre.
+ */
+function readIsoDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+
+  const limpio = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(limpio)) return null;
+
+  // Que exista de verdad: `2026-02-31` cumple el patrón y no es un día.
+  const fecha = new Date(`${limpio}T00:00:00Z`);
+  if (Number.isNaN(fecha.getTime())) return null;
+  if (fecha.toISOString().slice(0, 10) !== limpio) return null;
+
+  return limpio;
+}
+
 export function validateAssessment(raw: unknown): AssessmentResult {
   const errors = new Errors();
 
@@ -278,6 +302,8 @@ export function validateAssessment(raw: unknown): AssessmentResult {
       quitReasons: readFreeText(raw['quitReasons']),
       menopauseStage: readFreeText(raw['menopauseStage']),
       chronicConditions: readFreeText(raw['chronicConditions']),
+      birthDate: readIsoDate(raw['birthDate']),
+      medications: readFreeText(raw['medications']),
     },
   };
 }

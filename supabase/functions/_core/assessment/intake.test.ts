@@ -45,6 +45,8 @@ function ficha(extra: Partial<IntakeForVersion> = {}): IntakeForVersion {
     quitReasons: 'Falta de tiempo, falta de motivación',
     menopauseStage: null,
     chronicConditions: 'Diabetes tipo 2. Padre con hipertensión.',
+    medications: 'Metformina 850 mg, 2 al día',
+    birthDate: '1992-03-12',
     ...extra,
   };
 }
@@ -171,7 +173,7 @@ describe('los campos de SPEC-016 en la ficha', () => {
   it('los datos físicos van juntos, en una línea', () => {
     const texto = formatIntake(ficha());
 
-    expect(texto).toContain('Hombre · 34 años · 78\\.5 kg · 180 cm');
+    expect(texto).toContain('Hombre · 34 años \\(1992\\-03\\-12\\) · 78\\.5 kg · 180 cm');
   });
 
   it('el último pesaje va pegado a los datos: dice si el peso es fiable', () => {
@@ -218,6 +220,17 @@ it('sin género pero con peso: la línea sale igual, sin separador huérfano', (
   // Pasa de verdad: «Género» es opcional y el peso no.
   const texto = formatIntake(ficha({ gender: null }));
 
-  expect(texto).toContain('👤 34 años · 78\\.5 kg · 180 cm');
+  expect(texto).toContain('👤 34 años \\(1992\\-03\\-12\\) · 78\\.5 kg · 180 cm');
   expect(texto).not.toContain('·  ·');
+});
+
+it('sin fármacos, ese bloque no aparece', () => {
+  expect(formatIntake(ficha({ medications: null }))).not.toContain('💊');
+});
+
+it('sin fecha de nacimiento, la edad sale sola', () => {
+  const texto = formatIntake(ficha({ birthDate: null }));
+
+  expect(texto).toContain('34 años');
+  expect(texto).not.toContain('(1992');
 });

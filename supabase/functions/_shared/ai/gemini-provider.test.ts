@@ -25,6 +25,11 @@ const PETICION = {
   heightCm: null,
   quitReasons: null,
   menopauseStage: null,
+  lastWeighed: null,
+  chronicConditions: null,
+  medications: null,
+  lifestyle: null,
+  notes: null,
 } as const;
 
 interface Llamada {

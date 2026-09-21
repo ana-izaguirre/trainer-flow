@@ -103,12 +103,21 @@ export function buildPrompt(request: AIRequest): string {
   // tokens y confunde al modelo.
   if (request.gender !== null) partes.push(`- Género: ${request.gender}`);
   if (request.age !== null) partes.push(`- Edad: ${request.age} años`);
-  if (request.weightKg !== null) partes.push(`- Peso: ${request.weightKg} kg`);
+  if (request.weightKg !== null) {
+    // El pesaje va pegado al peso: suelto, parecía parte del bloque anterior.
+    partes.push(
+      request.lastWeighed === null
+        ? `- Peso: ${request.weightKg} kg`
+        : `- Peso: ${request.weightKg} kg (pesado ${request.lastWeighed.toLowerCase()})`,
+    );
+  }
   if (request.heightCm !== null) partes.push(`- Altura: ${request.heightCm} cm`);
 
   if (request.menopauseStage !== null) {
     partes.push(`- Etapa: ${request.menopauseStage}`);
   }
+
+  if (request.lifestyle !== null) partes.push(`- Estilo de vida: ${request.lifestyle}`);
 
   if (request.quitReasons !== null) {
     partes.push(
@@ -116,6 +125,34 @@ export function buildPrompt(request: AIRequest): string {
       `POR QUÉ ABANDONÓ ANTES: ${request.quitReasons}`,
       'Ten esto en cuenta al dimensionar la rutina: la que se cumple es mejor',
       'que la óptima.',
+    );
+  }
+
+  // ┌─ POR QUÉ ESTA SECCIÓN DICE QUÉ HACER, Y NO SOLO QUÉ PASA ───────────┐
+  // │ «Diabetes» a secas deja que el modelo improvise. Con la instrucción │
+  // │ al lado, adapta a propósito Y declara por qué, que es lo que el     │
+  // │ entrenador necesita para revisar en vez de auditar.                 │
+  // └─────────────────────────────────────────────────────────────────────┘
+  const clinico = [
+    request.chronicConditions === null
+      ? null
+      : `- Enfermedades propias o de familia cercana: ${request.chronicConditions}`,
+    request.medications === null ? null : `- Fármacos que toma: ${request.medications}`,
+  ].filter((x): x is string => x !== null);
+
+  if (clinico.length > 0) {
+    partes.push(
+      '',
+      'CONTEXTO CLÍNICO — sirve para ADAPTAR EL ENTRENAMIENTO, no para tratar nada:',
+      ...clinico,
+      '',
+      'Qué hacer con esto:',
+      '- Ajusta intensidad, volumen y selección de ejercicios a lo prudente.',
+      '- Ante cualquier duda, elige SIEMPRE la opción más conservadora.',
+      '- Declara en `warnings` una línea por cada cosa que tuviste en cuenta y',
+      '  qué decidiste por ella. El entrenador lee esa lista antes de aprobar.',
+      '- NO des consejo médico, no sugieras cambiar ni dejar un fármaco, y no',
+      '  interpretes síntomas. Solo programas entrenamiento.',
     );
   }
 
@@ -127,6 +164,16 @@ export function buildPrompt(request: AIRequest): string {
       '',
       'Evita todo ejercicio que cargue esa zona y propón una alternativa segura.',
       'Declara en `warnings` qué limitación tuviste en cuenta y cómo la sorteaste.',
+    );
+  }
+
+  if (request.notes !== null) {
+    partes.push(
+      '',
+      'LO QUE EL CLIENTE QUISO CONTAR:',
+      request.notes,
+      '',
+      'Úsalo si afecta al entrenamiento. Lo que no lo afecte, ignóralo.',
     );
   }
 
