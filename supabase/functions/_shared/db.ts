@@ -190,7 +190,6 @@ async function ingestAssessment(
       p_chronic_conditions: input.chronicConditions,
       p_birth_date: input.birthDate,
       p_medications: input.medications,
-      p_family_conditions: input.familyConditions,
       p_equipment_detail: input.equipmentDetail,
     })
     .single();
@@ -341,7 +340,6 @@ async function findVersionForGeneration(
       lastWeighed: (fila['last_weighed'] as string | null) ?? null,
       chronicConditions: (fila['chronic_conditions'] as string | null) ?? null,
       medications: (fila['medications'] as string | null) ?? null,
-      familyConditions: (fila['family_conditions'] as string | null) ?? null,
       equipmentDetail: (fila['equipment_detail'] as string | null) ?? null,
       lifestyle: (fila['lifestyle'] as string | null) ?? null,
       notes: (fila['notes'] as string | null) ?? null,
@@ -842,8 +840,7 @@ export function createIntakeRepo(db: Db): IntakeRepo {
         menopauseStage: (fila['menopause_stage'] as string | null) ?? null,
         chronicConditions: (fila['chronic_conditions'] as string | null) ?? null,
         medications: (fila['medications'] as string | null) ?? null,
-        familyConditions: (fila['family_conditions'] as string | null) ?? null,
-        equipmentDetail: (fila['equipment_detail'] as string | null) ?? null,
+          equipmentDetail: (fila['equipment_detail'] as string | null) ?? null,
         // `date` llega como string por PostgREST, y así se queda: convertirlo
         // metería la zona horaria del servidor en una fecha de nacimiento.
         birthDate: (fila['birth_date'] as string | null) ?? null,

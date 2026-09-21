@@ -1,21 +1,9 @@
--- SPEC-016 — Lo propio y lo familiar, separados.
+-- SPEC-016 — Las tres funciones, con fecha de nacimiento y fármacos.
 --
--- ┌─ POR QUÉ DOS COLUMNAS Y NO UNA ─────────────────────────────────────────┐
--- │ El entrenador pidió distinguir «la padeces tú» de «la padece un         │
--- │ familiar», y tiene razón: tu hipertensión cambia la rutina; la de tu    │
--- │ padre es un factor de riesgo, señal mucho más débil.                    │
--- │                                                                         │
--- │ Mezcladas llegaban como «Hipertensión, Diabetes» sin saber de quién     │
--- │ era cada una, y eso no se puede deshacer después.                       │
--- └─────────────────────────────────────────────────────────────────────────┘
+-- Recrea las tres para que acepten y devuelvan `birth_date` y `medications`.
 --
 -- Las tres funciones se recrean desde su ÚLTIMA versión (0018 y 0019), no
 -- desde la que las creó: copiar de la original pierde columnas en silencio.
-
-alter table assessments add column family_conditions text;
-
-comment on column assessments.family_conditions is
-  'Condiciones de familiares cercanos. Factor de riesgo, no diagnóstico propio.';
 
 drop function if exists ingest_assessment(
   uuid, text, text, jsonb, text, text, smallint, smallint, text, boolean,
@@ -47,8 +35,7 @@ create function ingest_assessment(
   p_menopause_stage    text default null,
   p_chronic_conditions text default null,
   p_birth_date         date default null,
-  p_medications        text default null,
-  p_family_conditions  text default null
+  p_medications        text default null
 )
 returns table (
   client_id     uuid,
@@ -73,14 +60,12 @@ begin
     client_id, raw_payload, goal, level, days_per_week, session_minutes,
     equipment, has_limitations, limitations_detail, lifestyle, notes,
     gender, age, weight_kg, height_cm, last_weighed, quit_reasons,
-    menopause_stage, chronic_conditions, birth_date, medications,
-    family_conditions
+    menopause_stage, chronic_conditions, birth_date, medications
   ) values (
     v_client_id, p_raw_payload, p_goal, p_level, p_days_per_week, p_session_minutes,
     p_equipment, p_has_limitations, p_limitations_detail, p_lifestyle, p_notes,
     p_gender, p_age, p_weight_kg, p_height_cm, p_last_weighed, p_quit_reasons,
-    p_menopause_stage, p_chronic_conditions, p_birth_date, p_medications,
-    p_family_conditions
+    p_menopause_stage, p_chronic_conditions, p_birth_date, p_medications
   )
   returning id into v_assessment_id;
 
@@ -126,8 +111,7 @@ returns table (
   chronic_conditions text,
   medications        text,
   lifestyle          text,
-  notes              text,
-  family_conditions  text
+  notes              text
 )
 language sql
 security invoker
@@ -157,8 +141,7 @@ as $$
     a.chronic_conditions,
     a.medications,
     a.lifestyle,
-    a.notes,
-    a.family_conditions
+    a.notes
   from workout_versions v
   join workout_plans  pl on pl.id = v.plan_id
   join assessments     a on a.id  = pl.assessment_id
@@ -200,8 +183,7 @@ returns table (
   menopause_stage    text,
   chronic_conditions text,
   birth_date         date,
-  medications        text,
-  family_conditions  text
+  medications        text
 )
 language sql
 security invoker
@@ -215,7 +197,7 @@ as $$
     coalesce(extract(year from age(a.created_at, a.birth_date))::smallint, a.age),
     a.weight_kg, a.height_cm, a.last_weighed,
     a.quit_reasons, a.menopause_stage, a.chronic_conditions,
-    a.birth_date, a.medications, a.family_conditions
+    a.birth_date, a.medications
   from workout_versions v
   join workout_plans   pl on pl.id = v.plan_id
   join clients          c on c.id  = pl.client_id

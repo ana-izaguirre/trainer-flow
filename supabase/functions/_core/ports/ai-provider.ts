@@ -57,8 +57,6 @@ export interface AIRequest {
   // │ la rutina salió como salió (SPEC-016 §3.2).                         │
   // └─────────────────────────────────────────────────────────────────────┘
   readonly chronicConditions: string | null;
-  /** De familiares cercanos: factor de riesgo, no diagnóstico del cliente. */
-  readonly familyConditions: string | null;
   readonly medications: string | null;
 
   /** «Sedentario, trabajo de oficina». Cambia el volumen y la recuperación. */

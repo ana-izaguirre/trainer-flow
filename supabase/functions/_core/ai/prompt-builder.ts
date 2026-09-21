@@ -139,11 +139,6 @@ export function buildPrompt(request: AIRequest): string {
     request.chronicConditions === null
       ? null
       : `- Condiciones que tiene el cliente: ${request.chronicConditions}`,
-    // Separado a propósito: lo propio cambia la rutina, lo familiar es un
-    // factor de riesgo y pesa mucho menos.
-    request.familyConditions === null
-      ? null
-      : `- En su familia cercana (factor de riesgo, no diagnóstico suyo): ${request.familyConditions}`,
     request.medications === null ? null : `- Fármacos que toma: ${request.medications}`,
   ].filter((x): x is string => x !== null);
 

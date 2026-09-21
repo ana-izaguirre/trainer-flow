@@ -29,7 +29,6 @@ function peticion(overrides: Partial<AIRequest> = {}): AIRequest {
     lastWeighed: null,
     chronicConditions: null,
     medications: null,
-    familyConditions: null,
     equipmentDetail: null,
     lifestyle: null,
     notes: null,
@@ -248,18 +247,6 @@ it('el pesaje va pegado al peso, no suelto en otro bloque', () => {
   const p = buildPrompt(peticion({ weightKg: 82.5, lastWeighed: 'Hace una semana' }));
 
   expect(p).toContain('Peso: 82.5 kg (pesado hace una semana)');
-});
-
-it('lo propio y lo familiar van SEPARADOS en el prompt', () => {
-  // Tu hipertensión cambia la rutina; la de tu padre es un factor de riesgo.
-  // Mezclarlas le quitaría al modelo la forma de pesarlas distinto.
-  const p = buildPrompt(
-    peticion({ chronicConditions: 'Hipertensión', familyConditions: 'Padre con diabetes' }),
-  );
-
-  expect(p).toContain('Condiciones que tiene el cliente: Hipertensión');
-  expect(p).toContain('factor de riesgo, no diagnóstico suyo');
-  expect(p).toContain('Padre con diabetes');
 });
 
 it('los pesos van pegados al material, que es a lo que se refieren', () => {

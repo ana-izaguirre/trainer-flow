@@ -61,7 +61,6 @@ describe('evaluación válida', () => {
       chronicConditions: null,
       birthDate: null,
       medications: null,
-      familyConditions: null,
       equipmentDetail: null,
     });
   });

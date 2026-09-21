@@ -15,15 +15,36 @@
 
 alter table assessments add column equipment_detail text;
 
+-- ┌─ UNA FECHA VÁLIDA NO ES UNA FECHA PLAUSIBLE ───────────────────────────┐
+-- │ El CHECK anterior solo exigía «entre 1900 y hoy», así que un dedazo    │
+-- │ —2026 en vez de 1996— pasaba y producía una edad de 0 años. El prompt  │
+-- │ diría «Edad: 0 años» y nadie lo notaría.                               │
+-- │                                                                        │
+-- │ Salió de un envío de prueba real, no de imaginarlo.                    │
+-- │                                                                        │
+-- │ El rango es el mismo que ya tenía `age`: de 10 a 120.                  │
+-- └────────────────────────────────────────────────────────────────────────┘
+alter table assessments drop constraint if exists assessments_birth_date_sane;
+
+alter table assessments
+  add constraint assessments_birth_date_plausible
+    check (
+      birth_date is null
+      or birth_date between current_date - interval '120 years'
+                        and current_date - interval '10 years'
+    );
+
 comment on column assessments.equipment_detail is
   'Pesos disponibles, en palabras del cliente. Lo lee la IA, no una consulta.';
 
 -- Las tres funciones, desde su última versión (0020).
 
+-- La firma tiene que ser EXACTA o Postgres deja las dos versiones vivas y
+-- falla con «function name is not unique». 24 parámetros, los de 0020.
 drop function if exists ingest_assessment(
   uuid, text, text, jsonb, text, text, smallint, smallint, text, boolean,
   text, text, text, uuid, text, smallint, numeric, smallint, text, text, text,
-  text, date, text, text
+  text, date, text
 );
 
 create function ingest_assessment(
@@ -51,7 +72,6 @@ create function ingest_assessment(
   p_chronic_conditions text default null,
   p_birth_date         date default null,
   p_medications        text default null,
-  p_family_conditions  text default null,
   p_equipment_detail   text default null
 )
 returns table (
@@ -78,13 +98,13 @@ begin
     equipment, has_limitations, limitations_detail, lifestyle, notes,
     gender, age, weight_kg, height_cm, last_weighed, quit_reasons,
     menopause_stage, chronic_conditions, birth_date, medications,
-    family_conditions, equipment_detail
+    equipment_detail
   ) values (
     v_client_id, p_raw_payload, p_goal, p_level, p_days_per_week, p_session_minutes,
     p_equipment, p_has_limitations, p_limitations_detail, p_lifestyle, p_notes,
     p_gender, p_age, p_weight_kg, p_height_cm, p_last_weighed, p_quit_reasons,
     p_menopause_stage, p_chronic_conditions, p_birth_date, p_medications,
-    p_family_conditions, p_equipment_detail
+    p_equipment_detail
   )
   returning id into v_assessment_id;
 
@@ -129,7 +149,6 @@ returns table (
   medications        text,
   lifestyle          text,
   notes              text,
-  family_conditions  text,
   equipment_detail   text
 )
 language sql
@@ -161,7 +180,6 @@ as $$
     a.medications,
     a.lifestyle,
     a.notes,
-    a.family_conditions,
     a.equipment_detail
   from workout_versions v
   join workout_plans  pl on pl.id = v.plan_id
@@ -203,7 +221,6 @@ returns table (
   chronic_conditions text,
   birth_date         date,
   medications        text,
-  family_conditions  text,
   equipment_detail   text
 )
 language sql
@@ -218,7 +235,7 @@ as $$
     coalesce(extract(year from age(a.created_at, a.birth_date))::smallint, a.age),
     a.weight_kg, a.height_cm, a.last_weighed,
     a.quit_reasons, a.menopause_stage, a.chronic_conditions,
-    a.birth_date, a.medications, a.family_conditions, a.equipment_detail
+    a.birth_date, a.medications, a.equipment_detail
   from workout_versions v
   join workout_plans   pl on pl.id = v.plan_id
   join clients          c on c.id  = pl.client_id

@@ -33,7 +33,6 @@ export interface AssessmentToIngest {
   readonly chronicConditions: string | null;
   readonly birthDate: string | null;
   readonly medications: string | null;
-  readonly familyConditions: string | null;
   readonly equipmentDetail: string | null;
 }
 

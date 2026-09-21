@@ -68,7 +68,6 @@ describe('el formulario real, de punta a punta', () => {
       chronicConditions: null,
       birthDate: null,
       medications: null,
-      familyConditions: null,
       equipmentDetail: null,
     });
   });
@@ -93,7 +92,6 @@ describe('el formulario real, de punta a punta', () => {
     'chronicConditions',
     'birthDate',
     'medications',
-    'familyConditions',
     'equipmentDetail',
   ]);
 

@@ -54,7 +54,6 @@ export const TALLY_MAPPING: FieldMapping = {
   // Solo se le muestra a quien marcó «Mujer» en Género: por eso `conditional`.
   menopauseStage: { label: '¿En qué etapa hormonal te encuentras?', conditional: true },
   chronicConditions: { label: '¿Tienes alguna de estas condiciones?' },
-  familyConditions: { label: '¿Y en tu familia cercana?' },
   equipmentDetail: { label: '¿Qué pesos tienes disponibles?', conditional: true },
   birthDate: { label: 'Fecha de nacimiento' },
   medications: { label: 'Tomas algún fármaco' },
