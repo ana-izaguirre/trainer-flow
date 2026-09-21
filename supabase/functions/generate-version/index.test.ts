@@ -33,6 +33,8 @@ const VERSION: VersionForGeneration = {
     lastWeighed: null,
     chronicConditions: null,
     medications: null,
+    lifestyle: null,
+    notes: null,
   },
   constraints: { daysPerWeek: 1, hasLimitations: false },
   trainerChatId: 99,

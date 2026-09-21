@@ -117,6 +117,8 @@ export function buildPrompt(request: AIRequest): string {
     partes.push(`- Etapa: ${request.menopauseStage}`);
   }
 
+  if (request.lifestyle !== null) partes.push(`- Estilo de vida: ${request.lifestyle}`);
+
   if (request.quitReasons !== null) {
     partes.push(
       '',
@@ -162,6 +164,16 @@ export function buildPrompt(request: AIRequest): string {
       '',
       'Evita todo ejercicio que cargue esa zona y propón una alternativa segura.',
       'Declara en `warnings` qué limitación tuviste en cuenta y cómo la sorteaste.',
+    );
+  }
+
+  if (request.notes !== null) {
+    partes.push(
+      '',
+      'LO QUE EL CLIENTE QUISO CONTAR:',
+      request.notes,
+      '',
+      'Úsalo si afecta al entrenamiento. Lo que no lo afecte, ignóralo.',
     );
   }
 

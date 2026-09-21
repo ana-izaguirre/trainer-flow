@@ -323,3 +323,50 @@ describe('campos opcionales de SPEC-016', () => {
     expect(r.value.chronicConditions).toContain('Hipertensión');
   });
 });
+
+describe('la fecha de nacimiento (SPEC-016)', () => {
+  const base = {
+    fullName: 'Carlos',
+    goal: 'Fuerza',
+    level: 'beginner',
+    daysPerWeek: 3,
+    sessionMinutes: 60,
+    equipment: 'Gimnasio',
+    hasLimitations: false,
+  };
+
+  const fecha = (v: unknown): string | null => {
+    const r = validateAssessment({ ...base, birthDate: v });
+    return r.ok ? r.value.birthDate : null;
+  };
+
+  it('acepta AAAA-MM-DD y la deja como texto', () => {
+    // No se convierte a Date: interpretarla aquí metería la zona horaria del
+    // servidor en una fecha de nacimiento, y un 1 de enero sería 31 de dic.
+    expect(fecha('1992-03-12')).toBe('1992-03-12');
+    expect(fecha('  1992-03-12  ')).toBe('1992-03-12');
+  });
+
+  it('rechaza un día que no existe aunque cumpla el patrón', () => {
+    // `2026-02-31` pasa la expresión regular y no es un día real.
+    expect(fecha('2026-02-31')).toBeNull();
+    expect(fecha('2026-13-01')).toBeNull();
+  });
+
+  it.each([
+    ['otro formato', '12/03/1992'],
+    ['con hora pegada', '1992-03-12T00:00:00Z'],
+    ['texto', 'no sé'],
+    ['vacío', ''],
+    ['un número', 19920312],
+    ['nulo', null],
+  ])('descarta %s sin invalidar la evaluación', (_n, v) => {
+    expect(fecha(v)).toBeNull();
+    expect(validateAssessment({ ...base, birthDate: v }).ok).toBe(true);
+  });
+
+  it('acepta el 29 de febrero de un bisiesto', () => {
+    expect(fecha('1992-02-29')).toBe('1992-02-29');
+    expect(fecha('1993-02-29')).toBeNull();
+  });
+});

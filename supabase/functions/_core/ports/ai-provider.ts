@@ -56,6 +56,11 @@ export interface AIRequest {
   // └─────────────────────────────────────────────────────────────────────┘
   readonly chronicConditions: string | null;
   readonly medications: string | null;
+
+  /** «Sedentario, trabajo de oficina». Cambia el volumen y la recuperación. */
+  readonly lifestyle: string | null;
+  /** Lo que el cliente quiso contar con sus palabras. */
+  readonly notes: string | null;
 }
 
 export type AIFailureReason = 'RATE_LIMITED' | 'TIMEOUT' | 'API_ERROR' | 'INVALID_OUTPUT';

@@ -223,3 +223,14 @@ it('sin género pero con peso: la línea sale igual, sin separador huérfano', (
   expect(texto).toContain('👤 34 años \\(1992\\-03\\-12\\) · 78\\.5 kg · 180 cm');
   expect(texto).not.toContain('·  ·');
 });
+
+it('sin fármacos, ese bloque no aparece', () => {
+  expect(formatIntake(ficha({ medications: null }))).not.toContain('💊');
+});
+
+it('sin fecha de nacimiento, la edad sale sola', () => {
+  const texto = formatIntake(ficha({ birthDate: null }));
+
+  expect(texto).toContain('34 años');
+  expect(texto).not.toContain('(1992');
+});
