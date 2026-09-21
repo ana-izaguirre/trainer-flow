@@ -78,11 +78,13 @@ export function formatIntake(intake: IntakeForVersion): string {
   if (intake.chronicConditions !== null && intake.chronicConditions.trim() !== '') {
     lines.push(
       '',
-      '🩺 *Enfermedades crónicas o familiares*',
+      '🩺 *Condiciones que tiene*',
       escapeMarkdownV2(intake.chronicConditions),
     );
   }
 
+  // Aparte de lo propio: no es lo mismo tenerla que tenerla un familiar.
+  lines.push(...bloque('👪 En su familia', intake.familyConditions));
   lines.push(...bloque('💊 Fármacos', intake.medications));
 
   // Los datos físicos, en una línea: se leen juntos o no se leen.

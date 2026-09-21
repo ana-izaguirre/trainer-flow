@@ -50,7 +50,8 @@ export const TALLY_MAPPING: FieldMapping = {
   quitReasons: { label: 'Qué te cuesta más para mejorar' },
   // Solo se le muestra a quien marcó «Mujer» en Género: por eso `conditional`.
   menopauseStage: { label: '¿En qué etapa hormonal te encuentras?', conditional: true },
-  chronicConditions: { label: 'Enfermedades crónicas' },
+  chronicConditions: { label: '¿Tienes alguna de estas condiciones?' },
+  familyConditions: { label: '¿Y en tu familia cercana?' },
   birthDate: { label: 'Fecha de nacimiento' },
   medications: { label: 'Tomas algún fármaco' },
 };

@@ -47,6 +47,7 @@ export function createTestGenerationRepo(db: Client, requestId: string): Generat
           lastWeighed: (fila['last_weighed'] as string | null) ?? null,
           chronicConditions: (fila['chronic_conditions'] as string | null) ?? null,
           medications: (fila['medications'] as string | null) ?? null,
+          familyConditions: (fila['family_conditions'] as string | null) ?? null,
           lifestyle: (fila['lifestyle'] as string | null) ?? null,
           notes: (fila['notes'] as string | null) ?? null,
           daysPerWeek,
