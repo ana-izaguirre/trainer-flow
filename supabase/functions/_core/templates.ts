@@ -13,7 +13,7 @@
  */
 import type { Level } from './domain/assessment.ts';
 import type { WorkoutConstraints, WorkoutDraft } from './domain/draft.ts';
-import type { Exercise, Workout } from './domain/workout.ts';
+import type { Exercise, Workout, WorkoutDay } from './domain/workout.ts';
 
 export interface WorkoutTemplate {
   readonly id: string;
@@ -320,6 +320,37 @@ const LIMITATIONS_NOTICE =
   'Revisar: el cliente declaró limitaciones y esta plantilla no las contempla. ' +
   'Ajusta o sustituye los ejercicios afectados antes de aprobar.';
 
+function daysAdaptedNotice(from: number, to: number): string {
+  return (
+    `Revisar: esta plantilla es de ${from} días y el cliente pidió ${to}. ` +
+    'Se ajustaron los días; comprueba que el reparto tenga sentido antes de aprobar.'
+  );
+}
+
+/**
+ * Los días de la plantilla, ajustados a los que el cliente pidió.
+ *
+ * ┌─ POR QUÉ EN CICLO ─────────────────────────────────────────────────────┐
+ * │ Con menos días se toman los primeros; con más se vuelve a empezar. Es  │
+ * │ como se usa una plantilla de verdad: «cuerpo completo 3×» a dos días   │
+ * │ son dos de esos tres.                                                  │
+ * │                                                                         │
+ * │ Sin esto, la regla 7 mentía. Las cuatro plantillas son de 3, 4, 3 y 6  │
+ * │ días y `validateDraft` los exige exactos: un cliente de 2 días veía    │
+ * │ las cuatro opciones y NINGUNA cargaba.                                 │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+export function adaptDays(days: readonly WorkoutDay[], target: number): readonly WorkoutDay[] {
+  // `%` sobre una lista vacía da NaN. Ninguna plantilla llega así, pero de
+  // esto depende que el borrador sea cargable: no se apoya en un invariante.
+  if (days.length === 0) return [];
+
+  return Array.from({ length: target }, (_, index) => {
+    const day = days[index % days.length] as WorkoutDay;
+    return { ...day, dayNumber: index + 1 };
+  });
+}
+
 /**
  * Convierte una plantilla en un borrador listo para el editor.
  *
@@ -332,14 +363,21 @@ export function applyTemplate(
   template: WorkoutTemplate,
   constraints: WorkoutConstraints | null,
 ): WorkoutDraft {
-  const needsNotice = constraints?.hasLimitations === true;
+  const original = template.workout.days;
+  const days =
+    constraints === null || constraints.daysPerWeek === original.length
+      ? original
+      : adaptDays(original, constraints.daysPerWeek);
 
-  const workout: Workout = {
-    ...template.workout,
-    warnings: needsNotice
-      ? [...template.workout.warnings, LIMITATIONS_NOTICE]
-      : [...template.workout.warnings],
-  };
+  const warnings = [...template.workout.warnings];
+  // El aviso de días va PRIMERO: es el que explica por qué la rutina no se
+  // parece a la plantilla que el entrenador eligió.
+  if (days.length !== original.length) {
+    warnings.push(daysAdaptedNotice(original.length, days.length));
+  }
+  if (constraints?.hasLimitations === true) warnings.push(LIMITATIONS_NOTICE);
+
+  const workout: Workout = { ...template.workout, days, warnings };
 
   return { source: 'template', raw: workout };
 }
