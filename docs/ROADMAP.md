@@ -92,7 +92,7 @@ revés, el fallback siempre queda "para después".
 | **S-24** | **E2E-4** | Ciclo de revisión completo | **SPEC-010 cerrada.** v1 queda byte a byte igual |
 | **S-25** ✅ | Comandos del entrenador | `/clientes`, `/cliente`, `/pendientes`… | **SPEC-007 cerrada** |
 
-## Bloque 8 — Cierre (S-26 → S-29)
+## Bloque 8 — Cierre (S-26 → S-30)
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
@@ -100,20 +100,35 @@ revés, el fallback siempre queda "para después".
 | **S-27** ✅ | Seguridad | `tests/integration/security.test.ts` | **SPEC-013 cerrada.** Los 11 casos en verde, y uno estaba roto |
 | **S-28** | Deploy y prueba real | Funciones desplegadas + un cliente real | El entrenador aprueba una rutina y el cliente la recibe |
 | **S-29** | Progresión en la rutina | `progression` en el `Workout`, los tres orígenes | **SPEC-020.** La rutina dice cómo avanzar, no solo qué hacer |
+| **S-30** | Histórico del cliente | `/historial <nombre>` + señales | **SPEC-021.** El entrenador ve la tendencia, no el último dato |
 
-## Por qué la progresión sí entra en V1
+## Por qué la progresión y el histórico sí entran en V1
 
-SPEC-020 salió de la misma conversación que las tres de abajo, y sin embargo
-sube al bloque 8. La diferencia:
+SPEC-020 y SPEC-021 salieron de la misma conversación que las tres de abajo, y
+sin embargo suben al bloque 8. Son las dos mitades de un ciclo:
+
+```
+SPEC-020  →  le dice al CLIENTE      cuándo subir el peso
+SPEC-021  →  le dice al ENTRENADOR   cuándo cambiar la rutina
+```
+
+La diferencia con las de abajo:
 
 > Sin ella, **la semana 3 es idéntica a la semana 1**. El cliente repite el
 > mismo peso hasta que el estímulo se apaga, y eso no es un detalle que
 > pulir después: es la diferencia entre entregar una rutina y entregar un
 > plan.
 
-Y cuesta poco: un campo en el `Workout`, que vive en un `jsonb`. **Cero
-migraciones.** Lo caro —registrar el peso que el cliente levantó de verdad—
-se descarta a propósito en §3.2 de la spec.
+Y del lado del entrenador, `/cliente` enseña el **último** check-in. «3/4 y
+Bien» significa una cosa si viene de 4/4 y otra muy distinta si viene de 2/4:
+la tendencia es el dato, y hoy no se ve.
+
+Las dos cuestan poco. SPEC-020 es un campo en un `jsonb` —**cero
+migraciones**— y SPEC-021 solo lee datos que ya se guardan desde el primer
+día: `checkins`, `change_requests` y `plan_events` se llenan solos.
+
+Lo caro de verdad —registrar el peso que el cliente levantó— se descarta a
+propósito, con su razón escrita, en SPEC-020 §3.2.
 
 ## Después del MVP — pedido por el entrenador al usarlo
 
