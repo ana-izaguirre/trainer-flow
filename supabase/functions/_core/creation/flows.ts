@@ -42,16 +42,43 @@ export type CreationOutcome =
 /** Una rutina manual nace así: sin días, y por eso no se puede aprobar. */
 const VACIA: Workout = { summary: 'Rutina en preparación', days: [], warnings: [] };
 
+/**
+ * ┌─ POR QUÉ EMPIEZA POR `/rutina` ────────────────────────────────────────┐
+ * │ Antes esto listaba cinco comandos sueltos, y montar tres días de cinco │
+ * │ ejercicios salían dieciocho mensajes sin equivocarse en ninguno. Lo    │
+ * │ primero que se lee ahora es la forma de hacerlo en UNO (SPEC-022).     │
+ * │                                                                        │
+ * │ Y termina ofreciendo la plantilla: partir de algo y retocarlo casi     │
+ * │ siempre gana a escribir desde cero, y desde el botón de ✍️ esa opción  │
+ * │ ya no está a la vista.                                                 │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
 const AYUDA_EDITOR = [
-  '✍️ Borrador vacío creado\\. Ve añadiendo:',
+  '✍️ Borrador vacío creado\\.',
   '',
-  '`/dia 1 Empuje` — nombra un día',
-  '`/add 1 Press banca 4x8 90` — añade un ejercicio',
+  '*Lo más rápido: díctala entera en un mensaje*',
+  '',
+  '`/rutina`',
+  '`Día 1: Empuje`',
+  '`Press banca 4x8 90`',
+  '`Press militar 3x10`',
+  '``',
+  '`Día 2: Tirón`',
+  '`Dominadas 4x6 120`',
+  '',
+  'Un día por cabecera, un ejercicio por renglón\\.',
+  'El descanso es opcional: si no lo pones, 90 segundos\\.',
+  '',
+  '*Para retoques sueltos*',
+  '`/add 1 Fondos 3x12` — añade un ejercicio',
   '`/quitar 1 2` — quita el ejercicio 2 del día 1',
   '`/nota 1 1 baja controlado` — pone una nota',
+  '`/dia 1 Empuje` — renombra un día',
   '`/ver` — enseña cómo va',
   '',
-  'Cuando esté, te salen los botones para aprobarla\\.',
+  'Después de cada cambio te devuelvo la rutina completa\\.',
+  '',
+  '💡 También puedes pulsar 📋 y partir de una plantilla: se retoca más rápido que escribirla desde cero\\.',
 ].join('\n');
 
 /**

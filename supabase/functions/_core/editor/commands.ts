@@ -24,6 +24,8 @@ export type EditorCommand =
       readonly restSeconds: number;
     }
   | { readonly kind: 'removeExercise'; readonly dayNumber: number; readonly index: number }
+  /** Reemplaza TODOS los días. Lo que produce `/rutina` (SPEC-022). */
+  | { readonly kind: 'setDays'; readonly days: readonly WorkoutDay[] }
   | {
       readonly kind: 'setNote';
       readonly dayNumber: number;
@@ -92,13 +94,27 @@ function parseSetDay(tokens: readonly string[]): ParseResult {
   return { ok: true, command: { kind: 'setDay', dayNumber, focus: focus.slice(0, L.text.focus) } };
 }
 
-function parseAddExercise(tokens: readonly string[]): ParseResult {
-  const syntax =
-    'Sintaxis: /add <día> <nombre> <series>x<reps> [descanso]. Ejemplo: /add 1 Press banca 4x8 90';
+/** Qué le pasa a una línea de ejercicio que no se entiende. */
+export type ExerciseProblem =
+  | 'no_sets_reps'
+  | 'no_name'
+  | 'sets_range'
+  | 'reps_long'
+  | 'bad_rest'
+  | 'rest_range';
 
-  const dayNumber = parseDayNumber(tokens[0]);
-  if (dayNumber === null) return fail(syntax);
+export type ExerciseParse =
+  | { readonly ok: true; readonly exercise: Exercise }
+  | { readonly ok: false; readonly problem: ExerciseProblem };
 
+/**
+ * `Press banca 4x8 90` → el ejercicio. **Sin el día**: eso lo pone quien llama.
+ *
+ * Devuelve el PROBLEMA, no el mensaje. `/add` y `/rutina` leen lo mismo pero
+ * no pueden decir lo mismo: uno habla de su sintaxis, el otro del renglón que
+ * falló. Compartir el texto obligaría a que uno de los dos mintiera.
+ */
+export function parseExerciseTokens(tokens: readonly string[]): ExerciseParse {
   // El nombre puede tener espacios, así que se ancla en el token `4x8`.
   // Una sola pasada: busca y captura a la vez, en vez de `test` y luego `exec`.
   let setsRepsIndex = -1;
@@ -106,7 +122,6 @@ function parseAddExercise(tokens: readonly string[]): ParseResult {
   let reps: string | undefined;
 
   for (const [i, token] of tokens.entries()) {
-    if (i === 0) continue;
     const match = SETS_REPS.exec(token);
     if (match !== null) {
       setsRepsIndex = i;
@@ -116,40 +131,60 @@ function parseAddExercise(tokens: readonly string[]): ParseResult {
     }
   }
 
-  if (rawSets === undefined || reps === undefined) return fail(syntax);
+  if (rawSets === undefined || reps === undefined) return { ok: false, problem: 'no_sets_reps' };
 
-  const name = tokens.slice(1, setsRepsIndex).join(' ').trim();
-  if (name.length === 0) return fail('Falta el nombre del ejercicio. ' + syntax);
+  const name = tokens.slice(0, setsRepsIndex).join(' ').trim();
+  if (name.length === 0) return { ok: false, problem: 'no_name' };
 
   const sets = Number.parseInt(rawSets, 10);
-  if (sets < L.sets.min || sets > L.sets.max) {
-    return fail(`Las series deben estar entre ${L.sets.min} y ${L.sets.max}.`);
-  }
-  if (reps.length > L.text.reps) return fail(`Las repeticiones son demasiado largas.`);
+  if (sets < L.sets.min || sets > L.sets.max) return { ok: false, problem: 'sets_range' };
+  if (reps.length > L.text.reps) return { ok: false, problem: 'reps_long' };
 
   // El descanso es opcional y admite la `s` de segundos.
   const restToken = tokens[setsRepsIndex + 1];
   let restSeconds = DEFAULT_REST_SECONDS;
   if (restToken !== undefined) {
     const parsed = Number.parseInt(restToken.replace(/s$/i, ''), 10);
-    if (!Number.isInteger(parsed)) return fail(syntax);
+    if (!Number.isInteger(parsed)) return { ok: false, problem: 'bad_rest' };
     if (parsed < L.restSeconds.min || parsed > L.restSeconds.max) {
-      return fail(`El descanso debe estar entre ${L.restSeconds.min} y ${L.restSeconds.max} segundos.`);
+      return { ok: false, problem: 'rest_range' };
     }
     restSeconds = parsed;
   }
 
   return {
     ok: true,
-    command: {
-      kind: 'addExercise',
-      dayNumber,
-      name: name.slice(0, L.text.name),
-      sets,
-      reps,
-      restSeconds,
-    },
+    exercise: { name: name.slice(0, L.text.name), sets, reps, restSeconds, notes: null },
   };
+}
+
+function parseAddExercise(tokens: readonly string[]): ParseResult {
+  const syntax =
+    'Sintaxis: /add <día> <nombre> <series>x<reps> [descanso]. Ejemplo: /add 1 Press banca 4x8 90';
+
+  const dayNumber = parseDayNumber(tokens[0]);
+  if (dayNumber === null) return fail(syntax);
+
+  const parsed = parseExerciseTokens(tokens.slice(1));
+  if (!parsed.ok) {
+    switch (parsed.problem) {
+      case 'no_name':
+        return fail('Falta el nombre del ejercicio. ' + syntax);
+      case 'sets_range':
+        return fail(`Las series deben estar entre ${L.sets.min} y ${L.sets.max}.`);
+      case 'reps_long':
+        return fail('Las repeticiones son demasiado largas.');
+      case 'rest_range':
+        return fail(
+          `El descanso debe estar entre ${L.restSeconds.min} y ${L.restSeconds.max} segundos.`,
+        );
+      default:
+        return fail(syntax);
+    }
+  }
+
+  const { name, sets, reps, restSeconds } = parsed.exercise;
+  return { ok: true, command: { kind: 'addExercise', dayNumber, name, sets, reps, restSeconds } };
 }
 
 function parseRemoveExercise(tokens: readonly string[]): ParseResult {
@@ -203,6 +238,11 @@ export function applyEditorCommand(workout: Workout, command: EditorCommand): Ap
       return applyRemoveExercise(workout, command);
     case 'setNote':
       return applySetNote(workout, command);
+    case 'setDays':
+      // `summary` y `warnings` se conservan: el aviso de limitaciones del
+      // cliente no es algo que el entrenador esté reescribiendo al dictar
+      // los días, y perderlo haría fallar la validación al aprobar.
+      return { ok: true, workout: withDays(workout, [...command.days]) };
   }
 }
 

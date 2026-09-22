@@ -21,7 +21,12 @@
  * │ puerta completa está en APROBAR (regla 11).                            │
  * └────────────────────────────────────────────────────────────────────────┘
  */
-import { applyEditorCommand, parseEditorCommand } from '../editor/commands.ts';
+import { parseWorkoutText } from '../editor/bulk.ts';
+import {
+  applyEditorCommand,
+  parseEditorCommand,
+  type ParseResult as ParsedCommand,
+} from '../editor/commands.ts';
 import type { CreationRepo } from '../ports/creation-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { escapeMarkdownV2, formatWorkout } from '../telegram/format.ts';
@@ -42,7 +47,7 @@ export type EditorOutcome =
   | { readonly kind: 'not_draft_anymore' };
 
 /** Los comandos que este módulo atiende. El resto no son suyos. */
-const COMANDOS = ['dia', 'día', 'add', 'quitar', 'nota', 'ver'] as const;
+const COMANDOS = ['rutina', 'dia', 'día', 'add', 'quitar', 'nota', 'ver'] as const;
 
 export function isEditorCommand(command: string): boolean {
   return (COMANDOS as readonly string[]).includes(command);
@@ -73,8 +78,9 @@ export async function handleEditorCommand(
     return { kind: 'shown', versionId: draft.versionId };
   }
 
-  // `día` con tilde se acepta al escribirlo, pero el parser conoce `dia`.
-  const parsed = parseEditorCommand(command === 'día' ? 'dia' : command, args);
+  // `/rutina` no es un comando con argumentos sueltos: es la rutina entera en
+  // los renglones de abajo, así que tiene su propio parser (SPEC-022).
+  const parsed = command === 'rutina' ? parseBulk(args) : parseEditorSyntax(command, args);
   if (!parsed.ok) {
     await deps.sender.sendMessage(chatId, escapeMarkdownV2(parsed.error));
     return { kind: 'invalid', error: parsed.error };
@@ -95,12 +101,30 @@ export async function handleEditorCommand(
     return { kind: 'not_draft_anymore' };
   }
 
-  // Decir de QUIÉN es cierra el hueco del contexto implícito: si tenía otro
-  // cliente en mente, lo ve ahora y no después de cuatro comandos.
-  await deps.sender.sendMessage(
-    chatId,
-    `✏️ Rutina de ${escapeMarkdownV2(draft.clientName)} actualizada\\.`,
-  );
+  // ┌─ SE DEVUELVE LA RUTINA ENTERA, NO UN «actualizada» ──────────────────┐
+  // │ Antes había que pedir `/ver` para saber si el comando hizo lo que se │
+  // │ esperaba. Editar a ciegas y comprobar después es la mitad de por qué │
+  // │ el modo manual «no se entendía».                                     │
+  // │                                                                       │
+  // │ Y `formatWorkout` lleva el nombre del cliente en la cabecera, así que │
+  // │ sigue diciendo de QUIÉN es: el hueco del contexto implícito no se     │
+  // │ reabre.                                                               │
+  // └───────────────────────────────────────────────────────────────────────┘
+  await deps.sender.sendMessage(chatId, formatWorkout(aplicado.workout, contexto));
 
   return { kind: 'edited', versionId: draft.versionId };
+}
+
+/** `/rutina` — la rutina dictada de corrido. */
+function parseBulk(args: string): ParsedCommand {
+  const leido = parseWorkoutText(args);
+  return leido.ok
+    ? { ok: true, command: { kind: 'setDays', days: leido.days } }
+    : { ok: false, error: leido.error };
+}
+
+/** El resto de comandos, con su sintaxis de siempre. */
+function parseEditorSyntax(command: string, args: string): ParsedCommand {
+  // `día` con tilde se acepta al escribirlo, pero el parser conoce `dia`.
+  return parseEditorCommand(command === 'día' ? 'dia' : command, args);
 }

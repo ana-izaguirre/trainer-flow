@@ -381,3 +381,48 @@ describe('validaciones que quedaban sin probar', () => {
     if (!result.ok) expect(result.error).toContain('4');
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('setDays — reemplazar todos los días (SPEC-022)', () => {
+  const RUTINA: Workout = {
+    summary: 'Fuerza',
+    days: [{ dayNumber: 1, focus: 'Viejo', exercises: [] }],
+    warnings: ['Revisar: hombro'],
+  };
+
+  const NUEVOS = [
+    {
+      dayNumber: 1,
+      focus: 'Empuje',
+      exercises: [{ name: 'Press banca', sets: 4, reps: '8', restSeconds: 90, notes: null }],
+    },
+    { dayNumber: 2, focus: 'Tirón', exercises: [] },
+  ];
+
+  it('los días viejos se van enteros', () => {
+    const result = applyEditorCommand(RUTINA, { kind: 'setDays', days: NUEVOS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.days).toHaveLength(2);
+    expect(result.workout.days[0]?.focus).toBe('Empuje');
+  });
+
+  it('el resumen y los avisos se conservan', () => {
+    // Perder el aviso de limitaciones haría fallar la validación al aprobar,
+    // y el entrenador no estaba reescribiéndolo: estaba dictando los días.
+    const result = applyEditorCommand(RUTINA, { kind: 'setDays', days: NUEVOS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.warnings).toEqual(['Revisar: hombro']);
+    expect(result.workout.summary).toBe('Fuerza');
+  });
+
+  it('no muta la rutina original', () => {
+    applyEditorCommand(RUTINA, { kind: 'setDays', days: NUEVOS });
+    expect(RUTINA.days).toHaveLength(1);
+    expect(RUTINA.days[0]?.focus).toBe('Viejo');
+  });
+});
