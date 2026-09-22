@@ -179,6 +179,19 @@ describe('cargar la elegida', () => {
     expect(mensajes.at(-1)?.text).toContain('Carlos');
   });
 
+  it('un borrador que no valida no se escribe, venga de donde venga', async () => {
+    // La puerta de `validateDraft` sigue ahí. Ajustar los días deja cargable
+    // todo lo que un cliente puede pedir (1 a 7), pero la comprobación no se
+    // apoya en eso: si la base trajera un 8, el borrador no se escribe.
+    const { deps, mensajes, pasos } = espia({ version: version({ daysPerWeek: 8 }) });
+
+    const outcome = await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps);
+
+    expect(outcome).toMatchObject({ kind: 'rejected', reason: 'invalid_draft' });
+    expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
+    expect(mensajes.at(-1)?.text).toContain('No pude cargarla');
+  });
+
   it('un id inventado se rechaza sin tocar la versión', async () => {
     // El `callback_data` lo fabrica cualquiera: tener la forma no basta.
     const { deps, pasos } = espia();
@@ -229,16 +242,24 @@ describe('cargar la elegida', () => {
     expect(await loadTemplate(id, VERSION_ID, ENTRENADOR, deps)).toMatchObject({ kind: 'filled' });
   });
 
-  it('si la plantilla no encaja con los días pedidos, se dice', async () => {
-    // No se cuela: una plantilla de 3 días sobre un cliente que pidió 6 es
-    // justo lo que `validateDraft` existe para detener.
-    const { deps, mensajes, pasos } = espia({ version: version({ daysPerWeek: 6 }) });
+  it('una plantilla de 3 días se carga para un cliente de 6, ajustada', async () => {
+    // ┌─ ESTE TEST AFIRMABA LO CONTRARIO ──────────────────────────────────┐
+    // │ Daba por buena una rutina rechazada, y así el bug tenía un test en │
+    // │ verde: la regla 7 prometía que el entrenador nunca se queda sin    │
+    // │ opciones, y ninguna de las cuatro plantillas cargaba para un       │
+    // │ cliente de 2 días. Se ajustan y se avisa (SPEC-008 regla 12).      │
+    // └─────────────────────────────────────────────────────────────────────┘
+    const { deps, guardado, pasos } = espia({ version: version({ daysPerWeek: 6 }) });
 
     const outcome = await loadTemplate('full-body-3d', VERSION_ID, ENTRENADOR, deps);
 
-    expect(outcome).toMatchObject({ kind: 'rejected', reason: 'invalid_draft' });
-    expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(false);
-    expect(mensajes.at(-1)?.text).toContain('No pude cargarla');
+    expect(outcome).toMatchObject({ kind: 'filled', source: 'template' });
+    expect(pasos.some((p) => p.startsWith('fillVersion'))).toBe(true);
+
+    const contenido = guardado[0]?.content as { days: unknown[]; warnings: string[] };
+    expect(contenido.days).toHaveLength(6);
+    // Y el entrenador se entera de que no es la plantilla tal cual.
+    expect(contenido.warnings.some((w) => /d[ií]as/i.test(w))).toBe(true);
   });
 });
 

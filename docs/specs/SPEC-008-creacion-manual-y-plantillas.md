@@ -179,6 +179,27 @@ explica la sintaxis esperada, no un error genérico.
    IA y el recordatorio queda a la vista. **Qué ajustar sigue siendo criterio
    del entrenador.**
 
+12. **`applyTemplate` ajusta los días a los que el cliente pidió.**
+
+    La regla 7 promete que el entrenador nunca se queda sin opciones. No se
+    cumplía: `validateDraft` exige que los días coincidan exactamente, y las
+    cuatro plantillas son de 3, 4, 3 y 6 días. **Un cliente de 2 días veía las
+    cuatro y ninguna cargaba**, con un «El cliente pidió 2 días y la rutina
+    trae 3» por cada intento.
+
+    ```
+    Plantilla de 3 días, cliente de 2  →  días 1 y 2
+    Plantilla de 3 días, cliente de 5  →  días 1, 2, 3, 1, 2
+    ```
+
+    Se recorre la plantilla **en ciclo**, renumerando. Es como se usa una
+    plantilla de verdad: «cuerpo completo 3×» a dos días son dos de esos tres.
+
+    **Y se avisa.** Cuando el número cambia, se inyecta una nota en `warnings`
+    igual que con las limitaciones: recortar «torso/pierna» a 2 días deja un
+    reparto que hay que mirar. El sistema deja la rutina cargable; **decidir
+    si ese reparto sirve es del entrenador.**
+
 10. **Un borrador creado a mano nace vacío, y eso es correcto.** No se puede
     aprobar —`validateDraft` lo rechaza sin ejercicios—, así que el mensaje
     que lo crea explica los comandos en vez de dejar al entrenador mirando
