@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { LEVELS } from './domain/assessment.ts';
 import { validateDraft } from './domain/validate-draft.ts';
 import { WORKOUT_LIMITS } from './domain/workout.ts';
-import { TEMPLATES, applyTemplate, findTemplate, templatesFor } from './templates.ts';
+import { TEMPLATES, adaptDays, applyTemplate, findTemplate, templatesFor } from './templates.ts';
 
 describe('el catálogo', () => {
   it('tiene al menos tres plantillas', () => {
@@ -222,5 +222,104 @@ describe('SPEC-008 CA-7 — las plantillas no tocan nada externo', () => {
     // No es una promesa, no es una consulta: es una constante del binario.
     expect(Array.isArray(TEMPLATES)).toBe(true);
     expect(TEMPLATES).not.toBeInstanceOf(Promise);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('los días se ajustan a los que el cliente pidió', () => {
+  // ┌─ EL BUG QUE ESTO CIERRA ───────────────────────────────────────────────┐
+  // │ Las cuatro plantillas son de 3, 4, 3 y 6 días, y `validateDraft` exige │
+  // │ que coincidan exactamente. Un cliente de 2 días veía las cuatro —la    │
+  // │ regla 7 promete no dejarlo sin opciones— y NINGUNA cargaba.            │
+  // └────────────────────────────────────────────────────────────────────────┘
+  const tresDias = TEMPLATES.find((t) => t.daysPerWeek === 3)!;
+
+  it('de 3 días a 2: se queda con los dos primeros', () => {
+    const draft = applyTemplate(tresDias, { daysPerWeek: 2, hasLimitations: false });
+    const result = validateDraft(draft, { daysPerWeek: 2, hasLimitations: false });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.days.map((d) => d.dayNumber)).toEqual([1, 2]);
+    expect(result.workout.days[0]?.focus).toBe(tresDias.workout.days[0]?.focus);
+  });
+
+  it('de 3 días a 5: vuelve a empezar, renumerando', () => {
+    const draft = applyTemplate(tresDias, { daysPerWeek: 5, hasLimitations: false });
+    const result = validateDraft(draft, { daysPerWeek: 5, hasLimitations: false });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.days.map((d) => d.dayNumber)).toEqual([1, 2, 3, 4, 5]);
+    // El ciclo: el cuarto día repite el primero, el quinto el segundo.
+    expect(result.workout.days[3]?.focus).toBe(tresDias.workout.days[0]?.focus);
+    expect(result.workout.days[4]?.focus).toBe(tresDias.workout.days[1]?.focus);
+  });
+
+  it('si el número ya coincide, no toca nada ni avisa', () => {
+    const draft = applyTemplate(tresDias, { daysPerWeek: 3, hasLimitations: false });
+    const result = validateDraft(draft, { daysPerWeek: 3, hasLimitations: false });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.days).toEqual(tresDias.workout.days);
+    expect(result.workout.warnings).toEqual([]);
+  });
+
+  it('cuando el número cambia, el entrenador se entera', () => {
+    // Recortar «torso/pierna» a 2 días deja un reparto que hay que mirar. El
+    // sistema deja la rutina cargable; decidir si sirve es del entrenador.
+    const draft = applyTemplate(tresDias, { daysPerWeek: 2, hasLimitations: false });
+    const result = validateDraft(draft, { daysPerWeek: 2, hasLimitations: false });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.warnings.some((w) => /d[ií]as/i.test(w))).toBe(true);
+  });
+
+  it('sin constraints se deja la plantilla como está', () => {
+    const draft = applyTemplate(tresDias, null);
+    const result = validateDraft(draft, null);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.days).toEqual(tresDias.workout.days);
+  });
+
+  it('sin días de los que partir, no inventa ninguno', () => {
+    // `%` sobre una lista vacía da NaN, y un `dayNumber: NaN` se colaría
+    // hasta la validación. Ninguna plantilla llega así, pero de esto depende
+    // que el borrador sea cargable: no se apoya en un invariante.
+    expect(adaptDays([], 3)).toEqual([]);
+  });
+
+  // El test que prueba que la regla 7 ya se cumple de verdad.
+  it('CUALQUIER plantilla carga para CUALQUIER número de días de 1 a 7', () => {
+    const fallos: string[] = [];
+
+    for (const template of TEMPLATES) {
+      for (let dias = 1; dias <= 7; dias += 1) {
+        const constraints = { daysPerWeek: dias, hasLimitations: false };
+        const result = validateDraft(applyTemplate(template, constraints), constraints);
+        if (!result.ok) fallos.push(`${template.id} a ${dias} días`);
+      }
+    }
+
+    expect(fallos).toEqual([]);
+  });
+
+  it('y también para un cliente con limitaciones', () => {
+    const fallos: string[] = [];
+
+    for (const template of TEMPLATES) {
+      for (let dias = 1; dias <= 7; dias += 1) {
+        const constraints = { daysPerWeek: dias, hasLimitations: true };
+        const result = validateDraft(applyTemplate(template, constraints), constraints);
+        if (!result.ok) fallos.push(`${template.id} a ${dias} días`);
+      }
+    }
+
+    expect(fallos).toEqual([]);
   });
 });
