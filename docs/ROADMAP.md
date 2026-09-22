@@ -92,13 +92,28 @@ revés, el fallback siempre queda "para después".
 | **S-24** | **E2E-4** | Ciclo de revisión completo | **SPEC-010 cerrada.** v1 queda byte a byte igual |
 | **S-25** ✅ | Comandos del entrenador | `/clientes`, `/cliente`, `/pendientes`… | **SPEC-007 cerrada** |
 
-## Bloque 8 — Cierre (S-26 → S-28)
+## Bloque 8 — Cierre (S-26 → S-29)
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
 | **S-26** ✅ | Observabilidad | `request_id` + logs estructurados + `duration_ms` | **SPEC-012 cerrada.** La cadena no se corta en el salto asíncrono |
 | **S-27** ✅ | Seguridad | `tests/integration/security.test.ts` | **SPEC-013 cerrada.** Los 11 casos en verde, y uno estaba roto |
 | **S-28** | Deploy y prueba real | Funciones desplegadas + un cliente real | El entrenador aprueba una rutina y el cliente la recibe |
+| **S-29** | Progresión en la rutina | `progression` en el `Workout`, los tres orígenes | **SPEC-020.** La rutina dice cómo avanzar, no solo qué hacer |
+
+## Por qué la progresión sí entra en V1
+
+SPEC-020 salió de la misma conversación que las tres de abajo, y sin embargo
+sube al bloque 8. La diferencia:
+
+> Sin ella, **la semana 3 es idéntica a la semana 1**. El cliente repite el
+> mismo peso hasta que el estímulo se apaga, y eso no es un detalle que
+> pulir después: es la diferencia entre entregar una rutina y entregar un
+> plan.
+
+Y cuesta poco: un campo en el `Workout`, que vive en un `jsonb`. **Cero
+migraciones.** Lo caro —registrar el peso que el cliente levantó de verdad—
+se descarta a propósito en §3.2 de la spec.
 
 ## Después del MVP — pedido por el entrenador al usarlo
 
