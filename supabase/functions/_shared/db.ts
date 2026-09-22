@@ -275,7 +275,7 @@ export function createGenerationRepo(db: Db, requestId: string): GenerationRepo 
       const { data, error } = await db.rpc('apply_version_transition', {
         p_version_id: versionId,
         p_expected_state: from,
-        p_next_state: to,
+        p_new_state: to,
         p_actor: 'system',
       });
 
@@ -422,7 +422,7 @@ export function createDeliveryRepo(db: Db): DeliveryRepo {
       const { data, error } = await db.rpc('apply_version_transition', {
         p_version_id: versionId,
         p_expected_state: from,
-        p_next_state: to,
+        p_new_state: to,
         // La entrega la dispara el sistema, no una pulsación (SPEC-005 §5).
         p_actor: 'system',
       });
@@ -540,7 +540,7 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
       const { data, error } = await db.rpc('apply_version_transition', {
         p_version_id: versionId,
         p_expected_state: from,
-        p_next_state: to,
+        p_new_state: to,
         // Fue el entrenador quien pulsó: es el actor que queda en el evento.
         p_actor: 'trainer',
         p_request_id: requestId,
