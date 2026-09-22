@@ -158,3 +158,31 @@ describe('límites y datos hostiles', () => {
     expect(parseUpdate(raw).kind).toBe('ignored');
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('un comando seguido de renglones (SPEC-022)', () => {
+  // ┌─ POR QUÉ EL SEPARADOR NO PUEDE SER SOLO ' ' ───────────────────────────┐
+  // │ `/rutina` se escribe con la rutina DEBAJO, no al lado. Buscando solo   │
+  // │ la barra espaciadora, el comando se habría comido el mensaje entero y  │
+  // │ habría salido un «no conozco /rutina\ndía 1: empuje…».                 │
+  // └────────────────────────────────────────────────────────────────────────┘
+  it('el comando termina en el salto de línea', () => {
+    const result = parseUpdate(mensaje('/rutina\nDía 1: Empuje\nPress banca 4x8'));
+
+    expect(result).toMatchObject({ kind: 'command', command: 'rutina' });
+  });
+
+  it('los renglones llegan enteros en los argumentos', () => {
+    const result = parseUpdate(mensaje('/rutina\nDía 1: Empuje\nPress banca 4x8'));
+
+    expect(result).toMatchObject({ kind: 'command', args: 'Día 1: Empuje\nPress banca 4x8' });
+  });
+
+  it('un comando de una línea sigue funcionando igual', () => {
+    expect(parseUpdate(mensaje('/cliente Carlos Pérez'))).toMatchObject({
+      command: 'cliente',
+      args: 'Carlos Pérez',
+    });
+  });
+});

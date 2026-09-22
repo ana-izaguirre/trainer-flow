@@ -95,7 +95,11 @@ function parseMessage(updateId: number, message: Record<string, unknown>): Parse
 
   // `/cliente Carlos Pérez` → command: "cliente", args: "Carlos Pérez"
   // En grupos, Telegram añade el sufijo del bot: `/clientes@TrainerFlowBot`.
-  const separator = text.indexOf(' ');
+  //
+  // El separador es CUALQUIER espacio, no solo la barra espaciadora: `/rutina`
+  // se escribe con la rutina en los renglones de abajo (SPEC-022), y buscando
+  // solo ' ' el comando se habría comido el mensaje entero.
+  const separator = text.search(/\s/);
   const head = separator === -1 ? text.slice(1) : text.slice(1, separator);
   const atIndex = head.indexOf('@');
   const command = (atIndex === -1 ? head : head.slice(0, atIndex)).toLowerCase();

@@ -92,7 +92,7 @@ revés, el fallback siempre queda "para después".
 | **S-24** | **E2E-4** | Ciclo de revisión completo | **SPEC-010 cerrada.** v1 queda byte a byte igual |
 | **S-25** ✅ | Comandos del entrenador | `/clientes`, `/cliente`, `/pendientes`… | **SPEC-007 cerrada** |
 
-## Bloque 8 — Cierre (S-26 → S-30)
+## Bloque 8 — Cierre (S-26 → S-31)
 
 | # | Objetivo | Entregable | Cierra cuando |
 |---|---|---|---|
@@ -101,6 +101,7 @@ revés, el fallback siempre queda "para después".
 | **S-28** | Deploy y prueba real | Funciones desplegadas + un cliente real | El entrenador aprueba una rutina y el cliente la recibe |
 | **S-29** | Progresión en la rutina | `progression` en el `Workout`, los tres orígenes | **SPEC-020.** La rutina dice cómo avanzar, no solo qué hacer |
 | **S-30** | Histórico del cliente | `/historial <nombre>` + señales | **SPEC-021.** El entrenador ve la tendencia, no el último dato |
+| **S-31** ✅ | Un editor que se entienda | `/rutina`: la rutina entera en un mensaje | **SPEC-022.** Dieciocho comandos pasan a ser uno |
 
 ## Por qué la progresión y el histórico sí entran en V1
 

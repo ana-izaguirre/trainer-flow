@@ -216,3 +216,88 @@ describe('lo que no se puede', () => {
     expect(mensajes.at(-1)).toContain('no se aplicó');
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-022 · /rutina — la rutina entera en un mensaje', () => {
+  const DICTADA = `Día 1: Empuje
+Press banca 4x8 90
+Press militar 3x10
+
+Día 2: Tirón
+Dominadas 4x6 120`;
+
+  it('reemplaza los días de golpe', async () => {
+    const { deps, guardado } = espia();
+
+    const outcome = await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+
+    expect(outcome).toMatchObject({ kind: 'edited' });
+    expect(guardado[0]?.days).toHaveLength(2);
+    expect(guardado[0]?.days[1]?.exercises[0]?.name).toBe('Dominadas');
+  });
+
+  it('conserva el resumen y los avisos', async () => {
+    // El aviso de limitaciones no es algo que el entrenador esté
+    // reescribiendo al dictar los días, y perderlo haría fallar la
+    // validación al aprobar.
+    const conAviso = { ...RUTINA, warnings: ['Revisar: hombro'] };
+    const { deps, guardado } = espia({ draft: borrador({ content: conAviso }) });
+
+    await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+
+    expect(guardado[0]?.warnings).toEqual(['Revisar: hombro']);
+    expect(guardado[0]?.summary).toBe('Fuerza');
+  });
+
+  it('devuelve la rutina completa, no un «actualizada»', async () => {
+    // Tener que pedir `/ver` para saber si el comando hizo lo esperado es la
+    // mitad de por qué el modo manual «no se entendía».
+    const { deps, mensajes } = espia();
+
+    await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+
+    expect(mensajes.at(-1)).toContain('Dominadas');
+    // Y sigue diciendo de quién es.
+    expect(mensajes.at(-1)).toContain('Carlos');
+  });
+
+  it('un renglón que no se entiende no guarda nada, y dice cuál', async () => {
+    const { deps, pasos, mensajes } = espia();
+
+    const outcome = await handleEditorCommand(
+      'rutina',
+      'Día 1: Empuje\nPress banca\nRemo 4x8',
+      TRAINER,
+      CHAT,
+      deps,
+    );
+
+    expect(outcome).toMatchObject({ kind: 'invalid' });
+    expect(pasos).not.toContain('saveDraft');
+    expect(mensajes.at(-1)).toContain('2');
+  });
+
+  it('un mensaje sin ningún día tampoco guarda', async () => {
+    const { deps, pasos, mensajes } = espia();
+
+    const outcome = await handleEditorCommand('rutina', 'Press banca 4x8', TRAINER, CHAT, deps);
+
+    expect(outcome).toMatchObject({ kind: 'invalid' });
+    expect(pasos).not.toContain('saveDraft');
+    expect(mensajes.at(-1)).toContain('día');
+  });
+
+  it('es un comando del editor, como los demás', () => {
+    expect(isEditorCommand('rutina')).toBe(true);
+  });
+
+  it('sin borrador abierto no hace nada', async () => {
+    const { deps, pasos } = espia({ draft: null });
+
+    const outcome = await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+
+    expect(outcome).toMatchObject({ kind: 'no_draft' });
+    expect(pasos).not.toContain('saveDraft');
+  });
+});
