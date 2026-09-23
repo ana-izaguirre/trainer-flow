@@ -26,6 +26,7 @@ import {
   formatPending,
   formatStaleCheckins,
   AYUDA_CLIENTE,
+  PIDE_NOMBRE_CLIENTE,
   SIN_RUTINA_TODAVIA,
 } from './format.ts';
 import { matchClientName } from './match.ts';
@@ -145,6 +146,14 @@ async function listar(actor: Identity, deps: CommandDeps): Promise<CommandOutcom
 }
 
 async function ficha(args: string, actor: Identity, deps: CommandDeps): Promise<CommandOutcome> {
+  // Regla 2 (SPEC-007). Sin nombre no es «no encontrado»: es que no buscó
+  // nada. Se responde ANTES de consultar — la misma disciplina de la regla 1,
+  // aplicada a un caso que no es de autorización sino de entrada vacía.
+  if (args.trim().length === 0) {
+    await deps.sender.sendMessage(actor.telegramChatId, PIDE_NOMBRE_CLIENTE);
+    return { kind: 'answered', command: 'cliente', messages: 1 };
+  }
+
   const clientes = await deps.repo.clients(actor.profileId);
   const encontrado = matchClientName(clientes, args);
 
