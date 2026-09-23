@@ -63,6 +63,19 @@ bot en todo lo que sigue.
       los inyecta en toda Edge Function. Ponerlos a mano no hace daño, pero
       tampoco hace nada.
 
+      Y estas tres son opcionales —no son secretos, pero van por el mismo
+      sitio— y **se cambian sin volver a desplegar**:
+
+      ```bash
+      supabase secrets set AI_MODEL='gemini-2.5-flash'   # fijar un modelo concreto
+      supabase secrets set AI_MAX_CALLS='20'             # 0 apaga la IA
+      supabase secrets set AI_WINDOW_MINUTES='60'
+      ```
+
+      `AI_MODEL` es la que importa: si el proveedor retira el modelo, **todas**
+      las generaciones fallan con 404 y esto lo arregla en un minuto. Por
+      defecto se usa un alias móvil justamente para que eso no pase solo.
+
 ## B. Desplegar
 
 - [ ] **5. Mergear a `main`.** El CI corre; si pasa, el deploy aplica las

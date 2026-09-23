@@ -66,6 +66,17 @@ configuración, no secretos. Pero viajan por el mismo mecanismo
 (`supabase secrets set`), porque es así como una Edge Function recibe
 variables de entorno. **Tampoco van a un `.env` del repositorio.**
 
+| Variable | Qué hace | Si no está |
+|---|---|---|
+| `AI_MODEL` | Qué modelo se le pide al proveedor | Un alias móvil al último `flash` |
+| `AI_MAX_CALLS` | Llamadas por ventana. **`0` apaga la IA sin desplegar** | `20` |
+| `AI_WINDOW_MINUTES` | Cuánto dura la ventana | `60` |
+
+`AI_MODEL` se documenta aquí porque el día que un nombre de modelo se retira,
+la generación cae entera y esta es la perilla que la levanta **sin desplegar**.
+Que el nombre del modelo no sea un secreto es lo que permite que aparezca en
+los logs y en `ai_generations.failure_reason`, que es donde se diagnostica.
+
 `TELEGRAM_BOT_USERNAME` tampoco es secreto: es el nombre público del bot.
 Es obligatorio porque sin él el enlace de vinculación sale roto (SPEC-014).
 

@@ -46,6 +46,45 @@ describe('ADR-007 — el dominio no conoce a ningún proveedor de IA', () => {
 
 // ---------------------------------------------------------------------------
 
+describe('SPEC-002 — el modelo por defecto no puede caducar', () => {
+  // ┌─ POR QUÉ ESTE TEST EXISTE ───────────────────────────────────────────┐
+  // │ El sistema estuvo sin generar ni una rutina porque el nombre del     │
+  // │ modelo por defecto (`…-2.0-flash`) se retiró del proveedor. Todo el  │
+  // │ código estaba bien y todos los tests pasaban: el fallo era que una   │
+  // │ constante nuestra apuntaba a algo que dejó de existir fuera.         │
+  // │                                                                      │
+  // │ No se puede comprobar contra la red desde un test. Lo que SÍ se      │
+  // │ puede comprobar es la propiedad que lo causó: un alias móvil no      │
+  // │ caduca, un nombre con versión sí. Así que el defecto debe ser un     │
+  // │ alias, y quien quiera fijar una versión usa `AI_MODEL`.              │
+  // └──────────────────────────────────────────────────────────────────────┘
+  const HANDLER = resolve(
+    import.meta.dirname,
+    '../../supabase/functions/generate-version/index.ts',
+  );
+
+  /** El literal del que tira `readDeps` cuando no hay `AI_MODEL`. */
+  function porDefecto(): string {
+    const ts = readFileSync(HANDLER, 'utf8');
+    const match = /const DEFAULT_MODEL = '([^']+)'/.exec(ts);
+
+    expect(match, 'DEFAULT_MODEL dejó de existir o cambió de forma').not.toBeNull();
+    return match![1] as string;
+  }
+
+  it('el defecto es un alias, no una versión concreta', () => {
+    expect(
+      porDefecto(),
+      'Un nombre con número de versión se retira y tumba la generación entera.',
+    ).not.toMatch(/\d/);
+  });
+
+  it('y sigue siendo sobreescribible sin desplegar', () => {
+    const ts = readFileSync(HANDLER, 'utf8');
+    expect(ts).toContain("optionalEnv('AI_MODEL')");
+  });
+});
+
 describe('el adaptador llama a las funciones SQL por su nombre real', () => {
   // ┌─ EL BUG QUE ESTO CIERRA ───────────────────────────────────────────────┐
   // │ `db.ts` llamaba a `apply_version_transition` con `p_next_state`, y la  │

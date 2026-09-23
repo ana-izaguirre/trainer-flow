@@ -36,6 +36,23 @@ export interface HandlerDeps {
 }
 
 /**
+ * El modelo por defecto. **Es un alias móvil a propósito.**
+ *
+ * Un nombre con versión (`…-2.0-flash`) se retira, y el día que se retira el
+ * sistema entero deja de generar con un 404 que no dice qué pasó. Ya ocurrió.
+ * Un alias no caduca.
+ *
+ * Lo que hace que sea seguro que el modelo cambie sin avisar no es confiar en
+ * el proveedor: es que `validateDraft` corre sobre TODA salida y que la
+ * transición `DRAFT → SENT` no existe. Ningún modelo llega al cliente sin que
+ * el entrenador lo apruebe. El riesgo de que cambie está acotado; el de un
+ * nombre muerto es la caída completa.
+ *
+ * Quien quiera fijarlo, pone `AI_MODEL` y manda sobre esto.
+ */
+const DEFAULT_MODEL = 'gemini-flash-latest';
+
+/**
  * Lee el entorno y abre la conexión. **Una vez, al arrancar.**
  *
  * El modelo y los límites de cuota son configuración, no secretos, pero
@@ -43,7 +60,7 @@ export interface HandlerDeps {
  */
 export function readDeps(): HandlerDeps {
   const apiKey = requireEnv('GEMINI_API_KEY');
-  const model = optionalEnv('AI_MODEL') ?? 'gemini-2.0-flash';
+  const model = optionalEnv('AI_MODEL') ?? DEFAULT_MODEL;
   const botToken = requireEnv('TELEGRAM_BOT_TOKEN');
   const db = createDb();
 
