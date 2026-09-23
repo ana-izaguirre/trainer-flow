@@ -144,9 +144,25 @@ export async function generateVersion(
   // ── 6. Cualquier fallo devuelve la versión a NEW ───────────────────────
   const reason: AIFailureReason = result.ok ? 'INVALID_OUTPUT' : result.reason;
 
+  // ┌─ EL DETALLE SE GUARDABA SOLO EN EL LOG ────────────────────────────────┐
+  // │ `API_ERROR` es el cajón de todo lo que no es cuota ni timeout: un 404  │
+  // │ de modelo retirado y un 403 de clave sin permisos entraban iguales.    │
+  // │                                                                        │
+  // │ El proveedor YA calcula «El proveedor respondió 404.» y se tiraba aquí,│
+  // │ así que la consulta obvia —`select failure_reason from ai_generations`—│
+  // │ devolvía `API_ERROR` y había que bucear en los logs para lo único que  │
+  // │ distingue un fallo de otro.                                            │
+  // │                                                                        │
+  // │ El RUNBOOK dice «la base es el índice». Un índice que no distingue no  │
+  // │ es un índice.                                                          │
+  // └────────────────────────────────────────────────────────────────────────┘
+  const detalle = result.ok ? 'La respuesta no tenía la forma esperada.' : result.detail;
+
   await deps.repo.finishGeneration(generationId, {
     status: 'FAILED',
-    failureReason: reason,
+    // Acotado como todo texto que llega de fuera: el detalle lo compone el
+    // adaptador, pero puede acabar citando al proveedor.
+    failureReason: `${reason}: ${detalle}`.slice(0, 300),
     latencyMs,
   });
   await aplicar(deps, versionId, generating, 'GENERATION_FAILED');

@@ -247,9 +247,46 @@ describe('cuando el proveedor falla', () => {
 
       expect(outcome).toEqual({ kind: 'generation_failed', reason });
       expect(pasos).toContain('transition:GENERATING->NEW');
-      expect(cierres[0]).toMatchObject({ status: 'FAILED', failureReason: reason });
+      expect(cierres[0]).toMatchObject({
+        status: 'FAILED',
+        failureReason: expect.stringContaining(reason) as unknown as string,
+      });
     },
   );
+
+  it('el DETALLE se guarda, no solo el cajón', async () => {
+    // ┌─ POR QUÉ ESTO IMPORTA ─────────────────────────────────────────────┐
+    // │ `API_ERROR` es el cajón de todo lo que no es cuota ni timeout: un  │
+    // │ 404 de modelo retirado y un 403 de clave sin permisos entraban     │
+    // │ iguales. El proveedor YA calcula cuál es, y se tiraba aquí.        │
+    // │                                                                     │
+    // │ Resultado: `select failure_reason from ai_generations` decía        │
+    // │ `API_ERROR` y había que bucear en los logs para lo único que        │
+    // │ distingue un fallo de otro.                                         │
+    // └─────────────────────────────────────────────────────────────────────┘
+    const { deps, cierres } = espia({
+      respuestas: [
+        { ok: false, reason: 'API_ERROR', detail: 'El proveedor respondió 404.' } as AIResult,
+      ],
+    });
+
+    await generateVersion('v1', deps);
+
+    const guardado = cierres[0]?.status === 'FAILED' ? cierres[0].failureReason : '';
+    expect(guardado).toContain('API_ERROR');
+    expect(guardado).toContain('404');
+  });
+
+  it('el detalle se acota: puede venir citando al proveedor', async () => {
+    const { deps, cierres } = espia({
+      respuestas: [{ ok: false, reason: 'API_ERROR', detail: 'x'.repeat(500) } as AIResult],
+    });
+
+    await generateVersion('v1', deps);
+
+    const guardado = cierres[0]?.status === 'FAILED' ? cierres[0].failureReason : '';
+    expect(guardado.length).toBeLessThanOrEqual(300);
+  });
 
   it('un 429 NUNCA se reintenta', async () => {
     // Reintentar sobre una cuota agotada la agota más (regla 8).
@@ -306,7 +343,9 @@ describe('cuando el modelo devuelve algo que no pasa la validación', () => {
     const outcome = await generateVersion('v1', deps);
 
     expect(outcome).toEqual({ kind: 'generation_failed', reason: 'INVALID_OUTPUT' });
-    expect(cierres[0]).toMatchObject({ failureReason: 'INVALID_OUTPUT' });
+    expect(cierres[0]?.status === 'FAILED' && cierres[0].failureReason).toContain(
+      'INVALID_OUTPUT',
+    );
     expect(pasos).not.toContain('saveContent');
   });
 
