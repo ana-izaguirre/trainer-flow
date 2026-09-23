@@ -131,16 +131,46 @@ día: `checkins`, `change_requests` y `plan_events` se llenan solos.
 Lo caro de verdad —registrar el peso que el cliente levantó— se descarta a
 propósito, con su razón escrita, en SPEC-020 §3.2.
 
+## Los dos huecos que sí se notan en el mes uno
+
+No salieron de pedirlos: salieron de leer el código buscando otra cosa. Son
+los primeros de la cola cuando S-28 termine.
+
+| Spec | El hueco | Tamaño |
+|---|---|---|
+| **SPEC-023** | **El cliente no puede volver a ver su rutina.** No tiene ningún comando: si archiva el chat, la perdió | Una tarde |
+| **SPEC-024** | **Un cliente que se va recibe check-ins para siempre.** `clients` no tiene ningún estado, y un plan `SENT` se queda `SENT` | Una migración y tres comandos |
+
+El segundo es el que da vergüenza: manda veinte mensajes antes de que nadie se
+dé cuenta, y contamina las señales de SPEC-021 con gente que se fue en marzo.
+
 ## Después del MVP — pedido por el entrenador al usarlo
 
-Estas tres salieron de usar el sistema, no de planificarlo. Tienen spec
-escrita y esperan turno.
+Tienen spec escrita y esperan turno.
 
 | Spec | Qué resuelve | Por qué no es urgente |
 |---|---|---|
+| **SPEC-026** | **El progreso medido: ¿está funcionando?** | Una pregunta de peso cada 4 semanas. Los datos del cuerpo se capturan hoy **una vez** y no se vuelven a tocar |
+| **SPEC-025** | **Videos del cliente para corregir técnica** | La que más diferencia y de las más baratas: Telegram guarda el video, se guarda el `file_id`. Pero no se decide bien sin ver cómo usan el bot |
 | **SPEC-017** | Plantillas editables desde la base | Hoy se cambian con un despliegue. Primero conviene ver **cuánto** las cambia |
 | **SPEC-018** | Sus preferencias en cada prompt | Es lo que hace que las rutinas se parezcan a **las suyas** |
 | **SPEC-019** | Ilustración por ejercicio | Ver abajo. **111 de 302 son bodyweight**: la categoría mejor cubierta |
+
+> **«Progresión» son TRES cosas, y conviene no confundirlas:**
+>
+> | | Qué responde | Dónde |
+> |---|---|---|
+> | De la rutina | «¿Cuándo subo el peso?» | SPEC-020 · V1 |
+> | De adherencia | «¿Está cumpliendo?» | SPEC-021 · V1 |
+> | **Medida** | **«¿Está funcionando?»** | **SPEC-026** |
+>
+> Las dos primeras pueden ir perfectas y la tercera ser un desastre: alguien
+> que entrena las 4 sesiones, se siente bien, y lleva tres meses sin moverse
+> hacia su objetivo.
+
+> **SPEC-025 por delante de SPEC-019, y no es empate.** Las ilustraciones
+> ayudan al cliente a ejecutar; el video deja al entrenador **entrenar**. La
+> rutina la genera cualquiera; corregir una sentadilla mirando un video es él.
 
 ### SPEC-019 — la decisión que ya está tomada
 
@@ -182,6 +212,43 @@ desaparece si el modelo no genera identificadores.
 **Se empieza por las plantillas**: 38 ejercicios, mapeo hecho a mano una vez,
 cobertura completa y riesgo cero. Lo que genera la IA va después, cuando haya
 datos de si acierta eligiendo.
+
+---
+
+## Dos decisiones tomadas, para no volver sobre ellas
+
+### El dashboard es V2, y de solo lectura
+
+Telegram se queda corto para **ver**: la cartera entera, las tendencias, varios
+clientes a la vez. Un dashboard completo es un proyecto; uno de solo lectura es
+una semana.
+
+```
+Escribir  →  sigue en Telegram (aprobar, editar, enviar)
+Leer      →  web (clientes, rutinas, check-ins, de un vistazo)
+```
+
+Sale barato por una razón concreta: **`_core` es TypeScript puro sin
+dependencias**, así que una web en Node importa el mismo dominio, las mismas
+validaciones y el mismo formateo. No se reimplementa nada. Esa decisión, que en
+su momento fue por los tests (ADR-001), es la que regala el dashboard.
+
+**No entra en V1.** Nada de lo que hay que aprender de los primeros dos meses
+se aprende más rápido teniéndolo.
+
+### WhatsApp queda descartado — ver ADR-012
+
+No es una postergación, es una decisión, y está razonada entera en
+`ARCHITECTURE.md`. En corto:
+
+| | |
+|---|---|
+| **El coste técnico** | ~4.850 líneas de Telegram viven **dentro de `_core`**. No es transporte, es la interfaz del producto: teclados, `callback_data`, deep links |
+| **El coste externo** | La Business API cobra por conversación, exige aprobación de Meta, y **no deja escribir primero** sin plantilla pre-aprobada — justo lo que hace el check-in semanal |
+
+**Se revisa solo por una razón de negocio, no técnica:** que los clientes de
+verdad no usen Telegram. Y entonces el puerto `MessagingProvider` se mete
+**antes** de construir nada nuevo encima.
 
 ---
 

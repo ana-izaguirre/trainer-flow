@@ -314,6 +314,49 @@ verdad. Eso exige `supabase start` con Docker, y va en S-28.
 
 ---
 
+### ADR-012 — Telegram es el canal, y no hay puerto de mensajería
+
+**Contexto.** La IA está detrás de un puerto (ADR-007) y Telegram no. Mirando
+el reparto, el contraste es fuerte:
+
+| | Dónde vive |
+|---|---|
+| **IA** | Puerto `AIProvider`. Cero menciones en `_core`, con un test que hace grep |
+| **Telegram** | **~4.850 líneas dentro de `_core`**: teclados, `callback_data`, MarkdownV2 |
+
+La pregunta, planteada al evaluar WhatsApp: ¿fue un descuido?
+
+**No.** Son dos cosas distintas y merecían decisiones distintas:
+
+- **Un proveedor de IA es intercambiable por naturaleza.** Entra un `AIRequest`,
+  sale un `WorkoutDraft`. El contrato es del dominio, y cualquier modelo lo
+  cumple o no sirve.
+- **Un canal de mensajería no lo es.** Los botones en línea, el límite de 64
+  bytes de `callback_data`, el deep link de `/start`, los teclados que cambian
+  según el estado — **eso no es transporte, es la interfaz de usuario del
+  producto.** Un puerto que lo abstrajera acabaría siendo una reimplementación
+  de Telegram con otro nombre.
+
+**Decisión.** Telegram es el canal de V1 y su código vive en `_core`. **No se
+introduce un puerto `MessagingProvider` de forma preventiva.**
+
+**El precio, dicho en voz alta.** Cambiar de proveedor de IA es un archivo
+nuevo en `_shared/ai/` y una línea en `generate-version`. Cambiar de canal es
+reescribir buena parte del dominio. Esa factura existe y se paga entera el día
+que se mude.
+
+**WhatsApp queda descartado para V1 y V2.** Además del coste de arriba, su
+Business API cobra por conversación, exige aprobación de Meta, y **no permite
+escribir primero sin una plantilla pre-aprobada** — que es exactamente lo que
+hace el check-in semanal de SPEC-006.
+
+**Cuándo se revisa.** Solo si aparece una razón de negocio, no técnica: que los
+clientes de verdad no usen Telegram. Y entonces el puerto se mete **antes** de
+construir nada nuevo encima, porque cada feature añadida a Telegram encarece la
+mudanza.
+
+---
+
 ## Capas
 
 ```
