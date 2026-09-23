@@ -219,7 +219,7 @@ describe('lo que no se puede', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('SPEC-022 · /rutina — la rutina entera en un mensaje', () => {
+describe('SPEC-022 · /crear_rutina — la rutina entera en un mensaje', () => {
   const DICTADA = `Día 1: Empuje
 Press banca 4x8 90
 Press militar 3x10
@@ -230,7 +230,7 @@ Dominadas 4x6 120`;
   it('reemplaza los días de golpe', async () => {
     const { deps, guardado } = espia();
 
-    const outcome = await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+    const outcome = await handleEditorCommand('crear_rutina', DICTADA, TRAINER, CHAT, deps);
 
     expect(outcome).toMatchObject({ kind: 'edited' });
     expect(guardado[0]?.days).toHaveLength(2);
@@ -244,7 +244,7 @@ Dominadas 4x6 120`;
     const conAviso = { ...RUTINA, warnings: ['Revisar: hombro'] };
     const { deps, guardado } = espia({ draft: borrador({ content: conAviso }) });
 
-    await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+    await handleEditorCommand('crear_rutina', DICTADA, TRAINER, CHAT, deps);
 
     expect(guardado[0]?.warnings).toEqual(['Revisar: hombro']);
     expect(guardado[0]?.summary).toBe('Fuerza');
@@ -255,7 +255,7 @@ Dominadas 4x6 120`;
     // mitad de por qué el modo manual «no se entendía».
     const { deps, mensajes } = espia();
 
-    await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+    await handleEditorCommand('crear_rutina', DICTADA, TRAINER, CHAT, deps);
 
     expect(mensajes.at(-1)).toContain('Dominadas');
     // Y sigue diciendo de quién es.
@@ -266,7 +266,7 @@ Dominadas 4x6 120`;
     const { deps, pasos, mensajes } = espia();
 
     const outcome = await handleEditorCommand(
-      'rutina',
+      'crear_rutina',
       'Día 1: Empuje\nPress banca\nRemo 4x8',
       TRAINER,
       CHAT,
@@ -281,7 +281,7 @@ Dominadas 4x6 120`;
   it('un mensaje sin ningún día tampoco guarda', async () => {
     const { deps, pasos, mensajes } = espia();
 
-    const outcome = await handleEditorCommand('rutina', 'Press banca 4x8', TRAINER, CHAT, deps);
+    const outcome = await handleEditorCommand('crear_rutina', 'Press banca 4x8', TRAINER, CHAT, deps);
 
     expect(outcome).toMatchObject({ kind: 'invalid' });
     expect(pasos).not.toContain('saveDraft');
@@ -289,13 +289,13 @@ Dominadas 4x6 120`;
   });
 
   it('es un comando del editor, como los demás', () => {
-    expect(isEditorCommand('rutina')).toBe(true);
+    expect(isEditorCommand('crear_rutina')).toBe(true);
   });
 
   it('sin borrador abierto no hace nada', async () => {
     const { deps, pasos } = espia({ draft: null });
 
-    const outcome = await handleEditorCommand('rutina', DICTADA, TRAINER, CHAT, deps);
+    const outcome = await handleEditorCommand('crear_rutina', DICTADA, TRAINER, CHAT, deps);
 
     expect(outcome).toMatchObject({ kind: 'no_draft' });
     expect(pasos).not.toContain('saveDraft');

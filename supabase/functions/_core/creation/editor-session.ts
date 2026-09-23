@@ -47,7 +47,9 @@ export type EditorOutcome =
   | { readonly kind: 'not_draft_anymore' };
 
 /** Los comandos que este módulo atiende. El resto no son suyos. */
-const COMANDOS = ['rutina', 'dia', 'día', 'add', 'quitar', 'nota', 'ver'] as const;
+// `/rutina` NO está aquí a propósito: es del CLIENTE, que es quien lo
+// escribe para ver la suya (SPEC-023). El del entrenador dicta una nueva.
+const COMANDOS = ['crear_rutina', 'dia', 'día', 'add', 'quitar', 'nota', 'ver'] as const;
 
 export function isEditorCommand(command: string): boolean {
   return (COMANDOS as readonly string[]).includes(command);
@@ -78,9 +80,10 @@ export async function handleEditorCommand(
     return { kind: 'shown', versionId: draft.versionId };
   }
 
-  // `/rutina` no es un comando con argumentos sueltos: es la rutina entera en
-  // los renglones de abajo, así que tiene su propio parser (SPEC-022).
-  const parsed = command === 'rutina' ? parseBulk(args) : parseEditorSyntax(command, args);
+  // `/crear_rutina` no es un comando con argumentos sueltos: es la rutina
+  // entera en los renglones de abajo, con su propio parser (SPEC-022).
+  const parsed =
+    command === 'crear_rutina' ? parseBulk(args) : parseEditorSyntax(command, args);
   if (!parsed.ok) {
     await deps.sender.sendMessage(chatId, escapeMarkdownV2(parsed.error));
     return { kind: 'invalid', error: parsed.error };
@@ -115,7 +118,7 @@ export async function handleEditorCommand(
   return { kind: 'edited', versionId: draft.versionId };
 }
 
-/** `/rutina` — la rutina dictada de corrido. */
+/** `/crear_rutina` — la rutina dictada de corrido. */
 function parseBulk(args: string): ParsedCommand {
   const leido = parseWorkoutText(args);
   return leido.ok

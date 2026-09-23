@@ -13,6 +13,8 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { Identity } from '../domain/identity.ts';
+import { formatForClient } from '../telegram/client-format.ts';
+import { buildKeyboard, CLIENT_ACTIONS } from '../telegram/keyboard.ts';
 import type { QueryRepo } from '../ports/query-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import {
@@ -23,7 +25,8 @@ import {
   formatNotFound,
   formatPending,
   formatStaleCheckins,
-  SOLO_ENTRENADOR,
+  AYUDA_CLIENTE,
+  SIN_RUTINA_TODAVIA,
 } from './format.ts';
 import { matchClientName } from './match.ts';
 
@@ -55,10 +58,9 @@ export async function handleCommand(
   if (command === 'start') return { kind: 'not_mine' };
 
   // ── Regla 1, antes de cualquier consulta ───────────────────────────────
-  if (actor.role !== 'trainer') {
-    await deps.sender.sendMessage(actor.telegramChatId, SOLO_ENTRENADOR);
-    return { kind: 'forbidden', command };
-  }
+  // El cliente no accede a NINGUNA consulta del entrenador. Pero tiene las
+  // suyas, y hasta ahora chocaba con un muro incluso al pedir ayuda.
+  if (actor.role !== 'trainer') return atenderCliente(command, actor, deps);
 
   switch (command) {
     case 'clientes':
@@ -83,6 +85,50 @@ export async function handleCommand(
       await deps.sender.sendMessage(actor.telegramChatId, AYUDA);
       return { kind: 'unknown', command };
   }
+}
+
+/**
+ * Los comandos del CLIENTE (SPEC-023).
+ *
+ * `/rutina` es lo primero que escribe alguien que quiere ver la suya, así que
+ * es SUYO. El comando con el que el entrenador dicta una se llama
+ * `/crear_rutina` por eso mismo.
+ *
+ * Todo lo demás —incluido un comando del entrenador— responde con su ayuda:
+ * no se lleva ningún dato, y sale sabiendo qué SÍ puede hacer.
+ */
+async function atenderCliente(
+  command: string,
+  actor: Identity,
+  deps: CommandDeps,
+): Promise<CommandOutcome> {
+  if (command === 'rutina') {
+    // El puerto recibe su PERFIL, no un id de cliente: no existe la forma de
+    // pedir la rutina de otro porque no hay dónde ponerla.
+    const rutina = await deps.repo.clientRoutine(actor.profileId);
+
+    if (rutina === null) {
+      await deps.sender.sendMessage(actor.telegramChatId, SIN_RUTINA_TODAVIA);
+      return { kind: 'answered', command, messages: 1 };
+    }
+
+    await deps.sender.sendMessage(
+      actor.telegramChatId,
+      formatForClient(rutina.content, { clientName: rutina.clientName, plan: rutina.plan }),
+      // Los mismos botones que traía al entregarse: sin ellos, «pedir un
+      // cambio» solo existiría en el mensaje original (SPEC-010 regla 10).
+      buildKeyboard(CLIENT_ACTIONS, rutina.versionId),
+    );
+    return { kind: 'answered', command, messages: 1 };
+  }
+
+  await deps.sender.sendMessage(actor.telegramChatId, AYUDA_CLIENTE);
+
+  // `answered` para los suyos, `forbidden` para los del entrenador: el
+  // registro sigue distinguiéndolos aunque la respuesta sea la misma.
+  return command === 'ayuda' || command === 'help'
+    ? { kind: 'answered', command, messages: 1 }
+    : { kind: 'forbidden', command };
 }
 
 async function listar(actor: Identity, deps: CommandDeps): Promise<CommandOutcome> {

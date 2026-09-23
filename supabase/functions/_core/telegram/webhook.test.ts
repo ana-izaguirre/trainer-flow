@@ -97,6 +97,10 @@ function fakeCommands(opciones: { clientes?: { clientId: string; fullName: strin
   const pasos: string[] = [];
 
   const repo: QueryRepo = {
+    clientRoutine: () => {
+      pasos.push('clientRoutine');
+      return Promise.resolve(null);
+    },
     clients: () => {
       pasos.push('clients');
       return Promise.resolve(

@@ -7,7 +7,7 @@
 import type { WorkoutConstraints } from '../domain/draft.ts';
 import type { VersionState } from '../domain/version.ts';
 import type { Workout } from '../domain/workout.ts';
-import type { AIFailureReason, AIRequest, TokenUsage } from './ai-provider.ts';
+import type { AIRequest, TokenUsage } from './ai-provider.ts';
 
 export interface VersionForGeneration {
   readonly versionId: string;
@@ -32,7 +32,14 @@ export type GenerationOutcome =
   | { readonly status: 'SUCCEEDED'; readonly usage: TokenUsage; readonly latencyMs: number }
   | {
       readonly status: 'FAILED';
-      readonly failureReason: AIFailureReason;
+      /**
+       * El motivo Y su detalle: `API_ERROR: El proveedor respondió 404.`
+       *
+       * Texto, no `AIFailureReason`: el motivo solo dice el cajón, y `404` y
+       * `403` caen en el mismo. Guardar únicamente el cajón obligaba a bucear
+       * en los logs para lo único que distingue un fallo de otro.
+       */
+      readonly failureReason: string;
       readonly latencyMs: number;
     };
 

@@ -426,6 +426,64 @@ describe('LOAD_TEMPLATE y CREATE_MANUAL solo salen de NEW', () => {
 
     await startManual(VERSION_ID, ENTRENADOR, e.deps);
 
-    expect(e.mensajes[0]?.text).toContain('ya no está en preparación');
+    expect(e.mensajes[0]?.text).toContain('ya la tiene el cliente');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('mientras no se ha enviado, sigue en preparación', () => {
+  // ┌─ EL MENSAJE ERA EL MISMO PARA LOS SEIS ESTADOS ────────────────────────┐
+  // │ «Esa rutina ya no está en preparación» salía también con un borrador   │
+  // │ a medias, que es el caso más común: el entrenador pulsa un botón viejo │
+  // │ teniendo ya un borrador abierto. Mentía Y lo dejaba sin salida.        │
+  // └────────────────────────────────────────────────────────────────────────┘
+
+  const mensajeEn = async (estado: 'GENERATING' | 'DRAFT' | 'APPROVED' | 'SENT' | 'REJECTED') => {
+    const e = espia({ version: version({ state: estado }) });
+    await startManual(VERSION_ID, ENTRENADOR, e.deps);
+    return e.mensajes[0]?.text ?? '';
+  };
+
+  it.each(['GENERATING', 'DRAFT', 'APPROVED'] as const)(
+    'en %s NO dice que ya no está en preparación',
+    async (estado) => {
+      expect(await mensajeEn(estado)).not.toContain('ya no está en preparación');
+    },
+  );
+
+  it('con un borrador a medias, manda a /ver en vez de dejarlo colgado', async () => {
+    // Es lo que el entrenador quería: su borrador, ya empezado.
+    const mensaje = await mensajeEn('DRAFT');
+
+    expect(mensaje).toContain('borrador');
+    expect(mensaje).toContain('/ver');
+  });
+
+  it('mientras la IA trabaja, dice que espere', async () => {
+    expect(await mensajeEn('GENERATING')).toMatch(/IA.*trabajando|momento/i);
+  });
+
+  it('aprobada: dice que está esperando para enviarse', async () => {
+    expect(await mensajeEn('APPROVED')).toContain('aprobada');
+  });
+
+  it('enviada: dice que hay que crear una versión nueva', async () => {
+    const mensaje = await mensajeEn('SENT');
+
+    expect(mensaje).toContain('cliente');
+    expect(mensaje).toContain('versión nueva');
+  });
+
+  it('descartada: dice cómo empezar otra', async () => {
+    expect(await mensajeEn('REJECTED')).toContain('descartaste');
+  });
+
+  it('los cinco estados dicen algo distinto: ninguno es un callejón', async () => {
+    const estados = ['GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED'] as const;
+    const mensajes = await Promise.all(estados.map(mensajeEn));
+
+    expect(new Set(mensajes).size).toBe(estados.length);
+    expect(mensajes.every((m) => m.length > 0)).toBe(true);
   });
 });

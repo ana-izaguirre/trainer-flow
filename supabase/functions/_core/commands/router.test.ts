@@ -7,6 +7,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
+import type { VersionForDelivery } from '../ports/delivery-ports.ts';
 import type { Identity } from '../domain/identity.ts';
 import type {
   ClientDetail,
@@ -47,6 +48,7 @@ interface Espia {
   readonly deps: CommandDeps;
   readonly pasos: string[];
   readonly mensajes: string[];
+  readonly teclados: unknown[];
 }
 
 function espia(
@@ -55,10 +57,12 @@ function espia(
     detalle?: ClientDetail | null;
     pendientes?: readonly PendingVersion[];
     checkins?: readonly StaleCheckin[];
+    rutinaDelCliente?: VersionForDelivery | null;
   } = {},
 ): Espia {
   const pasos: string[] = [];
   const mensajes: string[] = [];
+  const teclados: unknown[] = [];
 
   const repo: QueryRepo = {
     clients: (trainerId) => {
@@ -68,6 +72,10 @@ function espia(
     clientDetail: (clientId) => {
       pasos.push(`clientDetail:${clientId}`);
       return Promise.resolve(opciones.detalle === undefined ? null : opciones.detalle);
+    },
+    clientRoutine: (profileId) => {
+      pasos.push(`clientRoutine:${profileId}`);
+      return Promise.resolve(opciones.rutinaDelCliente ?? null);
     },
     pendingVersions: () => {
       pasos.push('pendingVersions');
@@ -83,9 +91,10 @@ function espia(
     deps: {
       repo,
       sender: {
-        sendMessage: (chatId, text) => {
+        sendMessage: (chatId, text, keyboard) => {
           pasos.push(`sendMessage:${chatId}`);
           mensajes.push(text);
+          teclados.push(keyboard ?? null);
           return Promise.resolve();
         },
         answerCallback: () => Promise.resolve(),
@@ -93,6 +102,7 @@ function espia(
     },
     pasos,
     mensajes,
+    teclados,
   };
 }
 
@@ -309,5 +319,105 @@ describe('ayuda y lo desconocido', () => {
 
     expect(await handleCommand('start', 'tok', CLIENTE, deps)).toEqual({ kind: 'not_mine' });
     expect(pasos).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-023 · lo que SÍ puede hacer un cliente', () => {
+  // ┌─ ANTES ERA UN MURO ────────────────────────────────────────────────────┐
+  // │ CUALQUIER comando de un cliente devolvía «eso solo lo puede consultar  │
+  // │ tu entrenador». Incluso `/ayuda`. Alguien recién vinculado no tenía    │
+  // │ forma de averiguar qué podía hacer: probaba a ciegas y chocaba con el  │
+  // │ mismo mensaje.                                                         │
+  // └────────────────────────────────────────────────────────────────────────┘
+  const RUTINA: VersionForDelivery = {
+    versionId: 'v-1',
+    state: 'SENT',
+    content: {
+      summary: 'Fuerza tres días',
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'Empuje',
+          exercises: [{ name: 'Press banca', sets: 4, reps: '8', restSeconds: 90, notes: null }],
+        },
+      ],
+      warnings: [],
+    },
+    clientName: 'Ana Matamoros',
+    clientChatId: 77,
+    trainerChatId: 10,
+    plan: null,
+  };
+
+  it('/rutina le devuelve la suya', async () => {
+    const { deps, mensajes } = espia({ rutinaDelCliente: RUTINA });
+
+    const outcome = await handleCommand('rutina', '', CLIENTE, deps);
+
+    expect(outcome).toMatchObject({ kind: 'answered', command: 'rutina' });
+    expect(mensajes[0]).toContain('Press banca');
+  });
+
+  it('con los botones de aceptar y pedir cambio', async () => {
+    // Sin ellos, «pedir un cambio» solo existiría en el mensaje de entrega
+    // original, que es justo el que el cliente no encuentra.
+    const { deps, teclados } = espia({ rutinaDelCliente: RUTINA });
+
+    await handleCommand('rutina', '', CLIENTE, deps);
+
+    expect(teclados[0]).not.toBeNull();
+  });
+
+  it('la consulta va con SU perfil: no hay dónde poner el de otro', async () => {
+    const { deps, pasos } = espia({ rutinaDelCliente: RUTINA });
+
+    await handleCommand('rutina', 'el-id-de-otro', CLIENTE, deps);
+
+    expect(pasos).toContain(`clientRoutine:${CLIENTE.profileId}`);
+    // El argumento se ignora por completo.
+    expect(pasos.some((p) => p.includes('el-id-de-otro'))).toBe(false);
+  });
+
+  it('sin rutina todavía, no es un error', async () => {
+    const { deps, mensajes } = espia({ rutinaDelCliente: null });
+
+    const outcome = await handleCommand('rutina', '', CLIENTE, deps);
+
+    expect(outcome).toMatchObject({ kind: 'answered' });
+    expect(mensajes[0]).toContain('preparando');
+  });
+
+  it.each(['ayuda', 'help'])('/%s le dice qué puede hacer', async (comando) => {
+    const { deps, mensajes } = espia();
+
+    const outcome = await handleCommand(comando, '', CLIENTE, deps);
+
+    expect(outcome).toMatchObject({ kind: 'answered' });
+    expect(mensajes[0]).toContain('/rutina');
+    expect(mensajes[0]).not.toContain('solo lo puede consultar');
+  });
+
+  it('un comando del entrenador le devuelve SU ayuda, no un muro', async () => {
+    const { deps, pasos, mensajes } = espia();
+
+    const outcome = await handleCommand('pendientes', '', CLIENTE, deps);
+
+    // Sigue siendo `forbidden` en el registro: el intento se distingue.
+    expect(outcome).toEqual({ kind: 'forbidden', command: 'pendientes' });
+    // Pero no se va con las manos vacías.
+    expect(mensajes[0]).toContain('/rutina');
+    // Y lo que más importa: ni una consulta del entrenador.
+    expect(pasos.filter((p) => !p.startsWith('sendMessage'))).toEqual([]);
+  });
+
+  it('un comando inventado también', async () => {
+    const { deps, mensajes } = espia();
+
+    const outcome = await handleCommand('loquesea', '', CLIENTE, deps);
+
+    expect(outcome).toEqual({ kind: 'forbidden', command: 'loquesea' });
+    expect(mensajes[0]).toContain('/rutina');
   });
 });

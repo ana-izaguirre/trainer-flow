@@ -123,9 +123,18 @@ export async function linkClient(
     return { kind: 'link_failed' };
   }
 
+  // ┌─ DECIRLE QUÉ SIGUE, NO SOLO QUE SE CONECTÓ ─────────────────────────┐
+  // │ «Ya estás conectado» y nada más dejaba al cliente mirando un chat    │
+  // │ vacío, sin saber si tenía que hacer algo. Probaba comandos a ciegas. │
+  // └──────────────────────────────────────────────────────────────────────┘
   await deps.sender.sendMessage(
     user.chatId,
-    `👋 Hola ${client.fullName}, ya estás conectado con tu entrenador\\.`,
+    [
+      `👋 Hola ${client.fullName}, ya estás conectado con tu entrenador\\.`,
+      '',
+      'Aquí vas a recibir tu rutina y un check\\-in corto cada lunes\\.',
+      'Escribe /ayuda cuando quieras ver qué puedes hacer\\.',
+    ].join('\n'),
   );
 
   // ── La entrega diferida ────────────────────────────────────────────────

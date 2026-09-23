@@ -456,7 +456,7 @@ function toNumberOrNull(value: unknown): number | null {
  */
 async function readDelivery(
   db: Db,
-  fn: 'version_for_delivery' | 'approved_version_for_client',
+  fn: 'version_for_delivery' | 'approved_version_for_client' | 'sent_version_for_profile',
   args: Record<string, string>,
 ): Promise<VersionForDelivery | null> {
   const { data, error } = await db.rpc(fn, args).maybeSingle();
@@ -765,6 +765,12 @@ export function createQueryRepo(db: Db): QueryRepo {
         daysWaiting: Number(fila['days_waiting']),
         reminded: fila['reminded'] === true,
       }));
+    },
+
+    // SPEC-023. Reutiliza `readDelivery` porque el cliente ve exactamente lo
+    // que recibió: misma forma, mismo formateo, mismos botones.
+    clientRoutine(profileId) {
+      return readDelivery(db, 'sent_version_for_profile', { p_profile_id: profileId });
     },
   };
 }
