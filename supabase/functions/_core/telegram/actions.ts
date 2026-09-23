@@ -27,6 +27,7 @@ import type { ActionRepo, VersionForAction } from '../ports/action-ports.ts';
 import type { GenerationTrigger } from '../ports/generation-trigger.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import type { CallbackAction } from './callback-data.ts';
+import { escapeMarkdownV2 } from './format.ts';
 
 export interface ActionRequest {
   readonly action: CallbackAction;
@@ -83,7 +84,7 @@ const ESTADO_EN_PALABRAS: Readonly<Record<VersionState, string>> = {
  *
  * Si se distinguieran, probar IDs diría cuáles existen.
  */
-const RESPUESTA_NEUTRA = 'No puedo hacer eso con esta rutina.';
+const RESPUESTA_NEUTRA = 'No puedo hacer eso con esta rutina\\.';
 
 export async function handleAction(
   request: ActionRequest,
@@ -109,7 +110,7 @@ export async function handleAction(
   const evento = EVENTO[request.action];
   if (evento === undefined) {
     // Un botón que no hace nada y no lo dice es peor que uno que no existe.
-    await deps.sender.sendMessage(actor.telegramChatId, 'Eso todavía no está listo.');
+    await deps.sender.sendMessage(actor.telegramChatId, 'Eso todavía no está listo\\.');
     return { kind: 'not_implemented', action: request.action };
   }
 
@@ -121,7 +122,10 @@ export async function handleAction(
     const problema = porQueNoSePuedeAprobar(version);
 
     if (problema !== null) {
-      await deps.sender.sendMessage(actor.telegramChatId, `No puedo aprobarla: ${problema}`);
+      await deps.sender.sendMessage(
+        actor.telegramChatId,
+        `No puedo aprobarla: ${escapeMarkdownV2(problema)}`,
+      );
       return { kind: 'invalid_action', state: version.state, action: 'approve' };
     }
   }
@@ -131,7 +135,7 @@ export async function handleAction(
   if (destino === null) {
     await deps.sender.sendMessage(
       actor.telegramChatId,
-      `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}.`,
+      `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}\\.`,
     );
     return { kind: 'invalid_action', state: version.state, action: request.action };
   }
@@ -139,7 +143,7 @@ export async function handleAction(
   // ── 5. La transición ES la guarda contra el doble clic ─────────────────
   // Una comprobación previa la pasarían las dos pulsaciones simultáneas.
   if (!(await deps.repo.transition(request.versionId, version.state, destino))) {
-    await deps.sender.sendMessage(actor.telegramChatId, 'Esta rutina ya fue procesada.');
+    await deps.sender.sendMessage(actor.telegramChatId, 'Esta rutina ya fue procesada\\.');
     return { kind: 'already_processed' };
   }
 
@@ -149,14 +153,14 @@ export async function handleAction(
     // enviar que no existe — y el mensaje de entrega llega justo después.
     await deps.sender.sendMessage(
       actor.telegramChatId,
-      `✅ Rutina aprobada para ${version.clientName}. Enviándosela…`,
+      `✅ Rutina aprobada para ${escapeMarkdownV2(version.clientName)}\\. Enviándosela…`,
     );
     return { kind: 'approved', versionId: request.versionId };
   }
 
   await deps.sender.sendMessage(
     actor.telegramChatId,
-    `❌ Rutina rechazada. Puedes empezar otra para ${version.clientName}.`,
+    `❌ Rutina rechazada\\. Puedes empezar otra para ${escapeMarkdownV2(version.clientName)}\\.`,
   );
   return { kind: 'rejected', versionId: request.versionId };
 }
@@ -185,7 +189,7 @@ async function generar(
   if (nextState(version.state, 'GENERATE') === null) {
     await deps.sender.sendMessage(
       actor.telegramChatId,
-      `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}.`,
+      `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}\\.`,
     );
     return { kind: 'invalid_action', state: version.state, action: 'generate' };
   }
@@ -194,7 +198,7 @@ async function generar(
   // invita a volver a pulsarlo.
   await deps.sender.sendMessage(
     actor.telegramChatId,
-    `🤖 Generando la rutina de ${version.clientName}. Te la mando en cuanto esté.`,
+    `🤖 Generando la rutina de ${escapeMarkdownV2(version.clientName)}\\. Te la mando en cuanto esté\\.`,
   );
 
   try {
@@ -204,7 +208,7 @@ async function generar(
     // El detalle del fallo va a los logs del handler, no al entrenador.
     await deps.sender.sendMessage(
       actor.telegramChatId,
-      'No pude arrancar la generación. Puedes reintentar o usar una plantilla.',
+      'No pude arrancar la generación\\. Puedes reintentar o usar una plantilla\\.',
     );
     return { kind: 'invalid_action', state: version.state, action: 'generate' };
   }
