@@ -11,6 +11,17 @@
 Que el cliente pueda volver a ver su rutina cuando quiera, sin depender de su
 historial de Telegram ni de escribirle al entrenador.
 
+## 1.bis El comando es `/rutina`, no `/mirutina`
+
+Esta spec proponía `/mirutina`. **Verlo usar lo desmintió en un día.**
+
+Una clienta recién vinculada escribió `/rutina` —lo natural— y chocó con «eso
+solo lo puede consultar tu entrenador», porque SPEC-022 acababa de darle ese
+nombre al comando con el que el ENTRENADOR dicta una.
+
+Nadie escribe `/mirutina`. Así que `/rutina` es del cliente y el del
+entrenador pasa a `/crear_rutina`.
+
 ## 2. El problema
 
 El cliente **no tiene ningún comando**. Solo botones, y los botones viven
@@ -32,7 +43,7 @@ Es la primera queja que va a llegar de un cliente real.
 ## 3. Alcance
 
 **Incluye:**
-- `/mirutina`, para el cliente vinculado
+- `/rutina`, para el cliente vinculado
 - Reenvía la **versión vigente**: la última en `SENT`
 - El mismo formato que recibió al entregársela, con sus botones
 
@@ -46,7 +57,7 @@ Es la primera queja que va a llegar de un cliente real.
 ### Entrada
 
 ```
-/mirutina
+/rutina
 ```
 
 Sin argumentos. El cliente es quien escribe, y el sistema sabe quién es por su
@@ -67,7 +78,7 @@ tal cual.
 3. Sin ninguna versión en `SENT`: se responde que su entrenador aún está
    preparándola. **No un error.**
 4. Un cliente sin vincular no llega hasta aquí: `/start <token>` es lo primero.
-5. **El entrenador que escriba `/mirutina` recibe `/ayuda`.** No es suyo, y el
+5. **El entrenador que escriba `/rutina` recibe `/ayuda`.** No es suyo, y el
    simétrico ya lo tiene.
 6. **No cambia ningún estado.** Reenviar no es reentregar: `sent_at` no se
    toca y no se registra un evento de entrega.
@@ -94,7 +105,7 @@ tal cual.
 
 ## 9. Criterios de aceptación
 
-- **CA-1** — DADO un cliente con rutina en `SENT`, CUANDO envía `/mirutina`,
+- **CA-1** — DADO un cliente con rutina en `SENT`, CUANDO envía `/rutina`,
   ENTONCES recibe esa rutina con sus botones.
 - **CA-2** — DADO un cliente con v1 `SENT` y v2 `DRAFT`, CUANDO la pide,
   ENTONCES recibe **la v1**.
@@ -102,7 +113,7 @@ tal cual.
   ENTONCES recibe el aviso de que está en camino, no un error.
 - **CA-4** — DADO que la pide el entrenador, CUANDO llega, ENTONCES recibe
   `/ayuda`.
-- **CA-5** — DADO `/mirutina` con cualquier argumento, CUANDO llega, ENTONCES
+- **CA-5** — DADO `/rutina` con cualquier argumento, CUANDO llega, ENTONCES
   el argumento **se ignora** y se devuelve la suya.
 - **CA-6** — DADO que la pide, CUANDO se responde, ENTONCES `sent_at` **no
   cambia** y no se registra ningún evento de entrega.
