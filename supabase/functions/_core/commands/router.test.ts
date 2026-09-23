@@ -226,12 +226,27 @@ describe('/cliente <nombre>', () => {
     expect(mensajes[0]).toContain('No tengo a nadie');
   });
 
-  it('`/cliente` a secas no lista a todos', async () => {
+  it('`/cliente` a secas no lista a todos, y tampoco consulta', async () => {
+    // Antes decía «No tengo a nadie con ese nombre», que es la respuesta de
+    // una búsqueda que SÍ corrió y no encontró — Carlos lo escribió dos veces
+    // seguidas sin entender qué le faltaba. Aquí no hubo búsqueda: se pide el
+    // nombre antes de tocar `clients()`, la misma disciplina que la regla 1.
+    const { deps, pasos, mensajes } = espia();
+
+    const outcome = await handleCommand('cliente', '', ENTRENADOR, deps);
+
+    expect(outcome).toEqual({ kind: 'answered', command: 'cliente', messages: 1 });
+    expect(mensajes[0]).toContain('/cliente');
+    expect(mensajes[0]).not.toContain('No tengo a nadie');
+    expect(pasos).not.toContain('clients:p-trainer');
+  });
+
+  it('`/cliente` con solo espacios cuenta igual que vacío', async () => {
     const { deps, mensajes } = espia();
 
-    await handleCommand('cliente', '', ENTRENADOR, deps);
+    await handleCommand('cliente', '   ', ENTRENADOR, deps);
 
-    expect(mensajes[0]).toContain('No tengo a nadie');
+    expect(mensajes[0]).toContain('/cliente');
   });
 });
 

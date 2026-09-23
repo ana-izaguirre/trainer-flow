@@ -206,6 +206,15 @@ export const AYUDA = [
 export const SOLO_ENTRENADOR = 'Eso solo lo puede consultar tu entrenador\\.';
 
 /**
+ * Regla 2. `/cliente` sin nombre.
+ *
+ * NO es «No tengo a nadie con ese nombre»: eso dice que buscó y no encontró,
+ * y aquí no buscó nada. La diferencia se vio en uso real — Carlos escribió
+ * `/cliente` a secas dos veces seguidas sin saber qué le faltaba.
+ */
+export const PIDE_NOMBRE_CLIENTE = 'Escribe el nombre: `/cliente Carlos`\\.';
+
+/**
  * Lo que puede hacer un CLIENTE.
  *
  * ┌─ POR QUÉ EXISTE ───────────────────────────────────────────────────────┐

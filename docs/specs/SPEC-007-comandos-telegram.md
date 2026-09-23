@@ -74,7 +74,10 @@ Lista de comandos.
 1. **Las consultas de la cartera son exclusivas del entrenador.** Un cliente que los
    escriba recibe un mensaje genérico.
 2. `/cliente` busca por coincidencia parcial, sin distinguir mayúsculas.
-   Varias coincidencias: se listan para elegir.
+   Varias coincidencias: se listan para elegir. **Sin nombre (`/cliente` a
+   secas): se pide que lo escriba.** No es lo mismo que «no hay nadie con ese
+   nombre» — decirlo así deja al entrenador escribiendo el comando otra vez
+   sin saber qué le falta (visto en uso real: Carlos lo probó dos veces).
 3. **Sin coincidencias: se sugiere por iniciales, no por distancia de edición.**
    Con diez clientes, un Levenshtein es maquinaria para un problema que no
    existe. Si nada contiene lo escrito, se ofrecen los que empiezan por la
