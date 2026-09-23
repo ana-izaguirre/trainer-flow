@@ -16,6 +16,7 @@
 import { canModifyVersion } from '../authorization.ts';
 import type { Identity } from '../domain/identity.ts';
 import { nextState } from '../domain/state-machine.ts';
+import type { VersionState } from '../domain/version.ts';
 import { describeErrors } from '../domain/draft.ts';
 import { validateDraft } from '../domain/validate-draft.ts';
 import type { Workout } from '../domain/workout.ts';
@@ -270,20 +271,44 @@ async function rechazar(
 }
 
 /**
+ * ┌─ «YA NO ESTÁ EN PREPARACIÓN» ERA MENTIRA ──────────────────────────────┐
+ * │ El mensaje salía IGUAL para los seis estados. Pero mientras la rutina  │
+ * │ no se ha ENVIADO, sigue en preparación:                               │
+ * │                                                                        │
+ * │   GENERATING  la IA está trabajando  → en preparación                 │
+ * │   DRAFT       hay un borrador        → en preparación                 │
+ * │   APPROVED    lista para enviar      → en preparación                 │
+ * │   SENT        el cliente la tiene    → ya no                          │
+ * │                                                                        │
+ * │ En el caso más común —pulsar un botón viejo teniendo ya un borrador—   │
+ * │ mentía Y dejaba sin salida. Un borrador empezado no es un callejón:   │
+ * │ es exactamente lo que el entrenador quería.                           │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * Cada estado dice qué hacer a continuación. Aquí sí se explica el motivo:
+ * solo llega el dueño de la rutina, así que no hay nada que filtrar.
+ */
+const SIGUIENTE_PASO: Readonly<Record<VersionState, string>> = {
+  // No llega: desde NEW se permiten los tres caminos. Si apareciera, es un bug.
+  NEW: 'Esa rutina está lista para empezar. Vuelve a pulsar un botón del aviso.',
+  GENERATING: 'La IA está trabajando en esta rutina. Dale un momento y te aviso.',
+  DRAFT: 'Esta rutina ya tiene un borrador empezado. Escribe /ver para verlo y seguir editándolo.',
+  APPROVED: 'Esta rutina ya está aprobada y esperando para enviarse al cliente.',
+  SENT: 'Esa rutina ya la tiene el cliente. Para cambiarla hay que crear una versión nueva.',
+  REJECTED: 'Esa versión la descartaste. Empieza otra desde el aviso del cliente.',
+};
+
+/**
  * Rechazo por ESTADO, no por pertenencia.
  *
- * Aquí sí se explica el motivo: solo llega el dueño de la rutina, que ya tiene
- * acceso. No hay nada que filtrar y sí algo que aclararle — normalmente ha
- * pulsado un botón viejo de un mensaje de hace semanas.
+ * Nunca es un callejón: el mensaje dice en qué punto está la rutina y cuál es
+ * el paso siguiente.
  */
 async function rechazarPorEstado(
   chatId: number,
   deps: CreationDeps,
-  estado: string,
+  estado: VersionState,
 ): Promise<CreationOutcome> {
-  await deps.sender.sendMessage(
-    chatId,
-    'Esa rutina ya no está en preparación, así que no puedo cambiarle el contenido\\.',
-  );
+  await deps.sender.sendMessage(chatId, escapeMarkdownV2(SIGUIENTE_PASO[estado]));
   return { kind: 'rejected', reason: `estado ${estado}` };
 }
