@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR — implementada, pendiente de que Ana la apruebe |
+| **Estado** | **IMPLEMENTADA** |
 | **Depende de** | SPEC-008 |
 | **Sesiones** | S-43 |
 
@@ -43,7 +43,7 @@ El entrenador tiene la rutina en la cabeza entera. La interfaz le pedía
 desmontarla en dieciocho piezas y volver a montarla de una en una.
 
 ```
-/rutina
+/crear_rutina
 Día 1: Empuje
 Press banca 4x8 90
 Press militar 3x10
@@ -75,7 +75,7 @@ entrenador buscaría el error en otro sitio.
 
 ### 3.3 Devolver la rutina, no un acuse
 
-Después de cada cambio —`/rutina`, `/add`, `/quitar`, `/nota`, `/dia`— se
+Después de cada cambio —`/crear_rutina`, `/add`, `/quitar`, `/nota`, `/dia`— se
 devuelve la rutina completa. Editar a ciegas y comprobar después con `/ver`
 era la otra mitad de «no se entendía».
 
@@ -90,7 +90,7 @@ no está a la vista.
 ## 4. Alcance
 
 **Incluye:**
-- `/rutina`, que reemplaza **todos** los días de una vez
+- `/crear_rutina`, que reemplaza **todos** los días de una vez
 - Errores que nombran el renglón
 - La rutina completa como respuesta a cada edición
 - El mensaje de ayuda reescrito, empezando por lo rápido
@@ -137,13 +137,13 @@ export function parseWorkoutText(text: string): BulkResult;
 ### El separador del comando
 
 `parseUpdate` buscaba el primer **espacio** para separar el comando de sus
-argumentos. `/rutina` se escribe con la rutina **debajo**, así que ahora busca
+argumentos. `/crear_rutina` se escribe con la rutina **debajo**, así que ahora busca
 el primer **espacio en blanco** de cualquier tipo. Sin esto, el comando se
 habría comido el mensaje entero.
 
 ## 6. Reglas de negocio
 
-1. `/rutina` reemplaza **todos** los días. No añade.
+1. `/crear_rutina` reemplaza **todos** los días. No añade.
 2. **`summary` y `warnings` se conservan.** El aviso de limitaciones del
    cliente no es algo que el entrenador esté reescribiendo al dictar los días,
    y perderlo haría fallar `validateDraft` al aprobar.
@@ -162,7 +162,7 @@ habría comido el mensaje entero.
 
 ## 7. Estados
 
-**Ninguno.** `/rutina` es una edición más: sobre `DRAFT`, in-place, sin cambiar
+**Ninguno.** `/crear_rutina` es una edición más: sobre `DRAFT`, in-place, sin cambiar
 estado (SPEC-008 reglas 5 y 6).
 
 ## 8. Errores
@@ -182,7 +182,7 @@ estado (SPEC-008 reglas 5 y 6).
 
 ## 9. Seguridad
 
-- Sin cambios: `/rutina` pasa por el mismo `currentDraft` que el resto, que ya
+- Sin cambios: `/crear_rutina` pasa por el mismo `currentDraft` que el resto, que ya
   resuelve el borrador **del entrenador que escribe**.
 - Los textos se acotan a los límites del dominio antes de guardarse.
 - `validateDraft` sigue siendo la puerta al aprobar. **Nada de esto crea un
@@ -190,21 +190,21 @@ estado (SPEC-008 reglas 5 y 6).
 
 ## 10. Criterios de aceptación
 
-- **CA-1** — DADO `/rutina` con dos días y sus ejercicios, CUANDO se envía,
+- **CA-1** — DADO `/crear_rutina` con dos días y sus ejercicios, CUANDO se envía,
   ENTONCES el borrador queda con esos dos días.
 - **CA-2** — DADO un borrador con un aviso de limitaciones, CUANDO se envía
-  `/rutina`, ENTONCES el aviso **sigue ahí**.
-- **CA-3** — DADO `/rutina` con un renglón ilegible, CUANDO se envía, ENTONCES
+  `/crear_rutina`, ENTONCES el aviso **sigue ahí**.
+- **CA-3** — DADO `/crear_rutina` con un renglón ilegible, CUANDO se envía, ENTONCES
   **no se guarda nada** y el mensaje nombra ese renglón.
 - **CA-4** — DADO cualquier edición correcta, CUANDO se aplica, ENTONCES la
   respuesta es la **rutina completa**, con el nombre del cliente.
-- **CA-5** — DADO `/rutina` sin ninguna cabecera de día, CUANDO se envía,
+- **CA-5** — DADO `/crear_rutina` sin ninguna cabecera de día, CUANDO se envía,
   ENTONCES se rechaza pidiendo un día.
 - **CA-6** — DADO los días dictados del 2 al 1, CUANDO se parsean, ENTONCES
   salen del 1 al 2.
 - **CA-7** — DADO un comando seguido de un salto de línea, CUANDO `parseUpdate`
   lo lee, ENTONCES el comando es solo la primera palabra.
-- **CA-8** — DADO que no hay borrador abierto, CUANDO se envía `/rutina`,
+- **CA-8** — DADO que no hay borrador abierto, CUANDO se envía `/crear_rutina`,
   ENTONCES se responde cómo abrir uno y no se guarda nada.
 
 ## 11. Tests
@@ -217,7 +217,7 @@ estado (SPEC-008 reglas 5 y 6).
 | Unit | Los blancos cuentan para el número de renglón |
 | Unit | Límites: nombre y foco largos se recortan; día sin ejercicios vale |
 | Unit | `setDays` conserva `summary` y `warnings`, y no muta el original |
-| Unit | `/rutina` por el handler: guarda, no guarda, y qué responde |
+| Unit | `/crear_rutina` por el handler: guarda, no guarda, y qué responde |
 | Unit | `parseUpdate` con un comando seguido de renglones |
 
 ## 12. Archivos que toca
@@ -234,10 +234,20 @@ Sin migraciones. Sin cambios en el modelo.
 
 ---
 
+## 12.bis El nombre cambió al verlo usar
+
+Se llamaba `/rutina`. Duró un día: un cliente recién vinculado escribió
+`/rutina` —lo natural para ver la suya— y se topó con un comando del
+entrenador.
+
+`/rutina` pasa a ser del CLIENTE. El del entrenador es `/crear_rutina`, con
+guion bajo porque BotFather no admite guiones ni mayúsculas en los comandos
+registrados, y sin registrar no aparecen en el menú del `/`.
+
 ## 13. Lo que queda abierto
 
 **Reordenar y duplicar días sigue siendo incómodo**, igual que reconocía
-SPEC-008. Con `/rutina` deja de doler tanto —se redicta entera— pero no es lo
+SPEC-008. Con `/crear_rutina` deja de doler tanto —se redicta entera— pero no es lo
 mismo que moverlos.
 
 Y el formato **no cubre las notas por ejercicio**: siguen siendo `/nota`. Meterlas

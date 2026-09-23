@@ -204,3 +204,35 @@ export const AYUDA = [
 
 /** Regla 1: un cliente que escribe un comando no se lleva ningún dato. */
 export const SOLO_ENTRENADOR = 'Eso solo lo puede consultar tu entrenador\\.';
+
+/**
+ * Lo que puede hacer un CLIENTE.
+ *
+ * ┌─ POR QUÉ EXISTE ───────────────────────────────────────────────────────┐
+ * │ Antes, CUALQUIER comando de un cliente devolvía «eso solo lo puede     │
+ * │ consultar tu entrenador». Incluso `/ayuda`. Así que alguien recién     │
+ * │ vinculado no tenía forma de averiguar qué podía hacer: probaba a       │
+ * │ ciegas y chocaba con el mismo muro.                                    │
+ * │                                                                        │
+ * │ Se termina diciendo que escriba, porque lo demás son botones y los     │
+ * │ botones no se buscan: aparecen.                                        │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
+export const AYUDA_CLIENTE = [
+  '🤖 *Lo que puedes hacer*',
+  '',
+  '/rutina — ver tu rutina actual',
+  '/ayuda — esto',
+  '',
+  'Cada lunes te llega un check\\-in de tres preguntas\\.',
+  'Y en tu rutina tienes botones para decir si te sirve o pedir un cambio\\.',
+  '',
+  'Cualquier otra cosa, háblalo con tu entrenador\\.',
+].join('\n');
+
+/** Vinculado, pero su entrenador todavía no le ha mandado nada. */
+export const SIN_RUTINA_TODAVIA = [
+  '⏳ Todavía no tienes una rutina\\.',
+  '',
+  'Tu entrenador la está preparando\\. En cuanto esté, te llega aquí mismo\\.',
+].join('\n');

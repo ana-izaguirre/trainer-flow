@@ -144,10 +144,12 @@ export async function handleAction(
   }
 
   if (destino === 'APPROVED') {
-    // Enviarla al cliente es SPEC-005: esto solo deja la versión lista.
+    // Enviarla al cliente es SPEC-005, y el webhook encadena las dos: aprobar
+    // ES enviar. Decirlo aquí evita que el entrenador busque un botón de
+    // enviar que no existe — y el mensaje de entrega llega justo después.
     await deps.sender.sendMessage(
       actor.telegramChatId,
-      `✅ Rutina aprobada para ${version.clientName}.`,
+      `✅ Rutina aprobada para ${version.clientName}. Enviándosela…`,
     );
     return { kind: 'approved', versionId: request.versionId };
   }

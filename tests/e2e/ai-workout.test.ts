@@ -280,7 +280,10 @@ describe('E2E-3 — la IA falla y el producto sigue', () => {
     );
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ status: 'FAILED', failure_reason: 'RATE_LIMITED' });
+    // El motivo Y su detalle: `API_ERROR` a secas mete un 404 de modelo
+    // retirado y un 403 de clave sin permisos en la misma casilla.
+    expect(rows[0]?.status).toBe('FAILED');
+    expect(rows[0]?.failure_reason).toContain('RATE_LIMITED');
 
     // El motivo vive en ai_generations, NO en version_state: el estado del
     // dominio no sabe de proveedores.

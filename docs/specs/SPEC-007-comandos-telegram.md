@@ -67,7 +67,11 @@ Lista de comandos.
 
 ## 4. Reglas de negocio
 
-1. **Todos los comandos son exclusivos del entrenador.** Un cliente que los
+0. **El cliente tiene los suyos: `/rutina` y `/ayuda`.** Cualquier otro
+   comando suyo devuelve su ayuda — no se lleva ningún dato, pero sale
+   sabiendo qué SÍ puede hacer. Antes chocaba con un muro incluso al pedir
+   ayuda, así que alguien recién vinculado no tenía forma de averiguarlo.
+1. **Las consultas de la cartera son exclusivas del entrenador.** Un cliente que los
    escriba recibe un mensaje genérico.
 2. `/cliente` busca por coincidencia parcial, sin distinguir mayúsculas.
    Varias coincidencias: se listan para elegir.

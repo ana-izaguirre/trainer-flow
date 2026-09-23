@@ -59,7 +59,7 @@ const AYUDA_EDITOR = [
   '',
   '*Lo más rápido: díctala entera en un mensaje*',
   '',
-  '`/rutina`',
+  '`/crear_rutina`',
   '`Día 1: Empuje`',
   '`Press banca 4x8 90`',
   '`Press militar 3x10`',

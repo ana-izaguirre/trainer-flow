@@ -15,6 +15,7 @@
  */
 import type { Level } from '../domain/assessment.ts';
 import type { VersionState } from '../domain/version.ts';
+import type { VersionForDelivery } from './delivery-ports.ts';
 
 /** Una línea de `/clientes`. Lo justo para pintar la lista. */
 export interface ClientSummary {
@@ -72,4 +73,12 @@ export interface QueryRepo {
   pendingVersions(trainerId: string): Promise<readonly PendingVersion[]>;
   /** Los `PENDING` de más de `minDays` días. */
   staleCheckins(trainerId: string, minDays: number): Promise<readonly StaleCheckin[]>;
+  /**
+   * La rutina vigente del CLIENTE que escribe (SPEC-023).
+   *
+   * Toma su `profileId`, no un `clientId`: la identidad ya viene verificada
+   * por Telegram, y sin un parámetro de cliente **no hay forma de pedir la de
+   * otro**.
+   */
+  clientRoutine(profileId: string): Promise<VersionForDelivery | null>;
 }
