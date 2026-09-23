@@ -112,6 +112,31 @@ generation.trigger_failed     → la petición ni salió (red, URL mal)
 se agotó, la versión se queda en `NEW` y el entrenador puede usar una
 plantilla o escribirla a mano. El sistema funciona completo sin IA.
 
+### Si fallan TODAS, no una
+
+Un fallo aislado es el proveedor teniendo un mal día. Que fallen todas apunta a
+configuración, y `failure_reason` dice cuál:
+
+| Lo que dice | Qué pasó | Arreglo |
+|---|---|---|
+| `…el modelo «X» no existe…` | Ese nombre se retiró, o la clave no lo tiene | `supabase secrets set AI_MODEL='…'` |
+| `…GEMINI_API_KEY no es válida…` | Clave mal copiada, caducada o sin permiso | Regenerarla en Google AI Studio |
+| `RATE_LIMITED` en todas | Cuota agotada, o `AI_MAX_CALLS` muy bajo | Esperar la ventana, o subir el límite |
+| `INVALID_OUTPUT` en todas | El modelo no está devolviendo el JSON pedido | Probar otro `AI_MODEL` |
+
+Los cuatro se corrigen con `supabase secrets set`, **sin desplegar**: el cambio
+entra en la siguiente invocación.
+
+Para ver qué modelos acepta la clave que tienes puesta:
+
+```bash
+curl -s -H "x-goog-api-key: $GEMINI_API_KEY" \
+  'https://generativelanguage.googleapis.com/v1beta/models' \
+  | grep -o '"name": "models/[^"]*"'
+```
+
+Sirve cualquiera que liste `generateContent` entre sus métodos.
+
 ---
 
 ## 3. «El bot no contesta a nadie»

@@ -65,6 +65,33 @@ function readUsage(payload: unknown): TokenUsage {
   return { tokensIn: leer('promptTokenCount'), tokensOut: leer('candidatesTokenCount') };
 }
 
+/**
+ * Un código HTTP traducido a algo con lo que se pueda hacer algo.
+ *
+ * ┌─ EL 404 NO ES «LA API FALLÓ» ──────────────────────────────────────────┐
+ * │ En este endpoint el modelo va en la URL, así que un 404 significa una  │
+ * │ sola cosa: ese nombre de modelo no existe para esta clave. Dicho así   │
+ * │ —con el nombre dentro— se arregla poniendo `AI_MODEL`; dicho como      │
+ * │ `API_ERROR` a secas manda a alguien a mirar la red durante una hora.   │
+ * │                                                                        │
+ * │ El nombre del modelo NO es un secreto (docs/SECURITY.md): es           │
+ * │ configuración. La clave sigue sin aparecer, que para eso va en         │
+ * │ cabecera.                                                              │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
+function explicar(status: number, model: string): string {
+  if (status === 404) {
+    return `El modelo «${model}» no existe o no está disponible para esta clave. ` +
+      'Cámbialo con la variable AI_MODEL.';
+  }
+
+  if (status === 401 || status === 403) {
+    return `El proveedor respondió ${status}: la clave GEMINI_API_KEY no es válida o no tiene permiso.`;
+  }
+
+  return `El proveedor respondió ${status}.`;
+}
+
 export function createProvider({ apiKey, model, log }: ProviderOptions): AIProvider {
   return {
     name: 'google',
@@ -109,8 +136,8 @@ export function createProvider({ apiKey, model, log }: ProviderOptions): AIProvi
         // la agota más. El sistema degrada a plantilla o manual.
         const reason = response.status === 429 ? 'RATE_LIMITED' : 'API_ERROR';
 
-        log.warn('ai.error', { reason, status: response.status, durationMs });
-        return { ok: false, reason, detail: `El proveedor respondió ${response.status}.` };
+        log.warn('ai.error', { reason, status: response.status, model, durationMs });
+        return { ok: false, reason, detail: explicar(response.status, model) };
       }
 
       let payload: unknown;

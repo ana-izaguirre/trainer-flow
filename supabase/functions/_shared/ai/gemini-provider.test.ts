@@ -183,6 +183,64 @@ Deno.test('500 → API_ERROR', async () => {
   );
 });
 
+Deno.test('404 · el detalle dice QUÉ modelo y cómo cambiarlo', async () => {
+  // El fallo real que tiró la generación entera en producción: el modelo por
+  // defecto se retiró y el sistema solo supo decir «API_ERROR». Con el nombre
+  // dentro, el arreglo es una variable de entorno; sin él, es una tarde.
+  await conFetch(
+    () => new Response('{}', { status: 404 }),
+    async (provider) => {
+      const r = await provider.generate(PETICION, new AbortController().signal);
+      if (r.ok) throw new Error('debería haber fallado');
+
+      assertEquals(r.reason, 'API_ERROR');
+      assertStringIncludes(r.detail, 'un-modelo');
+      assertStringIncludes(r.detail, 'AI_MODEL');
+    },
+  );
+});
+
+Deno.test('401 y 403 apuntan a la clave, no al modelo', async () => {
+  for (const status of [401, 403]) {
+    await conFetch(
+      () => new Response('{}', { status }),
+      async (provider) => {
+        const r = await provider.generate(PETICION, new AbortController().signal);
+        if (r.ok) throw new Error('debería haber fallado');
+        assertStringIncludes(r.detail, 'GEMINI_API_KEY');
+      },
+    );
+  }
+});
+
+Deno.test('NINGÚN detalle de error lleva la clave dentro', async () => {
+  // El detalle se persiste en `ai_generations.failure_reason` y se lee desde
+  // el panel: es exactamente el sitio donde una clave filtrada se queda.
+  for (const status of [401, 403, 404, 429, 500]) {
+    await conFetch(
+      () => new Response('{}', { status }),
+      async (provider) => {
+        const r = await provider.generate(PETICION, new AbortController().signal);
+        if (r.ok) throw new Error('debería haber fallado');
+        if (r.detail.includes(API_KEY)) {
+          throw new Error(`el detalle de ${status} lleva la clave`);
+        }
+      },
+    );
+  }
+});
+
+Deno.test('un status sin traducción propia se reporta tal cual', async () => {
+  await conFetch(
+    () => new Response('{}', { status: 503 }),
+    async (provider) => {
+      const r = await provider.generate(PETICION, new AbortController().signal);
+      if (r.ok) throw new Error('debería haber fallado');
+      assertStringIncludes(r.detail, '503');
+    },
+  );
+});
+
 Deno.test('un abort → TIMEOUT, no API_ERROR', async () => {
   // Distinguirlos importa: un timeout se reintenta una vez, un error de la
   // API no necesariamente.

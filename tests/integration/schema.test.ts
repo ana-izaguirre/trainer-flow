@@ -435,7 +435,7 @@ describe('la IA es una capacidad, no la dueña del dominio', () => {
 
     await db.query(
       `INSERT INTO ai_generations (provider, model, operation, version_id, status, failure_reason)
-       VALUES ('gemini', 'gemini-2.0-flash', 'generate', $1, 'FAILED', 'RATE_LIMITED')`,
+       VALUES ('gemini', 'gemini-flash-latest', 'generate', $1, 'FAILED', 'RATE_LIMITED')`,
       [versionId],
     );
 
