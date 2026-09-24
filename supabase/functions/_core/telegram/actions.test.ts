@@ -282,14 +282,52 @@ describe('la doble pulsación', () => {
 });
 
 describe('lo que todavía no está', () => {
-  it.each(['edit', 'template', 'manual'] as const)('%s se responde sin fingir', async (accion) => {
+  it.each(['template', 'manual'] as const)('%s se responde sin fingir', async (accion) => {
     // Un botón que no hace nada y no lo dice es peor que uno que no existe.
+    // (En producción, `template`/`manual` los enruta el webhook a otro
+    // flujo antes de llegar aquí — esto es la red de seguridad si algún día
+    // dejaran de hacerlo.)
     const { deps, mensajes } = espia();
 
     const outcome = await handleAction(pulsar(accion), TRAINER, deps);
 
     expect(outcome).toEqual({ kind: 'not_implemented', action: accion });
     expect(mensajes).toHaveLength(1);
+  });
+});
+
+describe('«✏️ Editar» redirige, en vez de fingir', () => {
+  // Antes decía «Eso todavía no está listo» para cualquier estado: cierto,
+  // pero inútil. El editor de verdad ya existe (/ver); solo faltaba decirlo.
+
+  it('sobre un DRAFT, manda al editor de verdad', async () => {
+    const { deps, mensajes } = espia({ version: version('DRAFT') });
+
+    const outcome = await handleAction(pulsar('edit'), TRAINER, deps);
+
+    expect(outcome).toEqual({ kind: 'not_implemented', action: 'edit' });
+    expect(mensajes).toHaveLength(1);
+    expect(mensajes[0]).toContain('/ver');
+  });
+
+  it.each(['NEW', 'GENERATING', 'APPROVED', 'SENT', 'REJECTED'] as const)(
+    'sobre un botón viejo — la rutina ya está en %s — dice en qué está, no manda a /ver',
+    async (estado) => {
+      const { deps, mensajes } = espia({ version: version(estado) });
+
+      const outcome = await handleAction(pulsar('edit'), TRAINER, deps);
+
+      expect(outcome).toEqual({ kind: 'not_implemented', action: 'edit' });
+      expect(mensajes[0]).not.toContain('/ver');
+    },
+  );
+
+  it('no transiciona nada: seguir en DRAFT tras "editar" no es un evento de la máquina', async () => {
+    const { deps, pasos } = espia({ version: version('DRAFT') });
+
+    await handleAction(pulsar('edit'), TRAINER, deps);
+
+    expect(pasos.some((p) => p.startsWith('transition:'))).toBe(false);
   });
 });
 

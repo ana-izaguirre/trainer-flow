@@ -107,6 +107,22 @@ export async function handleAction(
   // ── El botón de generar, antes del despacho normal ─────────────────────
   if (request.action === 'generate') return generar(version, actor, deps);
 
+  // ── «✏️ Editar», que redirige en vez de fingir ──────────────────────────
+  // El flujo conversacional que debía completar este botón nunca se
+  // construyó (SPEC-004 sigue PARCIAL). Decir «no está listo» y nada más era
+  // peor que la verdad: el editor de verdad —/ver, con /add, /quitar, /nota
+  // y /dia— ya existe (SPEC-008/SPEC-022) y hace exactamente esto. Solo
+  // faltaba no mentirle al entrenador sobre cómo llegar ahí.
+  if (request.action === 'edit') {
+    await deps.sender.sendMessage(
+      actor.telegramChatId,
+      version.state === 'DRAFT'
+        ? 'Para editarla escribe /ver: desde ahí se retoca con /add, /quitar, /nota y /dia\\.'
+        : `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}\\.`,
+    );
+    return { kind: 'not_implemented', action: 'edit' };
+  }
+
   const evento = EVENTO[request.action];
   if (evento === undefined) {
     // Un botón que no hace nada y no lo dice es peor que uno que no existe.
