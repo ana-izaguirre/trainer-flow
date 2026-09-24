@@ -8,22 +8,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
-
-/** La misma lista de `format.ts`, comprobada por fuera. */
-const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
-
-function tieneCaracterSinEscapar(texto: string): boolean {
-  let i = 0;
-  while (i < texto.length) {
-    if (texto[i] === '\\') {
-      i += 2;
-      continue;
-    }
-    if (ESPECIALES.has(texto[i]!)) return true;
-    i += 1;
-  }
-  return false;
-}
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
 import type { ChangeRequestRepo } from '../ports/change-request-ports.ts';

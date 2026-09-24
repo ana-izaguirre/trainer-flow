@@ -16,30 +16,11 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { Identity } from '../domain/identity.ts';
 import type { VersionState } from '../domain/version.ts';
 import type { ActionRepo, VersionForAction } from '../ports/action-ports.ts';
 import { handleAction, type ActionDeps } from './actions.ts';
-
-/**
- * La misma lista de `format.ts`, comprobada por fuera: no basta con que
- * quien escribe el mensaje se acuerde de escapar, hay que verificarlo.
- */
-const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
-
-/** ¿Telegram rechazaría este texto por tener un carácter especial suelto? */
-function tieneCaracterSinEscapar(texto: string): boolean {
-  let i = 0;
-  while (i < texto.length) {
-    if (texto[i] === '\\') {
-      i += 2; // la barra y lo que escapa cuentan como una sola unidad
-      continue;
-    }
-    if (ESPECIALES.has(texto[i]!)) return true;
-    i += 1;
-  }
-  return false;
-}
 
 const TRAINER: Identity = {
   profileId: 'perfil-entrenador',

@@ -2,25 +2,10 @@
  * SPEC-014 §3 — resendLink.
  */
 import { describe, expect, it } from 'vitest';
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { Identity } from '../domain/identity.ts';
 import type { ClientForResend, LinkResendRepo } from '../ports/link-ports.ts';
 import { resendLink, type ResendLinkDeps } from './resend-link.ts';
-
-const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
-
-/** ¿Telegram rechazaría este texto por tener un carácter especial suelto? */
-function tieneCaracterSinEscapar(texto: string): boolean {
-  let i = 0;
-  while (i < texto.length) {
-    if (texto[i] === '\\') {
-      i += 2;
-      continue;
-    }
-    if (ESPECIALES.has(texto[i]!)) return true;
-    i += 1;
-  }
-  return false;
-}
 
 const TRAINER: Identity = {
   profileId: 'perfil-entrenador',

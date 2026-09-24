@@ -2,22 +2,9 @@
  * SPEC-002 §11 — sweepStaleGenerations.
  */
 import { describe, expect, it } from 'vitest';
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { StaleGeneration, SweepRepo } from '../ports/sweep-ports.ts';
 import { sweepStaleGenerations, type SweepDeps } from './sweep-stale-generations.ts';
-
-const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
-
-/** Trata `\X` como una unidad ya escapada; cualquier otro de la lista, sin escapar. */
-function tieneCaracterSinEscapar(texto: string): boolean {
-  for (let i = 0; i < texto.length; i += 1) {
-    if (texto[i] === '\\') {
-      i += 1;
-      continue;
-    }
-    if (ESPECIALES.has(texto[i]!)) return true;
-  }
-  return false;
-}
 
 function candidata(extra: Partial<StaleGeneration> = {}): StaleGeneration {
   return {

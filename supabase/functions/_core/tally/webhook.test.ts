@@ -5,30 +5,10 @@
  * la firma antes de tocar nada, y el evento reclamado antes de trabajar.
  */
 import { describe, expect, it } from 'vitest';
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { handleTallyWebhook, outcomeToStatus } from './webhook.ts';
-
-/**
- * La misma lista de `format.ts`, comprobada por fuera. El aviso de «no se
- * pudo leer» interpola los NOMBRES de los campos (`_root` incluido — ver
- * `validate-assessment.ts`), y un guion bajo suelto rompe MarkdownV2 igual
- * que un punto.
- */
-const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
-
-function tieneCaracterSinEscapar(texto: string): boolean {
-  let i = 0;
-  while (i < texto.length) {
-    if (texto[i] === '\\') {
-      i += 2;
-      continue;
-    }
-    if (ESPECIALES.has(texto[i]!)) return true;
-    i += 1;
-  }
-  return false;
-}
 
 const CUERPO = JSON.stringify({
   eventId: 'evt-1',
