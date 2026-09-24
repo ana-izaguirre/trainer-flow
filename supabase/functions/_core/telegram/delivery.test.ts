@@ -9,9 +9,33 @@
  *
  *   `APPROVED → SENT` solo DESPUÉS de que Telegram confirme. Al revés, un
  *   fallo de red dejaría una rutina marcada como enviada que nadie recibió.
+ *
+ * ┌─ POR QUÉ `espia()` REVIENTA EN CUALQUIER MENSAJE SIN ESCAPAR ──────────┐
+ * │ Este archivo mandaba seis avisos al entrenador con `clientName` o       │
+ * │ `fullName` interpolados sin `escapeMarkdownV2`. Un nombre de Tally con  │
+ * │ guion —compuestos, apellidos con guion, muy comunes— rompía el mensaje  │
+ * │ ENTERO, y el entrenador se quedaba sin saber que la rutina llegó (o no).│
+ * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
 import type { Workout } from '../domain/workout.ts';
+
+/** La misma lista de `format.ts`, comprobada por fuera. */
+const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
+
+/** ¿Telegram rechazaría este texto por tener un carácter especial suelto? */
+function tieneCaracterSinEscapar(texto: string): boolean {
+  let i = 0;
+  while (i < texto.length) {
+    if (texto[i] === '\\') {
+      i += 2;
+      continue;
+    }
+    if (ESPECIALES.has(texto[i]!)) return true;
+    i += 1;
+  }
+  return false;
+}
 import type {
   ClientForLink,
   DeliveryRepo,
@@ -31,9 +55,12 @@ const RUTINA: Workout = {
   warnings: ['Se evitó press militar por la molestia de hombro'],
 };
 
+// Con guion: si `fullName`/`clientName` se interpolan sin `escapeMarkdownV2`,
+// un nombre real de Tally (compuestos, apellidos con guion) rompe el mensaje
+// entero. 'Carlos' no tiene ningún carácter especial y no habría probado nada.
 const CLIENTE: ClientForLink = {
   clientId: 'c1',
-  fullName: 'Carlos',
+  fullName: 'Ana-María Ruiz',
   linkedProfileId: null,
   linkedTelegramUserId: null,
   trainerChatId: 10,
@@ -48,7 +75,7 @@ function version(state: VersionForDelivery['state'] = 'APPROVED'): VersionForDel
     versionId: 'v1',
     state,
     content: RUTINA,
-    clientName: 'Carlos',
+    clientName: 'Ana-María Ruiz',
     clientChatId: 500,
     trainerChatId: 10,
     plan: { goal: 'Fuerza', daysPerWeek: 3, sessionMinutes: 60 },
@@ -251,7 +278,7 @@ describe('el perfil nace aquí', () => {
 
     await linkClient('un-token', USUARIO, deps);
 
-    expect(nombreDelPerfil).toEqual(['Carlos']);
+    expect(nombreDelPerfil).toEqual(['Ana-María Ruiz']);
   });
 
   it('un token ajeno NO llega a crear perfil', async () => {
@@ -352,7 +379,11 @@ describe('entregar', () => {
 
     await deliverVersion('v1', deps);
 
-    expect(mensajes.some((m) => m.chatId === 10 && m.text.includes('Carlos'))).toBe(true);
+    // No 'Ana-María Ruiz': el nombre sale ESCAPADO (`Ana\-María Ruiz`) y
+    // buscar el literal sin escapar fallaría aunque el mensaje esté bien.
+    expect(mensajes.some((m) => m.chatId === 10 && m.text.includes('recibió su rutina'))).toBe(
+      true,
+    );
   });
 
   it('la rutina al cliente lleva sus dos botones', async () => {
@@ -442,5 +473,72 @@ describe('entregar', () => {
     const outcome = await deliverVersion('v1', deps);
 
     expect(outcome.kind).toBe('already_sent');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/** El fixture ya es 'Ana-María Ruiz' en todo el archivo. */
+function elMensajeParaChatId(mensajes: { chatId: number; text: string }[], chatId: number) {
+  const mensaje = mensajes.find((m) => m.chatId === chatId);
+  expect(mensaje, `no se mandó ningún mensaje a ${chatId}`).toBeDefined();
+  return mensaje!.text;
+}
+
+describe('SPEC-005 — un nombre con guion no rompe ningún aviso', () => {
+  // Esto comprueba, mensaje por mensaje, que el guion sale ESCAPADO
+  // (`Ana\-María Ruiz`) y no suelto (`Ana-María Ruiz`) — que es justo lo
+  // que rompía el envío entero.
+
+  it('la bienvenida al cliente', async () => {
+    const { deps, mensajes } = espia({ aprobada: null });
+
+    await linkClient('un-token', USUARIO, deps);
+
+    const texto = elMensajeParaChatId(mensajes, 500);
+    expect(tieneCaracterSinEscapar(texto)).toBe(false);
+    expect(texto).toContain('Ana\\-María Ruiz');
+  });
+
+  it('el aviso al entrenador de un enlace ya usado', async () => {
+    const { deps, mensajes } = espia({
+      cliente: { ...CLIENTE, linkedProfileId: 'otro-perfil', linkedTelegramUserId: 999 },
+    });
+
+    await linkClient('un-token', USUARIO, deps);
+
+    const texto = elMensajeParaChatId(mensajes, 10);
+    expect(tieneCaracterSinEscapar(texto)).toBe(false);
+    expect(texto).toContain('Ana\\-María Ruiz');
+  });
+
+  it('«todavía no abrió su enlace»', async () => {
+    const { deps, mensajes } = espia({ version: { ...version(), clientChatId: null } });
+
+    await deliverVersion('v1', deps);
+
+    const texto = elMensajeParaChatId(mensajes, 10);
+    expect(tieneCaracterSinEscapar(texto)).toBe(false);
+    expect(texto).toContain('Ana\\-María Ruiz');
+  });
+
+  it('«no pude entregarle la rutina»', async () => {
+    const { deps, mensajes } = espia({ envioFalla: true });
+
+    await deliverVersion('v1', deps);
+
+    const texto = elMensajeParaChatId(mensajes, 10);
+    expect(tieneCaracterSinEscapar(texto)).toBe(false);
+    expect(texto).toContain('Ana\\-María Ruiz');
+  });
+
+  it('«recibió su rutina»', async () => {
+    const { deps, mensajes } = espia();
+
+    await deliverVersion('v1', deps);
+
+    const texto = elMensajeParaChatId(mensajes, 10);
+    expect(tieneCaracterSinEscapar(texto)).toBe(false);
+    expect(texto).toContain('Ana\\-María Ruiz');
   });
 });

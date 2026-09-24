@@ -81,7 +81,7 @@ import { parseUpdate } from './update.ts';
 import { constantTimeEquals } from '../security/constant-time.ts';
 
 /** Lo mismo para un desconocido que para un token inválido: no se filtra nada. */
-export const NEUTRAL_REPLY = 'No te tengo registrado. Habla con tu entrenador.';
+export const NEUTRAL_REPLY = 'No te tengo registrado\\. Habla con tu entrenador\\.';
 
 export type WebhookOutcome =
   | { readonly kind: 'unauthorized' }

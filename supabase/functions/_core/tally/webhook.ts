@@ -28,6 +28,7 @@ import { parseTallyEnvelope, redactCredentialUrls } from '../assessment/tally-en
 import { validateAssessment } from '../assessment/validate-assessment.ts';
 import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
+import { escapeMarkdownV2 } from '../telegram/format.ts';
 import { buildAssessmentArrived } from '../telegram/notify.ts';
 
 export type TallyOutcome =
@@ -162,7 +163,9 @@ export async function handleTallyWebhook(
       const fields = parsed.errors.map((e) => e.field);
       await deps.sender.sendMessage(
         trainer.chatId,
-        `Llegó una evaluación que no se pudo leer. Campos con problema: ${fields.join(', ')}.`,
+        // Nombres como `_root` llevan un guion bajo — especial en MarkdownV2
+        // igual que un punto suelto, así que se escapa la lista entera.
+        `Llegó una evaluación que no se pudo leer\\. Campos con problema: ${escapeMarkdownV2(fields.join(', '))}\\.`,
       );
       await deps.repo.markProcessed(eventId);
       return { kind: 'invalid', eventId, fields };

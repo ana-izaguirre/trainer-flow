@@ -23,6 +23,7 @@ import type {
 } from '../ports/delivery-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { formatForClient } from './client-format.ts';
+import { escapeMarkdownV2 } from './format.ts';
 import { buildKeyboard, CLIENT_ACTIONS } from './keyboard.ts';
 
 export interface DeliveryDeps {
@@ -95,7 +96,7 @@ export async function linkClient(
     await deps.sender.sendMessage(user.chatId, RESPUESTA_NEUTRA);
     await deps.sender.sendMessage(
       client.trainerChatId,
-      `⚠️ Alguien intentó usar el enlace de ${client.fullName}, que ya estaba vinculado\\.`,
+      `⚠️ Alguien intentó usar el enlace de ${escapeMarkdownV2(client.fullName)}, que ya estaba vinculado\\.`,
     );
     return { kind: 'already_linked_elsewhere' };
   }
@@ -130,7 +131,7 @@ export async function linkClient(
   await deps.sender.sendMessage(
     user.chatId,
     [
-      `👋 Hola ${client.fullName}, ya estás conectado con tu entrenador\\.`,
+      `👋 Hola ${escapeMarkdownV2(client.fullName)}, ya estás conectado con tu entrenador\\.`,
       '',
       'Aquí vas a recibir tu rutina y un check\\-in corto cada lunes\\.',
       'Escribe /ayuda cuando quieras ver qué puedes hacer\\.',
@@ -173,7 +174,7 @@ async function enviar(
   if (version.clientChatId === null) {
     await deps.sender.sendMessage(
       version.trainerChatId,
-      `⏳ ${version.clientName} todavía no abrió su enlace\\. La rutina le llegará en cuanto lo haga\\.`,
+      `⏳ ${escapeMarkdownV2(version.clientName)} todavía no abrió su enlace\\. La rutina le llegará en cuanto lo haga\\.`,
     );
     return { kind: 'undelivered' };
   }
@@ -195,7 +196,7 @@ async function enviar(
     // sigue en APPROVED esperando, y el entrenador se entera.
     await deps.sender.sendMessage(
       version.trainerChatId,
-      `⚠️ No pude entregarle la rutina a ${version.clientName}\\. Sigue pendiente\\.`,
+      `⚠️ No pude entregarle la rutina a ${escapeMarkdownV2(version.clientName)}\\. Sigue pendiente\\.`,
     );
     return { kind: 'undelivered' };
   }
@@ -214,8 +215,8 @@ async function enviar(
   await deps.sender.sendMessage(
     version.trainerChatId,
     resueltas > 0
-      ? `✅ ${version.clientName} recibió su rutina nueva\\.`
-      : `✅ ${version.clientName} recibió su rutina\\.`,
+      ? `✅ ${escapeMarkdownV2(version.clientName)} recibió su rutina nueva\\.`
+      : `✅ ${escapeMarkdownV2(version.clientName)} recibió su rutina\\.`,
   );
 
   return { kind: 'delivered', versionId: version.versionId };
