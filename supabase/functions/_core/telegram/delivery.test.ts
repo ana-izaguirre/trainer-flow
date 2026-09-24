@@ -10,32 +10,21 @@
  *   `APPROVED → SENT` solo DESPUÉS de que Telegram confirme. Al revés, un
  *   fallo de red dejaría una rutina marcada como enviada que nadie recibió.
  *
- * ┌─ POR QUÉ `espia()` REVIENTA EN CUALQUIER MENSAJE SIN ESCAPAR ──────────┐
+ * ┌─ EL BUG QUE «SPEC-005 — un nombre con guion...» CIERRA ────────────────┐
  * │ Este archivo mandaba seis avisos al entrenador con `clientName` o       │
  * │ `fullName` interpolados sin `escapeMarkdownV2`. Un nombre de Tally con  │
  * │ guion —compuestos, apellidos con guion, muy comunes— rompía el mensaje  │
  * │ ENTERO, y el entrenador se quedaba sin saber que la rutina llegó (o no).│
+ * │                                                                        │
+ * │ Las aserciones son puntuales, no un guardián genérico en `espia()`:    │
+ * │ este archivo manda `*negrita*` a propósito (`formatForClient`), y un   │
+ * │ guardián que reventara en cualquier especial daría falsos positivos    │
+ * │ ahí — ya pasó, y costó 10 tests fallando por la razón equivocada.      │
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { Workout } from '../domain/workout.ts';
-
-/** La misma lista de `format.ts`, comprobada por fuera. */
-const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
-
-/** ¿Telegram rechazaría este texto por tener un carácter especial suelto? */
-function tieneCaracterSinEscapar(texto: string): boolean {
-  let i = 0;
-  while (i < texto.length) {
-    if (texto[i] === '\\') {
-      i += 2;
-      continue;
-    }
-    if (ESPECIALES.has(texto[i]!)) return true;
-    i += 1;
-  }
-  return false;
-}
 import type {
   ClientForLink,
   DeliveryRepo,

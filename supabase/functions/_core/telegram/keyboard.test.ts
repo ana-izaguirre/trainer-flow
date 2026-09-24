@@ -78,3 +78,31 @@ describe('la forma', () => {
     expect(buildKeyboard([], VERSION)).toBeNull();
   });
 });
+
+describe('extraRow — una segunda fila, la excepción de SPEC-007 regla 7', () => {
+  it('sin extraRow, se comporta exactamente igual que antes', () => {
+    expect(buildKeyboard(DRAFT_ACTIONS, VERSION)).toEqual(buildKeyboard(DRAFT_ACTIONS, VERSION, []));
+  });
+
+  it('con extraRow, salen DOS filas', () => {
+    const teclado = buildKeyboard(DRAFT_ACTIONS, VERSION, ['intake'])!;
+
+    expect(teclado.inline_keyboard).toHaveLength(2);
+    expect(teclado.inline_keyboard[1]!.map((b) => parseCallbackData(b.callback_data)?.action)).toEqual([
+      'intake',
+    ]);
+  });
+
+  it('sin acciones principales pero con extraRow, sale una fila con esa sola', () => {
+    const teclado = buildKeyboard([], VERSION, ['intake'])!;
+
+    expect(teclado.inline_keyboard).toHaveLength(1);
+    expect(teclado.inline_keyboard[0]!.map((b) => parseCallbackData(b.callback_data)?.action)).toEqual([
+      'intake',
+    ]);
+  });
+
+  it('las dos vacías siguen dando null', () => {
+    expect(buildKeyboard([], VERSION, [])).toBeNull();
+  });
+});

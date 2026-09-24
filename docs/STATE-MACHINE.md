@@ -386,14 +386,22 @@ construirse (SPEC-004 sigue **PARCIAL**). Repetirlo en la ficha nueva sería
 fabricar un segundo botón muerto en vez de arreglar el primero. Queda
 anotado en `ROADMAP.md` como su propio arreglo.
 
-### Lo que sigue sin botón: `GENERATING` atascada de verdad
+### `GENERATING` atascada de verdad — resuelto con un cron, no un botón
 
-El arreglo de arriba ofrece «Ver evaluación» sobre una `GENERATING`, pero no
-un botón para forzarla de vuelta a `NEW`. Hacerlo bien exige una ventana de
-tiempo (¿cuánto es «atascada» contra «todavía trabajando»?) y una guarda
-contra la carrera con una generación que sí estuviera a punto de terminar:
-forzar el estado a `NEW` un segundo antes de que la generación real llegara
-a `aplicar(…, 'GENERATION_SUCCEEDED')` pisaría un `DRAFT` bueno con un `NEW`
-vacío. Es un arreglo real, no cosmético, y por eso tiene su propia entrada
-en `ROADMAP.md` en vez de colarse aquí. Mientras tanto, el desatasco manual
-está en `RUNBOOK.md`.
+El arreglo de arriba ofrece «Ver evaluación» sobre una `GENERATING`, pero
+nunca un botón para forzarla de vuelta a `NEW`: un botón manual exige que
+alguien note el problema y lo pulse, y esa versión puede llevar días sin que
+nadie mire esa ficha.
+
+**Arreglo:** `sweep-generating` (SPEC-002 §11), un job de `pg_cron` cada 5
+minutos, mismo patrón que el check-in semanal de SPEC-006. Devuelve a `NEW`
+toda versión con más de `GENERATION_STALE_MINUTES` (5 por defecto) en
+`GENERATING`, y avisa al entrenador.
+
+La guarda contra la carrera con una generación que sí estuviera a punto de
+terminar es la MISMA de siempre: `apply_version_transition` con
+`p_expected_state = 'GENERATING'`. Si la generación real llegó a
+`aplicar(…, 'GENERATION_SUCCEEDED')` un instante antes, esa condición ya no
+se cumple y el barrido no pisa el `DRAFT` recién creado — ni manda ningún
+aviso de más (`SweepRepo.transition` devuelve `false`, y ese caso no cuenta
+como recuperado).

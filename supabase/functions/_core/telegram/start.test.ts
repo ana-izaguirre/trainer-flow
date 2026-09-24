@@ -2,7 +2,7 @@
  * SPEC-005 §3 — el token que viaja dentro de `/start`.
  */
 import { describe, expect, it } from 'vitest';
-import { parseStartToken } from './start.ts';
+import { buildDeepLink, parseStartToken } from './start.ts';
 
 describe('parseStartToken', () => {
   const TOKEN = 'a'.repeat(32);
@@ -35,5 +35,19 @@ describe('parseStartToken', () => {
   it('acepta el alfabeto que Telegram permite en un deep link', () => {
     const conGuiones = `${'a'.repeat(10)}-${'B'.repeat(10)}_${'9'.repeat(10)}`;
     expect(parseStartToken('start', conGuiones)).toBe(conGuiones);
+  });
+});
+
+describe('buildDeepLink', () => {
+  it('arma la URL que Telegram espera', () => {
+    expect(buildDeepLink('mibot', 'abc123')).toBe('https://t.me/mibot?start=abc123');
+  });
+
+  it('es la inversa de parseStartToken: lo que arma, se vuelve a leer', () => {
+    const token = 'a'.repeat(32);
+    const link = buildDeepLink('mibot', token);
+    const args = link.split('?start=')[1]!;
+
+    expect(parseStartToken('start', args)).toBe(token);
   });
 });

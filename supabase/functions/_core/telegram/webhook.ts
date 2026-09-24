@@ -67,6 +67,7 @@ import {
 } from '../checkin/reply.ts';
 import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
 import { showIntake, type IntakeOutcome, type IntakeDeps } from '../assessment/intake.ts';
+import { resendLink, type ResendLinkOutcome, type ResendLinkDeps } from './resend-link.ts';
 import { parseCallbackData } from './callback-data.ts';
 import {
   deliverVersion,
@@ -103,6 +104,8 @@ export type WebhookOutcome =
       /** Qué pasó con el botón, cuando el update era uno. */
       readonly action?: ActionOutcome;
       readonly intake?: IntakeOutcome;
+      /** Qué pasó al pedir reenviar el enlace de vinculación (SPEC-014 §3). */
+      readonly link?: ResendLinkOutcome;
       /** Qué pasó con la entrega, cuando el botón fue Aprobar. */
       readonly delivery?: DeliverOutcome;
       /** Qué pasó con el check-in, cuando el update era una respuesta. */
@@ -137,6 +140,8 @@ export interface WebhookDeps {
    */
   readonly actions: ActionDeps;
   readonly intake: IntakeDeps;
+  /** SPEC-014 §3: reenviar el enlace de vinculación desde la ficha. */
+  readonly link: ResendLinkDeps;
   readonly delivery: DeliveryDeps;
   readonly checkins: ReplyDeps;
   readonly commands: CommandDeps;
@@ -229,6 +234,7 @@ export async function handleTelegramWebhook(
     let editor: EditorOutcome | undefined;
     let change: ChangeOutcome | undefined;
     let intake: IntakeOutcome | undefined;
+    let link: ResendLinkOutcome | undefined;
 
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
@@ -285,6 +291,10 @@ export async function handleTelegramWebhook(
         // SPEC-015. Va aparte de `handleAction` porque no es una transición:
         // es la única lectura del sistema, y no escribe nada.
         intake = await showIntake(payload.versionId, identity, deps.intake);
+      } else if (payload !== null && payload.action === 'link') {
+        // SPEC-014 §3. Tampoco transiciona nada: reenvía un dato que ya
+        // existía, igual que 'intake'.
+        link = await resendLink(payload.versionId, identity, deps.link);
       } else if (payload !== null && (payload.action === 'template' || payload.action === 'manual')) {
         // Los dos caminos sin IA. Van aparte de `handleAction` porque no son
         // una transición sobre la versión: una lista plantillas y la otra
@@ -360,6 +370,7 @@ export async function handleTelegramWebhook(
       updateKind: update.kind,
       ...(action === undefined ? {} : { action }),
       ...(intake === undefined ? {} : { intake }),
+      ...(link === undefined ? {} : { link }),
       ...(delivery === undefined ? {} : { delivery }),
       ...(checkin === undefined ? {} : { checkin }),
       ...(command === undefined ? {} : { command }),

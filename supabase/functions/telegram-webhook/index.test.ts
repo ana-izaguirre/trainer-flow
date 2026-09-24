@@ -134,6 +134,8 @@ function espia(identity: Identity | null = null): Espia {
       creationRepo: () => creationRepo,
       changeRepo: () => changeRepo,
       intakeRepo: () => ({ findIntake: () => Promise.resolve(null) }),
+      linkRepo: () => ({ findClientForVersion: () => Promise.resolve(null) }),
+      botUsername: 'mibot',
       generation: () => ({
         trigger: (versionId) => {
           usosDelRepo.push(`trigger:${versionId}`);
@@ -239,6 +241,29 @@ Deno.test('CA-1 · readDeps lanza nombrando la variable que falta', () => {
     for (const [nombre, valor] of previos) {
       if (valor !== undefined) Deno.env.set(nombre, valor);
     }
+  }
+});
+
+Deno.test('sin TELEGRAM_BOT_USERNAME, revienta nombrándolo', () => {
+  // Ya era obligatoria para tally-webhook (SPEC-014); reenviar el enlace
+  // (SPEC-014 §3) desde aquí necesita la misma variable.
+  const necesarias = ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET'].map(
+    (nombre) => [nombre, Deno.env.get(nombre)] as const,
+  );
+  for (const [nombre] of necesarias) Deno.env.set(nombre, 'lo-que-sea');
+
+  const original = Deno.env.get('TELEGRAM_BOT_USERNAME');
+  Deno.env.delete('TELEGRAM_BOT_USERNAME');
+
+  try {
+    const error = assertThrows(() => readDeps()) as Error;
+    assertStringIncludes(error.message, 'TELEGRAM_BOT_USERNAME');
+  } finally {
+    for (const [nombre, valor] of necesarias) {
+      if (valor === undefined) Deno.env.delete(nombre);
+      else Deno.env.set(nombre, valor);
+    }
+    if (original !== undefined) Deno.env.set('TELEGRAM_BOT_USERNAME', original);
   }
 });
 

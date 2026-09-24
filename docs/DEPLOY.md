@@ -43,6 +43,7 @@ bot en todo lo que sigue.
       ```bash
       openssl rand -hex 32    # → TELEGRAM_WEBHOOK_SECRET
       openssl rand -hex 32    # → CHECKIN_CRON_SECRET
+      openssl rand -hex 32    # → SWEEP_CRON_SECRET
       ```
 
 - [ ] **4. ⚠️ Los secretos del producto, ANTES de desplegar.** Este es el
@@ -57,6 +58,7 @@ bot en todo lo que sigue.
       supabase secrets set TALLY_SIGNING_SECRET='...'      # panel de Tally
       supabase secrets set GEMINI_API_KEY='...'            # Google AI Studio
       supabase secrets set CHECKIN_CRON_SECRET='...'       # el del paso 3
+      supabase secrets set SWEEP_CRON_SECRET='...'         # el del paso 3
       ```
 
       `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` **no se ponen**: Supabase
@@ -132,6 +134,27 @@ bot en todo lo que sigue.
       ```sql
       select jobname, schedule, active from cron.job where jobname = 'weekly-checkin';
       ```
+
+- [ ] **8b. Programar el barrido de generaciones atascadas** (SPEC-002 §11).
+      En el SQL Editor: pega `supabase/cron/sweep-generating.sql` y
+      ejecútalo, y después:
+
+      ```sql
+      select schedule_generation_sweep(
+        'https://<ref>.supabase.co/functions/v1/sweep-generating',
+        '<SWEEP_CRON_SECRET>'   -- el del paso 3
+      );
+      ```
+
+      Comprueba:
+      ```sql
+      select jobname, schedule, active from cron.job where jobname = 'sweep-generating';
+      ```
+
+      Sin este paso, una generación que muere a medias por un fallo de
+      plataforma se queda en `GENERATING` sin que nada la desatasque —el
+      resto del sistema funciona igual, esto es específicamente esa red de
+      seguridad.
 
 ## D. Darte de alta
 
@@ -546,8 +569,9 @@ supabase db reset
 Cómo se programa está en el **paso 8** del checklist. Aquí queda el motivo,
 que es lo que no se ve al teclearlo.
 
-`pg_cron` dispara `weekly-checkin` los lunes a las 9:00 UTC. **Ese job no está
-en las migraciones a propósito**, por dos razones independientes:
+`pg_cron` dispara `weekly-checkin` los lunes a las 9:00 UTC, y
+`sweep-generating` cada 5 minutos (paso 8b). **Ninguno de los dos está en
+las migraciones a propósito**, por dos razones independientes:
 
 · Programarlo necesita la URL del proyecto y una credencial. En una migración,
   o iría un secreto commiteado —bloqueante— o fallaría en cada `db reset`.

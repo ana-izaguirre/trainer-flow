@@ -17,6 +17,7 @@
 | La máquina de estados decide qué es legal (regla 1, CA-7, CA-8) | ✅ |
 | Doble pulsación (CA-2) | ✅ Vía la guarda de la transición |
 | Enrutado del `callback_query` en el webhook | ✅ |
+| El botón «✏️ Editar» redirige al editor real, no finge (S-49) | ✅ |
 | Flujo conversacional de edición (regla 6, CA-3) | ⏳ |
 | Máximo 5 ediciones (regla 9, CA-6) | ⏳ |
 | Retirar los botones tras actuar (regla 8) | ⏳ Ver nota |
@@ -25,6 +26,15 @@
 > que el puerto no tiene. Mientras tanto la doble pulsación la para la guarda
 > de la transición, que es **más robusta**: retirar botones es cosmético y dos
 > pulsaciones simultáneas lo esquivarían igual.
+
+> **Sobre «✏️ Editar» (S-49).** El botón vive desde S-10, pero
+> `handleAction` no lo tenía mapeado: cualquier pulsación caía en «Eso
+> todavía no está listo», sin decir por dónde seguir. Encontrado auditando
+> la máquina de estados (`docs/STATE-MACHINE.md`). No se implementó el
+> flujo conversacional de la regla 6 —eso sigue siendo un cambio grande,
+> con IA y consumo de cuota de por medio—: se corrigió el mensaje para que
+> mande al editor que **ya existe y ya funciona** (`/ver`, SPEC-008/022) en
+> vez de fingir que no hay nada que hacer.
 
 ## 1. Objetivo
 

@@ -35,6 +35,7 @@ const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
   change: '✏️ Pedir un cambio',
   revise: '✏️ Crear v2',
   intake: '📄 Ver evaluación',
+  link: '🔗 Reenviar enlace',
 };
 
 /**
@@ -87,23 +88,30 @@ export const RETRYABLE_FALLBACK_ACTIONS: readonly CallbackAction[] = [
 ];
 
 /**
- * Una sola fila: en un móvil tres botones caben sin apretarse.
+ * Una fila por defecto: en un móvil tres botones caben sin apretarse.
  *
- * `null` sin acciones: un `inline_keyboard: [[]]` hace que Telegram devuelva
- * 400, y ese error aparecería lejos de su causa.
+ * `extraRow` es la excepción, no la norma: SPEC-007 regla 7 la usa para
+ * separar «reenviar enlace» de los botones que dependen del estado de la
+ * rutina, porque son dos preguntas distintas y meter un quinto botón de
+ * texto largo en la misma fila se aprieta en un móvil.
+ *
+ * `null` sin ninguna acción: un `inline_keyboard: [[]]` hace que Telegram
+ * devuelva 400, y ese error aparecería lejos de su causa.
  */
 export function buildKeyboard(
   actions: readonly CallbackAction[],
   versionId: string,
+  extraRow: readonly CallbackAction[] = [],
 ): InlineKeyboard | null {
-  if (actions.length === 0) return null;
+  const filas = [actions, extraRow].filter((fila) => fila.length > 0);
+  if (filas.length === 0) return null;
 
   return {
-    inline_keyboard: [
-      actions.map((action) => ({
+    inline_keyboard: filas.map((fila) =>
+      fila.map((action) => ({
         text: ETIQUETAS[action],
         callback_data: buildCallbackData(action, versionId),
       })),
-    ],
+    ),
   };
 }

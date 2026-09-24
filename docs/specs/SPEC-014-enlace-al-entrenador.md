@@ -46,12 +46,29 @@ porque obligaría a dar de alta al cliente **antes** de que llene nada.
 - `TELEGRAM_BOT_USERNAME` como configuración obligatoria.
 
 **No incluye:**
-- Reenviar el enlace desde `/cliente <nombre>`. El mensaje sigue en el
-  historial de Telegram, así que se puede buscar hacia atrás. Si resulta
-  incómodo en uso real, se añade entonces — necesitaría migración, porque
-  `trainer_client_detail` no devuelve el token.
 - Que el bot mande el enlace al cliente. No puede: todavía no lo conoce.
 - Caducidad o rotación del token.
+
+## 3.1 — Reenviar el enlace desde la ficha (§3, S-49)
+
+**Dejado fuera a propósito en la versión original** de esta spec: «el
+mensaje sigue en el historial de Telegram, así que se puede buscar hacia
+atrás. Si resulta incómodo en uso real, se añade entonces». Pasó — salió en
+uso real («¿cómo puedo saber el link para reenviarlo?») — y se añade aquí,
+con la migración que la nota de arriba ya anticipaba.
+
+Un botón **🔗 Reenviar enlace** en `/cliente <nombre>` (SPEC-007 regla 7),
+visible siempre que el cliente **no** esté vinculado — pase lo que pase con
+el estado de su rutina. Al pulsarlo, el mismo texto y el mismo enlace del
+aviso original, reenviados.
+
+**Por qué no vive en `trainer_client_detail`.** El `link_token` es una
+credencial: exponerla en la consulta general de la ficha —que ya devuelve
+mucho, y con el tiempo devolverá más— la pondría a viajar por sitios que no
+la necesitan. En vez de eso, una función nueva, `client_for_resend`,
+resuelta SOLO cuando el entrenador pulsa el botón — el mismo patrón que
+`assessment_for_version` para 📄 (SPEC-015): un dato sensible, una función
+dedicada, un flujo que no escribe nada.
 
 ## 4. Contratos
 
@@ -119,6 +136,18 @@ le toca repartirlo—, pero obliga a dos cosas:
 No se añade caducidad: el enlace se canjea una vez y `ensure_client_profile`
 rechaza un segundo canje desde otra cuenta, avisando al entrenador.
 
+## 6.1 Criterios de aceptación — §3.1
+
+- **CA-7** — DADO un cliente sin vincular, CUANDO su entrenador pulsa
+  🔗 en la ficha, ENTONCES recibe el mismo enlace, con las mismas
+  instrucciones que en el aviso original.
+- **CA-8** — DADO un cliente YA vinculado, CUANDO se pulsa 🔗, ENTONCES se
+  dice que ya está vinculado y **no** se manda el token de nuevo.
+- **CA-9** — DADO el botón sobre una versión ajena o inexistente, CUANDO se
+  pulsa, ENTONCES la respuesta es neutra en los dos casos (SPEC-013 regla 2).
+- **CA-10** — DADO cualquier resultado, CUANDO se envía el mensaje, ENTONCES
+  el enlace va escapado para MarkdownV2.
+
 ## 7. Criterios de aceptación
 
 - **CA-1** — DADO una evaluación válida, CUANDO llega, ENTONCES el aviso al
@@ -151,4 +180,19 @@ supabase/functions/_core/tally/webhook.ts       captura el token y lo pasa
 supabase/functions/tally-webhook/index.ts       lee TELEGRAM_BOT_USERNAME
 docs/DEPLOY.md                                  la variable, en el paso 4
 docs/SECURITY.md                                configuración no secreta
+```
+
+### §3.1 — Reenviar (S-49)
+
+```
+supabase/migrations/0025_client_for_resend.sql
+supabase/functions/_core/ports/link-ports.ts             nuevo
+supabase/functions/_core/telegram/resend-link.ts         nuevo: el flujo
+supabase/functions/_core/telegram/start.ts                buildDeepLink
+supabase/functions/_core/telegram/callback-data.ts        'link'
+supabase/functions/_core/telegram/keyboard.ts              🔗, y una segunda fila
+supabase/functions/_core/telegram/webhook.ts               enruta
+supabase/functions/_core/commands/format.ts                keyboardForDetail
+supabase/functions/_shared/db.ts                          createLinkResendRepo
+supabase/functions/telegram-webhook/index.ts               cablea + TELEGRAM_BOT_USERNAME
 ```

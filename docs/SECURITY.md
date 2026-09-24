@@ -27,21 +27,24 @@ falle al arrancar diciendo cuál falta.
 | `TALLY_SIGNING_SECRET` | Verifica la firma del webhook de Tally | Tú, desde el panel de Tally |
 | `GEMINI_API_KEY` | Solo en `_shared/ai/`. **Nunca en `_core`** | Tú, desde Google AI Studio |
 | `CHECKIN_CRON_SECRET` | Que solo el cron dispare el check-in semanal | **Tú lo inventas** (igual que el de Telegram) |
+| `SWEEP_CRON_SECRET` | Que solo el cron dispare el barrido de `GENERATING` atascadas | **Tú lo inventas** (igual que los otros dos) |
 | `SUPABASE_URL` | Acceso de las Edge Functions | **Supabase, automático** |
 | `SUPABASE_SERVICE_ROLE_KEY` | Igual | **Supabase, automático** |
 
 Los dos últimos **no se configuran**: Supabase los inyecta en toda Edge
 Function. Ponerlos a mano no hace daño, pero tampoco hace nada.
 
-### Los dos que te inventas tú
+### Los tres que te inventas tú
 
-`TELEGRAM_WEBHOOK_SECRET` y `CHECKIN_CRON_SECRET` no salen de ningún panel: los
-eliges tú. Los dos protegen lo mismo —que una Edge Function expuesta a internet
-solo la llame quien debe— y los dos se comparan en tiempo constante.
+`TELEGRAM_WEBHOOK_SECRET`, `CHECKIN_CRON_SECRET` y `SWEEP_CRON_SECRET` no salen
+de ningún panel: los eliges tú. Los tres protegen lo mismo —que una Edge
+Function expuesta a internet solo la llame quien debe— y los tres se comparan
+en tiempo constante.
 
-El del cron se lo pasas a `schedule_weekly_checkin` al programar el job (ver
-`docs/DEPLOY.md`). Sin él, cualquiera podría disparar el check-in en bucle y
-llenar de mensajes el Telegram de todos los clientes.
+El del cron se lo pasas a `schedule_weekly_checkin` o `schedule_generation_sweep`
+al programar cada job (ver `docs/DEPLOY.md`). Sin él, cualquiera podría
+disparar el check-in en bucle, o forzar de vuelta a `NEW` una generación que
+todavía sigue trabajando.
 
 ### `TELEGRAM_WEBHOOK_SECRET` no sale de ningún panel
 
@@ -71,6 +74,7 @@ variables de entorno. **Tampoco van a un `.env` del repositorio.**
 | `AI_MODEL` | Qué modelo se le pide al proveedor | Un alias móvil al último `flash` |
 | `AI_MAX_CALLS` | Llamadas por ventana. **`0` apaga la IA sin desplegar** | `20` |
 | `AI_WINDOW_MINUTES` | Cuánto dura la ventana | `60` |
+| `GENERATION_STALE_MINUTES` | Minutos en `GENERATING` antes de que el barrido la considere atascada (SPEC-002 §11) | `5` |
 
 `AI_MODEL` se documenta aquí porque el día que un nombre de modelo se retira,
 la generación cae entera y esta es la perilla que la levanta **sin desplegar**.

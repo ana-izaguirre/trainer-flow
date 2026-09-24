@@ -27,3 +27,14 @@ export function parseStartToken(command: string, args: string): string | null {
   // Un `/start` a secas es legítimo: alguien abriendo el bot sin enlace.
   return TOKEN_PATTERN.test(args) ? args : null;
 }
+
+/**
+ * La inversa de `parseStartToken`: arma el deep link en vez de leerlo
+ * (SPEC-014). Un solo sitio para el formato, usado al avisar de una
+ * evaluación nueva y al reenviar el enlace más tarde (SPEC-014 §3) — que no
+ * diverjan es lo que evita mandar un enlace roto sin que nadie lo note hasta
+ * que un cliente lo abre.
+ */
+export function buildDeepLink(botUsername: string, token: string): string {
+  return `https://t.me/${botUsername}?start=${token}`;
+}

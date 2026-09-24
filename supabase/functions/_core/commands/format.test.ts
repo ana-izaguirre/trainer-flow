@@ -43,9 +43,12 @@ function ficha(extra: Partial<ClientDetail> = {}): ClientDetail {
   };
 }
 
-/** Las `callback_data` de un teclado, para no repetir el `?.` en cada test. */
+/**
+ * Las `callback_data` de un teclado, de TODAS sus filas: 'link' vive en una
+ * fila aparte (SPEC-014 §3), así que mirar solo la primera se lo perdería.
+ */
 function accionesDe(t: ReturnType<typeof keyboardForDetail>): string[] {
-  return t?.inline_keyboard[0]?.map((b) => b.callback_data) ?? [];
+  return t?.inline_keyboard.flat().map((b) => b.callback_data) ?? [];
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +222,29 @@ describe('los botones de la ficha — SPEC-007 regla 7', () => {
     // no fuera así, mejor ningún botón que uno que no sepa a qué estado
     // corresponde.
     expect(keyboardForDetail(ficha({ versionState: null }))).toBeNull();
+  });
+
+  describe('«🔗 Reenviar enlace» — SPEC-014 §3, ortogonal al estado', () => {
+    it('vinculado, nunca aparece', () => {
+      const acciones = accionesDe(keyboardForDetail(ficha({ versionState: 'SENT', linked: true })));
+      expect(acciones.some((c) => c.startsWith('act:link:'))).toBe(false);
+    });
+
+    it.each(['NEW', 'GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED'] as const)(
+      'sin vincular, aparece pase lo que pase con el estado (%s)',
+      (estado) => {
+        const acciones = accionesDe(keyboardForDetail(ficha({ versionState: estado, linked: false })));
+        expect(acciones.some((c) => c.startsWith('act:link:'))).toBe(true);
+      },
+    );
+
+    it('va en su propia fila, no mezclado con los botones de estado', () => {
+      const t = keyboardForDetail(ficha({ versionState: 'SENT', linked: false }))!;
+
+      expect(t.inline_keyboard).toHaveLength(2);
+      const ultimaFila = t.inline_keyboard.at(-1)!.map((b) => b.callback_data);
+      expect(ultimaFila.every((c) => c.startsWith('act:link:'))).toBe(true);
+    });
   });
 });
 
