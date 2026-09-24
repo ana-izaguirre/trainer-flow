@@ -294,3 +294,106 @@ No es gratis: hay un test de esquema que hoy hace `UPDATE … SET state = 'SENT'
 a mano y habría que reescribirlo, y las dos copias de la tabla pueden
 desincronizarse si nadie mira el test de acuerdo. Por eso va aparte, con su
 spec, y no colado en un arreglo.
+
+---
+
+## Cobertura de salida: qué botón tiene cada estado
+
+**El principio de arriba sigue intacto: la tabla es correcta y tiene
+cobertura del 100%, transiciones válidas e inválidas.** Los errores de
+septiembre de 2025 —aprobar/rechazar/generar en silencio, un rechazo sin
+salida— no salieron de la máquina de estados. Salieron de que **no todo
+estado tenía, en producción, alguien capaz de dispararla.**
+
+Son dos problemas distintos, y confundirlos es lo que hacía parecer que
+«100% de cobertura y aun así fallan cosas» era una contradicción. No lo es:
+
+| | La máquina de estados | Quién la usa |
+|---|---|---|
+| Qué es | `_core/domain/state-machine.ts` | Cada botón, cada comando, cada job |
+| Cobertura | 100%, las 11 válidas y las 43 inválidas, con test | Ninguna cifra la medía |
+| Qué falló | Nada. Nunca falló | Dos huecos distintos, los dos silenciosos |
+
+### Hueco 1 — el mensaje de confirmación se perdía (ya arreglado)
+
+`actions.ts`, `delivery.ts`, `tally/webhook.ts` y `telegram/webhook.ts`
+interpolaban `${clientName}` sin `escapeMarkdownV2`. Con un nombre como
+«Ana-María» o cualquier signo de puntuación, Telegram rechaza el mensaje
+**entero** — no solo el caracter. La transición SÍ ocurría en la base; lo
+único que fallaba era avisarlo, así que aprobar, rechazar y generar parecían
+no hacer nada.
+
+**Por qué el 100% de cobertura no lo atrapó.** Cada fixture de test usaba
+`'Carlos'` como nombre: cero caracteres especiales. La línea con la
+interpolación se ejecutaba entera bajo cobertura — lo que faltaba no era
+ejecutarla, era que escapara lo que llevaba dentro. **Cobertura mide que una
+línea CORRIÓ, no que sea correcta para cualquier entrada real.**
+
+**Arreglo:** PR #57 y #58 (`escapeMarkdownV2` en los cuatro archivos) + los
+fixtures de nombre en todos los tests que tocan Telegram pasaron a
+`'Ana-María Ruiz'`, para que un caracter sin escapar vuelva a hacer fallar un
+test si reaparece en un mensaje nuevo.
+
+### Hueco 2 — cuatro estados no tenían ningún botón de vuelta
+
+La tarjeta original (con sus tres o cuatro botones) es un mensaje de
+Telegram, y los mensajes se pierden en el scroll. Si esa tarjeta ya no está
+a la vista: `/cliente <nombre>` mostraba el estado **como texto**, sin
+ningún botón —ni uno, en ningún estado, hasta este cambio— y `/pendientes`
+**solo lista `DRAFT`** (`trainer_pending_versions`, migración 0011). Estos
+cuatro estados se quedaban sin ningún camino de vuelta:
+
+| Estado | Cómo se quedaba atascado | Único rastro que quedaba |
+|---|---|---|
+| `NEW` | La tarjeta original se perdió en el chat | Nada: ni `/pendientes` ni `/cliente` ofrecían un botón |
+| `GENERATING` | La función murió antes de que su propio manejo de errores pudiera devolver el estado a `NEW` (`_core/ai/generate-version.ts`: si algo revienta antes de llegar a `aplicar(…, 'GENERATION_FAILED')`, esa línea nunca corre) | El RUNBOOK ya lo nombraba: «se murió a medias» |
+| `SENT` | `startRevision` (crear v2) solo es alcanzable desde el botón que acompaña a una solicitud de cambio DEL CLIENTE. Si el entrenador quiere adelantarse, no había botón | El mensaje de «pedir un cambio» — y solo si el cliente lo manda |
+| `REJECTED` | El propio mensaje de rechazo dice *«Puedes empezar otra»* — y hasta este cambio, **era falso**: cero código lo permitía | Ninguno |
+
+**Por qué el 100% de cobertura tampoco atrapó esto.** No hay ninguna línea
+incorrecta que cubrir: `nextState('REJECTED', cualquier_evento)` devuelve
+`null`, correctamente, con test. El hueco no está en una función — está en
+que **ninguna función llama** a la que arreglaría esto. Cobertura mide las
+líneas que el código tiene, no las que le faltan.
+
+**Arreglo (S-49):** `/cliente <nombre>` pasa a llevar teclado, condicionado
+al estado de la versión vigente (`_core/commands/format.ts`,
+`keyboardForDetail`):
+
+| Estado | Botones en la ficha |
+|---|---|
+| `NEW` | Los mismos cuatro orígenes de la tarjeta original: Ver evaluación, IA, Plantilla, A mano |
+| `GENERATING` | Solo Ver evaluación — no hay nada más que hacer mientras trabaja |
+| `DRAFT` | Aprobar, Rechazar, Ver evaluación *(no «Editar»: ver nota abajo)* |
+| `APPROVED` | Rechazar, Ver evaluación *(no «crear v2»: ver nota abajo)* |
+| `SENT` | **Crear v2**, Ver evaluación |
+| `REJECTED` | **Crear v2**, Ver evaluación |
+
+**Por qué `APPROVED` no ofrece «crear v2».** `startRevision` no comprueba el
+estado de la versión: mueve `current_version_id` a la v2 sin condición
+(SPEC-010). Desde `SENT` o `REJECTED` eso es exactamente lo que ya hace hoy,
+en producción, el flujo de «pedir un cambio». Desde `APPROVED` sería un
+camino nuevo, nunca ejercitado: la v1 sigue esperando que el cliente se
+vincule para recibirla, y la v2 vacía se volvería la vigente antes de que la
+v1 le llegara a nadie. Es exactamente el tipo de atajo que este documento
+existe para prohibir, así que no se ofrece hasta que alguien lo decida con
+su propia spec.
+
+**Por qué ningún estado ofrece «Editar».** No es un descuido: ese botón ya
+existe en `/pendientes` desde SPEC-004 y hoy no hace nada — cae en «Eso
+todavía no está listo», porque el flujo conversacional de edición sigue sin
+construirse (SPEC-004 sigue **PARCIAL**). Repetirlo en la ficha nueva sería
+fabricar un segundo botón muerto en vez de arreglar el primero. Queda
+anotado en `ROADMAP.md` como su propio arreglo.
+
+### Lo que sigue sin botón: `GENERATING` atascada de verdad
+
+El arreglo de arriba ofrece «Ver evaluación» sobre una `GENERATING`, pero no
+un botón para forzarla de vuelta a `NEW`. Hacerlo bien exige una ventana de
+tiempo (¿cuánto es «atascada» contra «todavía trabajando»?) y una guarda
+contra la carrera con una generación que sí estuviera a punto de terminar:
+forzar el estado a `NEW` un segundo antes de que la generación real llegara
+a `aplicar(…, 'GENERATION_SUCCEEDED')` pisaría un `DRAFT` bueno con un `NEW`
+vacío. Es un arreglo real, no cosmético, y por eso tiene su propia entrada
+en `ROADMAP.md` en vez de colarse aquí. Mientras tanto, el desatasco manual
+está en `RUNBOOK.md`.

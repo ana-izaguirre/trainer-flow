@@ -180,6 +180,7 @@ describe('/cliente <nombre>', () => {
     const { deps, pasos } = espia({
       detalle: {
         ...resumen('Carlos Pérez'),
+        versionId: 'v-carlos-1',
         goal: 'Ganancia muscular',
         level: 'intermediate',
         daysPerWeek: 4,
@@ -194,6 +195,50 @@ describe('/cliente <nombre>', () => {
     await handleCommand('cliente', 'carl', ENTRENADOR, deps);
 
     expect(pasos).toContain('clientDetail:carlos-pérez');
+  });
+
+  it('la ficha lleva botones según el estado de la rutina vigente', async () => {
+    // SPEC-007 regla 7: antes de esto, `/cliente <nombre>` nunca tenía
+    // teclado, en ningún estado.
+    const { deps, teclados } = espia({
+      detalle: {
+        ...resumen('Carlos Pérez', { versionState: 'REJECTED' }),
+        versionId: 'v-carlos-1',
+        goal: null,
+        level: null,
+        daysPerWeek: null,
+        sessionMinutes: null,
+        equipment: null,
+        hasLimitations: false,
+        sentDaysAgo: null,
+        lastCheckin: null,
+      },
+    });
+
+    await handleCommand('cliente', 'carl', ENTRENADOR, deps);
+
+    expect(teclados[0]).not.toBeNull();
+  });
+
+  it('sin ninguna versión, la ficha no lleva teclado', async () => {
+    const { deps, teclados } = espia({
+      detalle: {
+        ...resumen('Carlos Pérez', { versionState: null, versionNumber: null }),
+        versionId: null,
+        goal: null,
+        level: null,
+        daysPerWeek: null,
+        sessionMinutes: null,
+        equipment: null,
+        hasLimitations: false,
+        sentDaysAgo: null,
+        lastCheckin: null,
+      },
+    });
+
+    await handleCommand('cliente', 'carl', ENTRENADOR, deps);
+
+    expect(teclados[0]).toBeNull();
   });
 
   it('CA-3 · varias coincidencias se listan SIN pedir el detalle', async () => {

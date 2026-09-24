@@ -11,6 +11,7 @@ import {
   formatNotFound,
   formatPending,
   formatStaleCheckins,
+  keyboardForDetail,
   PAGE_SIZE,
 } from './format.ts';
 
@@ -29,6 +30,7 @@ function resumen(extra: Partial<ClientSummary> = {}): ClientSummary {
 function ficha(extra: Partial<ClientDetail> = {}): ClientDetail {
   return {
     ...resumen(),
+    versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7c',
     goal: 'Ganancia muscular',
     level: 'intermediate',
     daysPerWeek: 4,
@@ -39,6 +41,11 @@ function ficha(extra: Partial<ClientDetail> = {}): ClientDetail {
     lastCheckin: null,
     ...extra,
   };
+}
+
+/** Las `callback_data` de un teclado, para no repetir el `?.` en cada test. */
+function accionesDe(t: ReturnType<typeof keyboardForDetail>): string[] {
+  return t?.inline_keyboard[0]?.map((b) => b.callback_data) ?? [];
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +169,56 @@ describe('la ficha', () => {
       ficha({ lastCheckin: { weekNumber: 1, sessions: 2, feeling: 'raro', discomfort: null } }),
     );
     expect(t).toContain('raro');
+  });
+});
+
+describe('los botones de la ficha — SPEC-007 regla 7', () => {
+  it('sin ninguna versión, no hay teclado', () => {
+    expect(keyboardForDetail(ficha({ versionId: null }))).toBeNull();
+  });
+
+  it('NEW ofrece los cuatro orígenes, incluida la evaluación', () => {
+    const acciones = accionesDe(keyboardForDetail(ficha({ versionState: 'NEW' })));
+    for (const accion of ['intake', 'generate', 'template', 'manual']) {
+      expect(acciones.some((c) => c.startsWith(`act:${accion}:`)), accion).toBe(true);
+    }
+  });
+
+  it('GENERATING solo ofrece ver la evaluación: no hay nada más que hacer', () => {
+    const t = keyboardForDetail(ficha({ versionState: 'GENERATING' }));
+    expect(t?.inline_keyboard[0]).toHaveLength(1);
+    expect(accionesDe(t)[0]).toContain('act:intake:');
+  });
+
+  it('DRAFT ofrece aprobar y rechazar, pero NUNCA editar', () => {
+    // El flujo de edición no existe: ese botón cae hoy en «no está listo».
+    const acciones = accionesDe(keyboardForDetail(ficha({ versionState: 'DRAFT' })));
+    expect(acciones.some((c) => c.startsWith('act:approve:'))).toBe(true);
+    expect(acciones.some((c) => c.startsWith('act:reject:'))).toBe(true);
+    expect(acciones.some((c) => c.startsWith('act:edit:'))).toBe(false);
+  });
+
+  it('APPROVED puede rechazarse, pero NUNCA ofrece crear una v2', () => {
+    // Crear v2 aquí movería current_version_id con la v1 todavía sin entregar.
+    const acciones = accionesDe(keyboardForDetail(ficha({ versionState: 'APPROVED' })));
+    expect(acciones.some((c) => c.startsWith('act:reject:'))).toBe(true);
+    expect(acciones.some((c) => c.startsWith('act:revise:'))).toBe(false);
+  });
+
+  it.each(['SENT', 'REJECTED'] as const)(
+    '%s ofrece crear una v2 y ver la evaluación: los dos callejones sin salida de esta sesión',
+    (estado) => {
+      const acciones = accionesDe(keyboardForDetail(ficha({ versionState: estado })));
+      expect(acciones.some((c) => c.startsWith('act:revise:'))).toBe(true);
+      expect(acciones.some((c) => c.startsWith('act:intake:'))).toBe(true);
+    },
+  );
+
+  it('una combinación que no debería darse (versionId sin versionState) falla a lo seguro', () => {
+    // En datos reales van juntos: sin versión no hay versionId. Si algún día
+    // no fuera así, mejor ningún botón que uno que no sepa a qué estado
+    // corresponde.
+    expect(keyboardForDetail(ficha({ versionState: null }))).toBeNull();
   });
 });
 

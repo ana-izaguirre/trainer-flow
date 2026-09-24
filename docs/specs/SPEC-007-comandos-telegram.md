@@ -87,6 +87,14 @@ Lista de comandos.
    4096 caracteres, así que `splitMessage` sigue siendo la última red.
 5. `/pendientes` incluye botones que llevan directo a la acción de SPEC-004.
 6. Un comando desconocido responde con `/ayuda`.
+7. **`/cliente <nombre>` lleva botones, condicionados al estado de la rutina
+   vigente** (S-49): los mismos orígenes que la tarjeta original si está en
+   `NEW`, aprobar/rechazar en `DRAFT`, rechazar en `APPROVED`, y **crear una
+   versión nueva** en `SENT` o `REJECTED` — los dos estados que antes no
+   tenían ningún camino de vuelta una vez que la tarjeta original se perdía
+   en el chat. Nunca repite «Editar»: ese flujo no existe todavía (SPEC-004).
+   Ver `docs/STATE-MACHINE.md` → «Cobertura de salida» para la tabla completa
+   y el porqué de cada exclusión.
 
 ## 5. Estados
 
@@ -94,8 +102,9 @@ Solo lectura. No cambia estados.
 
 **Eso es una propiedad, no una nota.** Estos comandos no pueden aprobar, ni
 enviar, ni tocar una versión: el puerto que usan no expone ninguna escritura.
-Los botones de `/pendientes` llevan a las acciones de SPEC-004, que sí escriben
-y ya tienen su propia autorización.
+Los botones de `/pendientes` **y los de `/cliente <nombre>`** llevan a las
+acciones de SPEC-004 y SPEC-010, que sí escriben y ya tienen su propia
+autorización.
 
 ## 6. Errores
 
@@ -134,6 +143,9 @@ y ya tienen su propia autorización.
   ENTONCES recibe `/ayuda` y **ninguna consulta toca la base de datos**.
 - **CA-9** — DADO que el entrenador aún no tiene clientes, CUANDO envía
   `/clientes`, ENTONCES recibe instrucciones, no una lista vacía.
+- **CA-10** — DADO un cliente con su rutina vigente en `SENT` o `REJECTED`,
+  CUANDO se pide `/cliente <nombre>`, ENTONCES la ficha lleva un botón para
+  crear una versión nueva. DADO `APPROVED`, ENTONCES NO lo lleva.
 
 ## 9. Tests
 

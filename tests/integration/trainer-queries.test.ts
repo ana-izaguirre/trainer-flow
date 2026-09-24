@@ -191,7 +191,7 @@ describe('trainer_client_detail', () => {
   it('CA-2 · trae la ficha con su evaluación', async () => {
     const t = await createProfile(db, 'trainer');
     const c = await nuevoCliente(t, 'Carlos Pérez');
-    await conRutina(t, c);
+    const v = await conRutina(t, c);
 
     const { rows } = await db.query(`SELECT * FROM trainer_client_detail($1)`, [c]);
 
@@ -201,6 +201,7 @@ describe('trainer_client_detail', () => {
       level: 'intermediate',
       days_per_week: 4,
       has_limitations: true,
+      version_id: v,
     });
   });
 
