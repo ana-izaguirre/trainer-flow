@@ -6,12 +6,40 @@
  * │ esta comprobación de autorización y esta máquina de estados. Si        │
  * │ cualquiera de las dos cede, el principio deja de existir.              │
  * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─ POR QUÉ `espia()` REVIENTA EN CUALQUIER MENSAJE SIN ESCAPAR ──────────┐
+ * │ Este archivo pasó meses en producción mandando `Rutina aprobada para   │
+ * │ Carlos.` con el punto sin escapar — MarkdownV2 rechaza el mensaje      │
+ * │ ENTERO, así que aprobar y rechazar no decían nada, aunque la           │
+ * │ transición de estado sí se aplicaba. Cada test de este archivo ya      │
+ * │ ejercitaba esos caminos; ninguno miraba la forma del texto. Ahora sí.  │
+ * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
 import type { Identity } from '../domain/identity.ts';
 import type { VersionState } from '../domain/version.ts';
 import type { ActionRepo, VersionForAction } from '../ports/action-ports.ts';
 import { handleAction, type ActionDeps } from './actions.ts';
+
+/**
+ * La misma lista de `format.ts`, comprobada por fuera: no basta con que
+ * quien escribe el mensaje se acuerde de escapar, hay que verificarlo.
+ */
+const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
+
+/** ¿Telegram rechazaría este texto por tener un carácter especial suelto? */
+function tieneCaracterSinEscapar(texto: string): boolean {
+  let i = 0;
+  while (i < texto.length) {
+    if (texto[i] === '\\') {
+      i += 2; // la barra y lo que escapa cuentan como una sola unidad
+      continue;
+    }
+    if (ESPECIALES.has(texto[i]!)) return true;
+    i += 1;
+  }
+  return false;
+}
 
 const TRAINER: Identity = {
   profileId: 'perfil-entrenador',
@@ -40,7 +68,10 @@ function version(state: VersionState = 'DRAFT'): VersionForAction {
     versionId: 'v1',
     state,
     client: { clientId: 'c1', trainerId: 'perfil-entrenador', profileId: null },
-    clientName: 'Carlos',
+    // Con guion: si `clientName` se interpola sin `escapeMarkdownV2`, un
+    // nombre real de Tally (compuestos, apellidos con guion) rompe el
+    // mensaje entero. Un nombre "limpio" como «Carlos» no lo habría pillado.
+    clientName: 'Ana-María Ruiz',
     versionNumber: 1,
     content: RUTINA,
     // La rutina de prueba tiene un día; los criterios encajan para que los
@@ -92,6 +123,11 @@ function espia(
       requestId: 'req-1',
       sender: {
         sendMessage: (chatId, text) => {
+          // Si esto revienta, Telegram habría hecho lo mismo con el mensaje
+          // real: rechazarlo entero y dejar al entrenador sin respuesta.
+          if (tieneCaracterSinEscapar(text)) {
+            throw new Error(`mensaje sin escapar para MarkdownV2: ${text}`);
+          }
           mensajes.push(`${chatId}:${text}`);
           return Promise.resolve();
         },
