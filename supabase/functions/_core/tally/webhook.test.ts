@@ -9,6 +9,27 @@ import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { handleTallyWebhook, outcomeToStatus } from './webhook.ts';
 
+/**
+ * La misma lista de `format.ts`, comprobada por fuera. El aviso de «no se
+ * pudo leer» interpola los NOMBRES de los campos (`_root` incluido — ver
+ * `validate-assessment.ts`), y un guion bajo suelto rompe MarkdownV2 igual
+ * que un punto.
+ */
+const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
+
+function tieneCaracterSinEscapar(texto: string): boolean {
+  let i = 0;
+  while (i < texto.length) {
+    if (texto[i] === '\\') {
+      i += 2;
+      continue;
+    }
+    if (ESPECIALES.has(texto[i]!)) return true;
+    i += 1;
+  }
+  return false;
+}
+
 const CUERPO = JSON.stringify({
   eventId: 'evt-1',
   eventType: 'FORM_RESPONSE',
@@ -349,6 +370,17 @@ describe('una evaluación que no se puede leer', () => {
     expect(outcome.fields).toContain('level');
     for (const campo of outcome.fields) expect(avisos[0]).toContain(campo);
     expect(avisos[0]).not.toContain('Ana');
+  });
+
+  it('el aviso no lleva ningún carácter de MarkdownV2 sin escapar', async () => {
+    // `_root` (validate-assessment.ts) es un nombre de campo posible y lleva
+    // un guion bajo — especial en MarkdownV2 igual que un punto suelto. Si
+    // la lista se interpola cruda, el aviso entero se pierde en silencio.
+    const { deps, avisos } = espia();
+
+    await handleTallyWebhook(entrada({ rawBody: SIN_NIVEL }), deps);
+
+    expect(tieneCaracterSinEscapar(avisos[0]!)).toBe(false);
   });
 
   it('responde 200: reintentar no la haría válida', async () => {

@@ -8,6 +8,22 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
+
+/** La misma lista de `format.ts`, comprobada por fuera. */
+const ESPECIALES = new Set('\\_*[]()~`>#+-=|{}.!');
+
+function tieneCaracterSinEscapar(texto: string): boolean {
+  let i = 0;
+  while (i < texto.length) {
+    if (texto[i] === '\\') {
+      i += 2;
+      continue;
+    }
+    if (ESPECIALES.has(texto[i]!)) return true;
+    i += 1;
+  }
+  return false;
+}
 import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
 import type { ChangeRequestRepo } from '../ports/change-request-ports.ts';
@@ -576,6 +592,9 @@ describe('identidad', () => {
     expect(sender.sent).toHaveLength(1);
     // El mensaje no revela si el usuario existe ni por qué se rechazó.
     expect(sender.sent[0]?.text).not.toMatch(/perfil|base de datos|registrad[oa] en/i);
+    // NEUTRAL_REPLY llevaba dos puntos sueltos: MarkdownV2 rechazaba el
+    // mensaje entero y este desconocido no recibía ni el aviso neutro.
+    expect(tieneCaracterSinEscapar(sender.sent[0]!.text)).toBe(false);
     // El evento se marca procesado igual: no se reintenta en bucle.
     expect(repo.calls).toContain('markProcessed');
   });
