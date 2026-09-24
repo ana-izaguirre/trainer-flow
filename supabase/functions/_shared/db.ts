@@ -715,6 +715,7 @@ export function createQueryRepo(db: Db): QueryRepo {
 
       return {
         ...leerResumen(fila),
+        versionId: (fila['version_id'] as string | null) ?? null,
         goal: (fila['goal'] as string | null) ?? null,
         level: (fila['level'] as Level | null) ?? null,
         daysPerWeek: toNumberOrNull(fila['days_per_week']),

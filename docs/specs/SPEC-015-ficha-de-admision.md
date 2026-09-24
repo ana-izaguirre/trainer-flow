@@ -42,6 +42,18 @@ Quien pulsa tiene el chat abierto y está mirando la pantalla. La regla de la
 pantalla de bloqueo se mantiene intacta para el aviso, que es el que llega
 solo.
 
+### Segunda entrada, desde `/cliente <nombre>` (S-49)
+
+El mismo botón 📄 aparece también en la ficha del cliente, para la versión
+vigente, sea cual sea su estado — no solo mientras el aviso original de
+`NEW` sigue a la vista en el chat (SPEC-007 regla 7). Es la misma llamada,
+con el mismo `versionId`: la evaluación vive en el PLAN, no en la versión,
+así que cualquier versión de ese plan resuelve la misma ficha.
+
+Esto cierra el hueco que esta spec dejaba abierto en su propia sección
+«Lo que hoy falta»: antes, en cuanto la tarjeta de `NEW` se perdía en el
+chat, la evaluación completa dejaba de ser alcanzable para siempre.
+
 ## 4. Alcance
 
 **Incluye:** la ficha de la evaluación que originó esa versión.

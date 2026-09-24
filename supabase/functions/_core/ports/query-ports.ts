@@ -31,6 +31,13 @@ export interface ClientSummary {
 
 /** La ficha de `/cliente <nombre>`. */
 export interface ClientDetail extends ClientSummary {
+  /**
+   * La versión vigente del plan. `null` si el cliente todavía no tiene
+   * ninguna. Es lo que necesita `keyboardForDetail` para construir los
+   * botones de la ficha (SPEC-007 regla 7): sin esto, la ficha solo podía
+   * mostrar texto y nunca ofrecer una acción.
+   */
+  readonly versionId: string | null;
   readonly goal: string | null;
   readonly level: Level | null;
   readonly daysPerWeek: number | null;

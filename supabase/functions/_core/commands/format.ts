@@ -14,8 +14,8 @@ import type {
   StaleCheckin,
 } from '../ports/query-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
-import { buildKeyboard, type InlineKeyboard } from '../telegram/keyboard.ts';
-import { DRAFT_ACTIONS } from '../telegram/keyboard.ts';
+import type { CallbackAction } from '../telegram/callback-data.ts';
+import { buildKeyboard, DRAFT_ACTIONS, NEW_ACTIONS, type InlineKeyboard } from '../telegram/keyboard.ts';
 
 /** Regla 4. Veinte líneas caben en una pantalla sin hacer scroll eterno. */
 export const PAGE_SIZE = 20;
@@ -131,6 +131,52 @@ export function formatClientDetail(c: ClientDetail): string {
   }
 
   return lineas.join('\n');
+}
+
+/**
+ * Los botones de la ficha — SPEC-007 regla 7.
+ *
+ * ┌─ POR QUÉ NUNCA OFRECE 'edit' ──────────────────────────────────────────┐
+ * │ Ese botón ya existe en `/pendientes` desde SPEC-004 y hoy no hace       │
+ * │ nada: cae en «Eso todavía no está listo», porque el flujo conversa-     │
+ * │ cional de edición sigue sin construirse (SPEC-004 sigue PARCIAL).       │
+ * │ Repetirlo aquí sería fabricar un segundo botón muerto en vez de         │
+ * │ arreglar el primero. Para editar un DRAFT, el camino real es `/ver`.    │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─ POR QUÉ 'revise' SOLO EN SENT Y REJECTED, NUNCA EN APPROVED ──────────┐
+ * │ `startRevision` no mira el estado de la versión: mueve                  │
+ * │ `current_version_id` a la v2 sin condición (SPEC-010). Desde SENT o     │
+ * │ REJECTED eso es exactamente lo que ya hace en producción el flujo de    │
+ * │ «pedir un cambio». Desde APPROVED sería un camino nuevo y nunca         │
+ * │ ejercitado: la v1 sigue esperando que el cliente se vincule para        │
+ * │ recibirla, y la v2 vacía se volvería la vigente antes de que la v1 le   │
+ * │ llegara a nadie. No se ofrece hasta que alguien lo decida con su propia │
+ * │ spec (ver docs/STATE-MACHINE.md, «Cobertura de salida»).                │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
+export function keyboardForDetail(c: ClientDetail): InlineKeyboard | null {
+  if (c.versionId === null) return null;
+
+  const acciones: readonly CallbackAction[] = (() => {
+    switch (c.versionState) {
+      case 'NEW':
+        return NEW_ACTIONS;
+      case 'GENERATING':
+        return ['intake'];
+      case 'DRAFT':
+        return ['approve', 'reject', 'intake'];
+      case 'APPROVED':
+        return ['reject', 'intake'];
+      case 'SENT':
+      case 'REJECTED':
+        return ['revise', 'intake'];
+      default:
+        return [];
+    }
+  })();
+
+  return buildKeyboard(acciones, c.versionId);
 }
 
 /** Cuando lo escrito no identifica a nadie, o a varios. */

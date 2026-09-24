@@ -25,6 +25,7 @@ import {
   formatNotFound,
   formatPending,
   formatStaleCheckins,
+  keyboardForDetail,
   AYUDA_CLIENTE,
   PIDE_NOMBRE_CLIENTE,
   SIN_RUTINA_TODAVIA,
@@ -172,10 +173,19 @@ async function ficha(args: string, actor: Identity, deps: CommandDeps): Promise<
   // ajeno, porque no hay dónde escribirlo (SPEC-009 regla 8).
   const detalle = await deps.repo.clientDetail(encontrado.client.clientId);
 
-  await deps.sender.sendMessage(
-    actor.telegramChatId,
-    detalle === null ? formatNotFound([]) : formatClientDetail(detalle),
-  );
+  if (detalle === null) {
+    await deps.sender.sendMessage(actor.telegramChatId, formatNotFound([]));
+  } else {
+    // Regla 7 (SPEC-007): la ficha lleva botones según el estado de su
+    // rutina vigente. Antes de esto, `/cliente <nombre>` nunca tenía
+    // ninguno: si la tarjeta original se perdía en el chat, no quedaba
+    // ningún camino de vuelta (ver docs/STATE-MACHINE.md).
+    await deps.sender.sendMessage(
+      actor.telegramChatId,
+      formatClientDetail(detalle),
+      keyboardForDetail(detalle),
+    );
+  }
 
   return { kind: 'answered', command: 'cliente', messages: 1 };
 }
