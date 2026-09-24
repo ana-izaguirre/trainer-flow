@@ -30,6 +30,7 @@ import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import { buildAssessmentArrived } from '../telegram/notify.ts';
+import { buildDeepLink } from '../telegram/start.ts';
 
 export type TallyOutcome =
   | { readonly kind: 'unauthorized' }
@@ -192,7 +193,7 @@ export async function handleTallyWebhook(
     const aviso = buildAssessmentArrived(
       { ...parsed.value, clientName: parsed.value.fullName },
       ids.versionId,
-      `https://t.me/${deps.botUsername}?start=${linkToken}`,
+      buildDeepLink(deps.botUsername, linkToken),
     );
     await deps.sender.sendMessage(trainer.chatId, aviso.text, aviso.keyboard);
 

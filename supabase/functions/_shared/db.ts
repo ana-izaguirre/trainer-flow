@@ -20,6 +20,7 @@ import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { ChangeReason } from '../_core/domain/change-request.ts';
 import type { IntakeRepo } from '../_core/ports/intake-ports.ts';
+import type { LinkResendRepo } from '../_core/ports/link-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { CheckinAnswers } from '../_core/checkin/answers.ts';
 import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
@@ -895,6 +896,38 @@ export function createIntakeRepo(db: Db): IntakeRepo {
         // `date` llega como string por PostgREST, y así se queda: convertirlo
         // metería la zona horaria del servidor en una fecha de nacimiento.
         birthDate: (fila['birth_date'] as string | null) ?? null,
+      };
+    },
+  };
+}
+
+/**
+ * Implementa el puerto `LinkResendRepo` (SPEC-014 §3).
+ *
+ * Igual que `createIntakeRepo`: es de solo lectura, así que no expone nada
+ * con lo que escribir.
+ */
+export function createLinkResendRepo(db: Db): LinkResendRepo {
+  return {
+    async findClientForVersion(versionId) {
+      const { data, error } = await db
+        .rpc('client_for_resend', { p_version_id: versionId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer el cliente: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data as Record<string, unknown>;
+
+      return {
+        client: {
+          clientId: fila['client_id'] as string,
+          trainerId: fila['trainer_id'] as string,
+          profileId: (fila['profile_id'] as string | null) ?? null,
+        },
+        fullName: fila['full_name'] as string,
+        linked: fila['linked'] === true,
+        linkToken: fila['link_token'] as string,
       };
     },
   };

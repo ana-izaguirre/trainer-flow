@@ -24,6 +24,8 @@ export const CALLBACK_ACTIONS = [
   'revise',
   /** SPEC-015: leer la evaluación. Es la única que NO escribe nada. */
   'intake',
+  /** SPEC-014 §3: reenviar el enlace de vinculación. Tampoco escribe nada. */
+  'link',
 ] as const;
 
 export type CallbackAction = (typeof CALLBACK_ACTIONS)[number];

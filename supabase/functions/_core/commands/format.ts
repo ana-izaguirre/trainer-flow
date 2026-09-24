@@ -154,11 +154,18 @@ export function formatClientDetail(c: ClientDetail): string {
  * │ llegara a nadie. No se ofrece hasta que alguien lo decida con su propia │
  * │ spec (ver docs/STATE-MACHINE.md, «Cobertura de salida»).                │
  * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─ POR QUÉ 'link' VA EN SU PROPIA FILA, NO CON LOS DEMÁS ────────────────┐
+ * │ Reenviar el enlace (SPEC-014 §3) es ortogonal al estado de la rutina:  │
+ * │ un cliente sin vincular lo necesita igual si está en NEW que si ya fue │
+ * │ RECHAZADA. Mezclarlo en la fila de arriba dejaría hasta cinco botones  │
+ * │ —uno de texto largo— apretados en un móvil.                            │
+ * └────────────────────────────────────────────────────────────────────────┘
  */
 export function keyboardForDetail(c: ClientDetail): InlineKeyboard | null {
   if (c.versionId === null) return null;
 
-  const acciones: readonly CallbackAction[] = (() => {
+  const porEstado: readonly CallbackAction[] = (() => {
     switch (c.versionState) {
       case 'NEW':
         return NEW_ACTIONS;
@@ -176,7 +183,7 @@ export function keyboardForDetail(c: ClientDetail): InlineKeyboard | null {
     }
   })();
 
-  return buildKeyboard(acciones, c.versionId);
+  return buildKeyboard(porEstado, c.versionId, c.linked ? [] : ['link']);
 }
 
 /** Cuando lo escrito no identifica a nadie, o a varios. */

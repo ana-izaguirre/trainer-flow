@@ -142,7 +142,7 @@ Se listan aquí, en el orden en que conviene atacarlos, para no perderlos.
 | 1 | ✅ `/cliente <nombre>` sin botones — cuatro estados sin ningún camino de vuelta | Un PR | Bloqueaba el trabajo real de Carlos. Hecho en S-49 — ver `STATE-MACHINE.md` |
 | 2 | ✅ Vigía para `GENERATING` atascada de verdad | Media tarde | Hecho en S-49: `sweep-generating` + `pg_cron` cada 5 min, mismo patrón que SPEC-006. Falta el paso manual de `docs/DEPLOY.md` §8b al desplegar |
 | 3 | ✅ El botón «Editar» de `/pendientes` no hacía nada | Una hora | Hecho en S-49: redirige a `/ver` en vez de fingir. El flujo conversacional de la regla 6 sigue PARCIAL — eso es una feature nueva, no este arreglo |
-| 4 | Reenviar el enlace de vinculación de un cliente | Una hora | Salió en uso real: hoy no hay comando ni botón para recuperar `link_token` sin abrir Supabase Studio |
+| 4 | ✅ Reenviar el enlace de vinculación de un cliente | Una hora | Hecho en S-49: botón 🔗 en la ficha, SPEC-014 §3.1. `client_for_resend` dedicada — el token no viaja por `trainer_client_detail` |
 | 5 | Deduplicar `tieneCaracterSinEscapar` entre archivos de test | Media hora | Cosmético — tres copias casi iguales, una por archivo de test que toca Telegram. Esperar a que el PR #58 esté mergeado para no pisarlo |
 
 ## Los dos huecos que sí se notan en el mes uno

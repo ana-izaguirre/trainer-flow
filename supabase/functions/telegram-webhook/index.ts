@@ -23,6 +23,7 @@ import type { ActionRepo } from '../_core/ports/action-ports.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
 import type { IntakeRepo } from '../_core/ports/intake-ports.ts';
+import type { LinkResendRepo } from '../_core/ports/link-ports.ts';
 import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { GenerationTrigger } from '../_core/ports/generation-trigger.ts';
@@ -40,6 +41,7 @@ import {
   createCreationRepo,
   createDb,
   createIntakeRepo,
+  createLinkResendRepo,
   createDeliveryRepo,
   createQueryRepo,
   createTelegramRepo,
@@ -67,6 +69,10 @@ export interface HandlerDeps {
   readonly changeRepo: (requestId: string) => ChangeRequestRepo;
   /** SPEC-015: solo lectura, así que no necesita `requestId` para auditar. */
   readonly intakeRepo: () => IntakeRepo;
+  /** SPEC-014 §3: solo lectura, igual que `intakeRepo`. */
+  readonly linkRepo: () => LinkResendRepo;
+  /** Sin `@`. Arma el deep link al reenviar (SPEC-014). */
+  readonly botUsername: string;
 }
 
 /**
@@ -78,10 +84,14 @@ export interface HandlerDeps {
 export function readDeps(): HandlerDeps {
   const botToken = requireEnv('TELEGRAM_BOT_TOKEN');
   const expectedSecret = requireEnv('TELEGRAM_WEBHOOK_SECRET');
+  // Ya era obligatoria para tally-webhook (SPEC-014); reenviar el enlace
+  // desde aquí necesita la misma variable.
+  const botUsername = requireEnv('TELEGRAM_BOT_USERNAME');
   const db = createDb();
 
   return {
     expectedSecret,
+    botUsername,
     repo: (requestId) => createTelegramRepo(db, requestId),
     sender: (log) => asSender(createTelegramClient(botToken, log)),
     actionRepo: (requestId) => createActionRepo(db, requestId),
@@ -92,6 +102,7 @@ export function readDeps(): HandlerDeps {
     creationRepo: (requestId) => createCreationRepo(db, requestId),
     changeRepo: (requestId) => createChangeRequestRepo(db, requestId),
     intakeRepo: () => createIntakeRepo(db),
+    linkRepo: () => createLinkResendRepo(db),
   };
 }
 
@@ -134,7 +145,8 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
           commands: { repo: deps.queryRepo(), sender },
           creation: { repo: deps.creationRepo(requestId), sender },
           changes: { repo: deps.changeRepo(requestId), sender },
-        intake: { repo: deps.intakeRepo(), sender },
+          intake: { repo: deps.intakeRepo(), sender },
+          link: { repo: deps.linkRepo(), sender, botUsername: deps.botUsername },
         },
       );
 
