@@ -220,3 +220,77 @@ supabase/functions/_core/ai/rate-limit.test.ts
 supabase/functions/_shared/ai/gemini-provider.ts
 supabase/functions/generate-version/index.ts
 ```
+
+---
+
+## 11. La vigía de generaciones atascadas (S-49)
+
+**Por qué hace falta.** `NEW → GENERATING` la hace `generate-version`, y esa
+misma función es la única que sabe devolverla a `NEW` cuando algo sale mal
+(regla 8, timeout de 45s). Pero si la función muere ANTES de llegar a esa
+línea —el timeout de la plataforma, un OOM, cualquier fallo que no pase por
+su propio `try/catch`—, la versión se queda en `GENERATING` para siempre.
+Encontrado auditando la máquina de estados: ver `docs/STATE-MACHINE.md`,
+«Cobertura de salida».
+
+**La solución: el mismo patrón que SPEC-006.** Un job de `pg_cron` cada 5
+minutos llama a `sweep-generating`, que devuelve a `NEW` toda versión con
+más de `GENERATION_STALE_MINUTES` (5 por defecto) en `GENERATING`, y avisa
+al entrenador.
+
+```
+GENERATING desde hace > GENERATION_STALE_MINUTES
+        │
+        ▼
+apply_version_transition(GENERATING → NEW, actor='system')
+        │
+   ¿tuvo éxito?
+   ├─ Sí → aviso al entrenador: puede reintentar, plantilla o a mano
+   └─ No → la generación terminó de verdad un instante antes.
+           No se pisa el DRAFT recién creado. No se avisa nada.
+```
+
+11.1. Correr el barrido de más no duplica ni pisa nada: usa
+`apply_version_transition` con la misma guarda de concurrencia que
+`generate-version`, `actions.ts` y `delivery.ts` — `p_expected_state` sigue
+siendo la única regla.
+
+11.2. `GENERATION_STALE_MINUTES` es configuración, no secreto: viaja por
+`supabase secrets set`, igual que `AI_MODEL` (`docs/SECURITY.md`).
+
+11.3. El job **no vive en una migración**, por las mismas dos razones que
+`weekly-checkin` (`supabase/cron/sweep-generating.sql`, `docs/DEPLOY.md`
+paso 8b): necesita la URL del proyecto y un secreto, y `pg_cron`/`pg_net`
+no existen en el Postgres pelado de los tests.
+
+### Criterios de aceptación
+
+- **CA-10** — DADO una versión en `GENERATING` desde hace más de
+  `GENERATION_STALE_MINUTES`, CUANDO corre el barrido, ENTONCES vuelve a
+  `NEW` y el entrenador recibe el aviso con el tiempo que estuvo atascada.
+- **CA-11** — DADO que la generación en realidad terminó un instante antes
+  del barrido, CUANDO corre, ENTONCES la guarda de concurrencia lo detecta
+  (`transition` devuelve `false`) y no se pisa el `DRAFT` recién creado, ni
+  se manda ningún aviso de más.
+- **CA-12** — DADO que el barrido corre dos veces seguidas sobre la misma
+  atascada, ENTONCES la segunda pasada no encuentra nada que hacer (ya
+  volvió a `NEW`) y no manda un segundo aviso.
+
+### Tests
+
+| Nivel | Caso |
+|---|---|
+| Unit | `sweepStaleGenerations`: sin candidatas, una, varias, la guarda de concurrencia, el escapado del aviso |
+| Deno | La Edge Function: secreto correcto/incorrecto/ausente, `readDeps` |
+
+### Archivos
+
+```
+supabase/migrations/0024_stale_generating_versions.sql
+supabase/functions/_core/ports/sweep-ports.ts
+supabase/functions/_core/ai/sweep-stale-generations.ts
+supabase/functions/_core/ai/sweep-stale-generations.test.ts
+supabase/functions/sweep-generating/index.ts
+supabase/functions/sweep-generating/index.test.ts
+supabase/cron/sweep-generating.sql
+```

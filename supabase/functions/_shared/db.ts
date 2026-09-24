@@ -25,6 +25,7 @@ import type { CheckinAnswers } from '../_core/checkin/answers.ts';
 import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { ClientSummary, QueryRepo } from '../_core/ports/query-ports.ts';
 import type { DeliveryRepo, VersionForDelivery } from '../_core/ports/delivery-ports.ts';
+import type { SweepRepo } from '../_core/ports/sweep-ports.ts';
 import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
 import { requireEnv } from './env.ts';
 
@@ -349,6 +350,49 @@ async function findVersionForGeneration(
       hasLimitations: fila['has_limitations'] as boolean,
     },
     trainerChatId: Number(fila['trainer_chat_id']),
+  };
+}
+
+/**
+ * Implementa el puerto `SweepRepo` (SPEC-002 §11).
+ *
+ * Reusa `apply_version_transition`: es la MISMA guarda de concurrencia que
+ * usa cualquier otro camino, así que una generación que sí terminó un
+ * instante antes de esta pasada no se pisa.
+ */
+export function createSweepRepo(db: Db): SweepRepo {
+  return {
+    async staleGenerations(minMinutes) {
+      const { data, error } = await db.rpc('stale_generating_versions', {
+        p_min_minutes: minMinutes,
+      });
+
+      if (error !== null) {
+        throw new Error(`No se pudieron leer las generaciones atascadas: ${error.code}`);
+      }
+
+      return (data ?? []).map((fila: Record<string, unknown>) => ({
+        versionId: fila['version_id'] as string,
+        trainerChatId: Number(fila['trainer_chat_id']),
+        clientName: fila['client_name'] as string,
+        minutesStuck: Number(fila['minutes_stuck']),
+      }));
+    },
+
+    async transition(versionId, from, to) {
+      const { data, error } = await db.rpc('apply_version_transition', {
+        p_version_id: versionId,
+        p_expected_state: from,
+        p_new_state: to,
+        // Lo fuerza el barrido, no una decisión del entrenador ni la propia
+        // generación: queda registrado como quien es.
+        p_actor: 'system',
+      });
+
+      if (error !== null) throw new Error(`No se pudo aplicar la transición: ${error.code}`);
+
+      return data === true;
+    },
   };
 }
 

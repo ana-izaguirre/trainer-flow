@@ -137,10 +137,16 @@ generation.trigger_failed     → la petición ni salió (red, URL mal)
 si se agotó, la versión se queda en `NEW` y el entrenador puede usar una
 plantilla o escribirla a mano. El sistema funciona completo sin IA.
 
-### 2.1 — Desatascar una `GENERATING` colgada, a mano
+### 2.1 — Una `GENERATING` colgada
 
-No hay todavía un botón para esto (`docs/STATE-MACHINE.md`, «Lo que sigue
-sin botón»). Mientras no exista:
+**Desde S-49 esto se arregla solo.** `sweep-generating` (SPEC-002 §11) corre
+cada 5 minutos por `pg_cron` y devuelve a `NEW` toda versión con más de
+`GENERATION_STALE_MINUTES` (5 por defecto) atascada, con aviso al
+entrenador. Si ves una `GENERATING` de más de 10 minutos, dale un momento al
+cron antes de tocar nada a mano.
+
+**Si el cron no está programado todavía** (el paso 8b de `docs/DEPLOY.md`),
+o hace falta desatascarla YA:
 
 ```sql
 update workout_versions
@@ -153,6 +159,16 @@ El `and state = 'GENERATING'` no es opcional: si la generación en realidad
 terminó un segundo antes de este UPDATE, esa condición hace que el UPDATE no
 toque nada, en vez de pisar un `DRAFT` recién llegado. Corre la consulta de
 arriba otra vez después para confirmar en qué quedó.
+
+**Comprobar que el cron está activo:**
+```sql
+select
+  j.jobname, j.schedule, j.active,
+  (select status from cron.job_run_details
+    where jobid = j.jobid order by start_time desc limit 1) as last_run_status
+from cron.job j
+where j.jobname = 'sweep-generating';
+```
 
 ### 2.2 — Si fallan TODAS, no una
 
