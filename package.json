@@ -28,7 +28,7 @@
   "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "@supabase/supabase-js": "^2.116.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.6.2",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^2.1.8",
     "deno": "^2.9.6",
