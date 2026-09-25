@@ -1,0 +1,39 @@
+# Actualizaciones de dependencias, una vez por semana.
+#
+# ┌─ POR QUÉ AGRUPADAS ────────────────────────────────────────────────────────┐
+# │ Minor y patch llegan en UN solo PR por ecosistema: diez PRs sueltos cada   │
+# │ lunes se terminan ignorando. Las majors van cada una en su PR, porque son  │
+# │ las que rompen (TypeScript 7, oxlint, vitest) y hay que poder revertirlas  │
+# │ por separado.                                                              │
+# └────────────────────────────────────────────────────────────────────────────┘
+#
+# Las Edge Functions importan `npm:@supabase/supabase-js@2` y `jsr:@std/assert@1`
+# fijadas solo por versión mayor: Deno toma los parches solo al desplegar, y
+# Dependabot no entiende esos especificadores. Quedan fuera a propósito.
+#
+# Ninguna de estas actualizaciones toca `supabase/`, así que mergear una NO
+# dispara un deploy (ver deploy.yml, «Is there anything to deploy?»).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(ci)
+    groups:
+      acciones:
+        patterns: ['*']
