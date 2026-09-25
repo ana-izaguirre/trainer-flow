@@ -26,6 +26,12 @@ updates:
     groups:
       menores:
         update-types: [minor, patch]
+    ignore:
+      # @types/node sigue a la versión de Node que CORRE (22, en ci.yml), no
+      # a la última publicada. Con los tipos de una major más nueva, tsc
+      # acepta APIs que en tiempo de ejecución no existen.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
