@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing (docs/TESTING.md). Solo los tres módulos que vitest.config.ts ya exige al 100%: la cobertura dice que sus líneas CORRIERON; esto dice si los tests notarían que están mal.",
+  "testRunner": "vitest",
+  "plugins_comment": "Explícito porque pnpm aísla los paquetes: Stryker no encuentra el runner buscándolo junto a su propia carpeta.",
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ],
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "mutate": [
+    "supabase/functions/_core/authorization.ts",
+    "supabase/functions/_core/domain/state-machine.ts",
+    "supabase/functions/_core/domain/validate-draft.ts"
+  ],
+  "coverageAnalysis": "perTest",
+  "reporters": [
+    "html",
+    "json",
+    "clear-text",
+    "progress"
+  ],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "thresholds": {
+    "high": 90,
+    "low": 80,
+    "break": null
+  },
+  "tempDirName": ".stryker-tmp",
+  "tsconfigFile_comment": "Vacío a propósito. Stryker usaría la API de compilador de TypeScript para reescribir `extends`/`references` del tsconfig, y TypeScript 7 ya no la expone. Nuestro tsconfig.json no tiene ninguno de los dos, así que ese paso no haría nada.",
+  "tsconfigFile": "",
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  }
+}

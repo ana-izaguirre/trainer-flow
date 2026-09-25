@@ -23,3 +23,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Mutation testing (Stryker)
+reports/
+.stryker-tmp/
