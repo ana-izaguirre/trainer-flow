@@ -2,12 +2,20 @@
 
 **10 tablas.** Sin ORM: `supabase-js` con tipos generados desde el esquema.
 
-```bash
-pnpm types:local     # contra la base local
-pnpm types           # contra el proyecto vinculado
-```
+`database.types.ts` se versiona y **nunca se edita a mano**. La fuente de
+verdad son las **migraciones**, no el proyecto desplegado: CI genera el
+archivo desde ellas en cada run y falla si el versionado no coincide.
 
-`database.types.ts` se versiona y **nunca se edita a mano**.
+Generarlo necesita Docker. Dos caminos:
+
+- **Sin Docker** (sesiones en la nube): cuando CI falla por los tipos, sube
+  el archivo correcto como artefacto `database-types`. Se descarga y se
+  versiona en `supabase/functions/_core/database.types.ts`.
+- **Con Docker**: `pnpm test:integration` (deja creada `trainerflow_test`) y
+  después `pnpm types:local`.
+
+`pnpm types` genera contra el proyecto vinculado: sirve para detectar si
+producción se desvió de las migraciones, **no** para versionar su salida.
 
 ---
 

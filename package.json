@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "types": "supabase gen types typescript --linked > supabase/functions/_core/database.types.ts",
-    "types:local": "supabase gen types typescript --db-url $TEST_DATABASE_URL > supabase/functions/_core/database.types.ts",
+    "types:local": "supabase gen types typescript --schema public --db-url postgresql://postgres:postgres@127.0.0.1:5432/trainerflow_test > supabase/functions/_core/database.types.ts",
     "db:reset": "supabase db reset",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
