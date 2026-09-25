@@ -149,7 +149,12 @@ jobs:
             --db-url "postgresql://postgres:postgres@localhost:5432/types_from_migrations" \
             > "$RUNNER_TEMP/database.types.ts"
 
-          if ! diff -u supabase/functions/_core/database.types.ts "$RUNNER_TEMP/database.types.ts"; then
+          # Against /dev/null when the file does not exist yet, so the log
+          # shows it whole: the artifact is not the only way to get it.
+          committed=supabase/functions/_core/database.types.ts
+          [ -f "$committed" ] || committed=/dev/null
+
+          if ! diff -u "$committed" "$RUNNER_TEMP/database.types.ts"; then
             echo "::error::supabase/functions/_core/database.types.ts does not match the migrations. Download the 'database-types' artifact of this run and commit it in that path."
             exit 1
           fi
