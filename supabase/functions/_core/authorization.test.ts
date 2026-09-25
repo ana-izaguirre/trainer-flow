@@ -223,3 +223,43 @@ describe('cambiar un ID no da acceso a nada (CA-7)', () => {
     expect(canRequestChange(clientA, ajena).allowed).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Hallados con mutation testing (Stryker): con 100% de cobertura, nada
+ * fallaba si se borraban las comprobaciones de rol o de NULL. La base hoy
+ * impide estas combinaciones, pero este módulo es la ÚNICA capa que separa
+ * datos (ADR-010): no puede apoyarse en que la base las impida.
+ */
+describe('el rol cuenta, no solo el ID', () => {
+  it('un cliente con el ID de su entrenador no pasa por entrenador', () => {
+    const clienteConIdDeEntrenador = identity(TRAINER_A, 'client');
+
+    expect(canViewClient(clienteConIdDeEntrenador, clientRef())).toEqual({
+      allowed: false,
+      reason: 'NOT_YOUR_CLIENT',
+    });
+  });
+
+  it('un entrenador con el ID del cliente no pasa por el cliente', () => {
+    const entrenadorConIdDeCliente = identity(CLIENT_A, 'trainer');
+
+    expect(canViewClient(entrenadorConIdDeCliente, clientRef())).toEqual({
+      allowed: false,
+      reason: 'NOT_YOUR_CLIENT',
+    });
+  });
+
+  it('un NULL no coincide con un cliente sin vincular', () => {
+    // Imposible por tipos, pero la guarda existe justo para cuando un dato
+    // de fuera llega roto: dos NULL no pueden abrir acceso.
+    const sinPerfil = identity(null as unknown as string, 'client');
+    const sinVincular = clientRef({ profileId: null });
+
+    expect(canViewClient(sinPerfil, sinVincular)).toEqual({
+      allowed: false,
+      reason: 'NOT_YOUR_CLIENT',
+    });
+  });
+});
