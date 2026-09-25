@@ -156,6 +156,12 @@ bot en todo lo que sigue.
       resto del sistema funciona igual, esto es específicamente esa red de
       seguridad.
 
+      > **El deploy lo vigila.** Cada despliegue termina comprobando que
+      > `weekly-checkin` y `sweep-generating` existan y estén activos. Si
+      > falta alguno, el run de *Deploy* sale en rojo nombrando el paso (8 u
+      > 8b). El código ya quedó desplegado: lo único que falta es el paso
+      > manual que indica el error.
+
 ## D. Darte de alta
 
 - [ ] **9. ⚠️ Tu perfil de entrenador, ANTES de la primera evaluación.**

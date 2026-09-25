@@ -4,9 +4,13 @@ import { Client } from 'pg';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 
+// El valor por defecto es el MISMO que usan CI (ci.yml) y las sesiones en la
+// nube (.claude/hooks/session-start.sh): una credencial desechable sobre una
+// base local, no un secreto. Con un valor distinto, `pnpm test:integration`
+// fallaba en cualquier sitio que no exportara la variable.
 const ADMIN_URL =
   process.env['TEST_ADMIN_DATABASE_URL'] ??
-  'postgresql://trainerflow:trainerflow@127.0.0.1:5432/postgres';
+  'postgresql://postgres:postgres@127.0.0.1:5432/postgres';
 
 const TEST_DB = process.env['TEST_DATABASE_NAME'] ?? 'trainerflow_test';
 

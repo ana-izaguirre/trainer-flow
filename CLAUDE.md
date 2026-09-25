@@ -156,7 +156,8 @@ Antes de dar una feature por terminada:
 
 ## Git
 
-- Rama: `code/youthful-cannon-4lqn8c`
+- Rama: la que asigne cada sesión. **Nunca se trabaja directo en `main`**:
+  todo entra por PR con CI en verde.
 - Un commit por spec, o por paso claro dentro de una spec
 - Mensaje: `feat(spec-008): plantillas y creación manual`
 

@@ -161,6 +161,42 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase functions deploy
 
+      # ┌─ THE TWO pg_cron JOBS DO NOT TRAVEL WITH THE MIGRATIONS ───────────┐
+      # │ They need the function URL and a secret, so they are scheduled by  │
+      # │ hand (DEPLOY.md steps 8 and 8b), and nothing else notices if one   │
+      # │ is missing: the weekly check-in or the stuck-GENERATING sweep just │
+      # │ never runs. This turns that silent gap into a red deploy.          │
+      # │                                                                    │
+      # │ It runs AFTER the functions: if it fails, the code is already      │
+      # │ deployed and fine — what is missing is the manual step it names.   │
+      # └────────────────────────────────────────────────────────────────────┘
+      - name: pg_cron jobs are scheduled
+        if: steps.changes.outputs.any == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if ! rows=$(supabase db query --linked --agent no -o json \
+            "select jobname from cron.job where active and jobname in ('weekly-checkin', 'sweep-generating')"); then
+            echo "::error::Could not read cron.job. Is the pg_cron extension enabled? See docs/DEPLOY.md step 8."
+            exit 1
+          fi
+
+          # The CLI prints a bare array; the object form is accepted too so a
+          # change in its output shape fails on the job names, not on jq.
+          found=$(jq -r '(if type == "array" then . else .rows end) | .[].jobname' <<< "$rows")
+
+          missing=0
+          for job in "weekly-checkin:8" "sweep-generating:8b"; do
+            name="${job%%:*}"
+            step="${job##*:}"
+            if ! grep -qx "$name" <<< "$found"; then
+              echo "::error::The pg_cron job '$name' is missing or inactive. Schedule it with docs/DEPLOY.md step $step (supabase/cron/$name.sql)."
+              missing=1
+            fi
+          done
+
+          exit "$missing"
+
       # Leaves what happened on the Actions tab, without opening the logs.
       - name: Summary
         if: always()

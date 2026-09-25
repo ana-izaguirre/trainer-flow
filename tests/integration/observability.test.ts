@@ -79,10 +79,12 @@ describe('CA-6 · un request_id recupera la cadena entera', () => {
   it('las tres tablas comparten el identificador', async () => {
     await cadenaCompleta(REQ_A);
 
-    const [eventos, planEvents, generaciones] = await Promise.all([
-      db.query('SELECT 1 FROM webhook_events WHERE request_id = $1', [REQ_A]),
-      db.query('SELECT 1 FROM plan_events WHERE request_id = $1', [REQ_A]),
-      db.query('SELECT 1 FROM ai_generations WHERE request_id = $1', [REQ_A]),
+    // Una tras otra, no con Promise.all: un mismo `Client` de pg no admite
+    // consultas simultáneas, y pg@9 lo convierte de advertencia en error.
+    const eventos = await db.query('SELECT 1 FROM webhook_events WHERE request_id = $1', [REQ_A]);
+    const planEvents = await db.query('SELECT 1 FROM plan_events WHERE request_id = $1', [REQ_A]);
+    const generaciones = await db.query('SELECT 1 FROM ai_generations WHERE request_id = $1', [
+      REQ_A,
     ]);
 
     expect(eventos.rowCount).toBe(1);

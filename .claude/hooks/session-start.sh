@@ -22,8 +22,12 @@ pnpm install
 # sobreviven al cacheo, así que hay que arrancarlo en cada sesión.
 #
 # `postgres:postgres` NO es un secreto: es la misma credencial desechable que
-# usa CI (.github/workflows/ci.yml), sobre una base que solo escucha en
-# localhost, se crea vacía y se tira al terminar.
+# usa CI (.github/workflows/ci.yml) y el valor por defecto de
+# tests/helpers/db.ts, sobre una base que solo escucha en localhost, se crea
+# vacía y se tira al terminar.
+#
+# El contenedor trae PostgreSQL 16; CI y producción usan 17. Es la imagen de
+# la sesión, no se elige aquí: CI sigue siendo la referencia.
 if command -v pg_lsclusters >/dev/null 2>&1; then
   read -r pg_version pg_cluster _ < <(pg_lsclusters --no-header | head -n 1)
 
@@ -35,12 +39,6 @@ if command -v pg_lsclusters >/dev/null 2>&1; then
     until pg_isready -q -h 127.0.0.1 -p 5432; do sleep 1; done
 
     su postgres -c "psql -qc \"ALTER USER postgres WITH PASSWORD 'postgres';\""
-
-    # Sin esto, tests/helpers/db.ts cae a su valor por defecto
-    # (trainerflow:trainerflow), que no existe en este contenedor.
-    if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-      echo 'export TEST_ADMIN_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/postgres"' >> "$CLAUDE_ENV_FILE"
-    fi
   fi
 else
   echo "Aviso: no hay PostgreSQL en el contenedor; pnpm test:integration no va a poder correr." >&2
