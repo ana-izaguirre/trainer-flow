@@ -543,7 +543,89 @@ de Telegram siguen viviendo solo en `supabase secrets set`.
 
 ### Volver a desplegar sin tocar el código
 
-Actions → Deploy → *Run workflow*.
+Actions → Deploy → *Run workflow* → rama `main`, destino `production`.
+
+Producción **solo acepta `main`**: si eliges otra rama con destino
+`production`, el deploy se niega antes de tocar nada.
+
+## Staging — probar sin tocar producción
+
+Un segundo proyecto de Supabase con su propio bot de Telegram. Existe porque
+probar en producción obliga después a borrar datos a mano, y un `DELETE`
+equivocado ahí no tiene vuelta.
+
+| | Producción | Staging |
+|---|---|---|
+| Cuándo despliega | Solo, en cada merge a `main` | A mano, desde **cualquier rama** |
+| Aprobación manual | Configurable (*Required reviewers*) | No |
+| Jobs de pg_cron | Obligatorios (el deploy los vigila) | No hacen falta |
+| Bot de Telegram | El real | Uno de pruebas |
+
+### Montarlo, una sola vez
+
+- [ ] **S1. Crear el proyecto** en Supabase (por ejemplo
+      `trainer-flow-staging`) y apuntar su *project ref* y su contraseña de
+      base de datos. El plan gratuito alcanza, pero **pausa los proyectos
+      inactivos**: si un deploy a staging falla sin razón aparente, mira si
+      está pausado.
+- [ ] **S2. Las credenciales en GitHub**, con nombres **propios**
+      (Settings → Secrets and variables → Actions):
+
+      | | Tipo |
+      |---|---|
+      | `STAGING_SUPABASE_PROJECT_REF` | Variable |
+      | `STAGING_SUPABASE_DB_PASSWORD` | Secret |
+
+      `SUPABASE_ACCESS_TOKEN` se comparte: es de tu cuenta, no del proyecto.
+
+      > **Por qué nombres propios.** Si staging usara los mismos nombres
+      > dentro de su *environment*, un secreto olvidado caería en silencio en
+      > el de producción. Con nombres propios, lo que falte es un error que
+      > lo nombra, y el deploy también se niega si el ref de staging es igual
+      > al de producción.
+
+- [ ] **S3. Un bot de pruebas** en BotFather (por ejemplo
+      `@trainerflow_pruebas_bot`). Tu cuenta de Telegram sirve para los dos
+      bots: son chats distintos.
+- [ ] **S4. Los secretos del producto en el proyecto de staging**, igual
+      que el paso 4 pero enlazado a staging y con el token del bot de
+      pruebas:
+
+      ```bash
+      supabase link --project-ref <ref-de-staging>
+      supabase secrets set TELEGRAM_BOT_TOKEN='...'        # el del bot de pruebas
+      supabase secrets set TELEGRAM_BOT_USERNAME='...'     # sin @
+      supabase secrets set TELEGRAM_WEBHOOK_SECRET='...'   # uno nuevo, no el de producción
+      supabase secrets set GEMINI_API_KEY='...'
+      ```
+
+      Son los que piden `telegram-webhook` y `generate-version`. Los de
+      Tally y de los crons (`TALLY_SIGNING_SECRET`, `CHECKIN_CRON_SECRET`,
+      `SWEEP_CRON_SECRET`) solo hacen falta si conectas esas piezas en
+      staging.
+
+      Después **vuelve a enlazar producción** (`supabase link --project-ref
+      <ref>`) si usas el CLI desde tu máquina para otras cosas.
+- [ ] **S5. Primer deploy:** Actions → Deploy → *Run workflow* → rama
+      `main`, destino `staging`.
+- [ ] **S6. Conectar el bot de pruebas** al webhook de staging (paso 6 del
+      checklist, con el ref de staging y el secreto de S4).
+- [ ] **S7. Tu perfil de entrenador en staging** (paso 9, contra la base
+      de staging).
+
+Tally es opcional: sin él, en staging se crean las rutinas a mano o desde
+plantilla, que es el camino que más se prueba de todas formas.
+
+### Usarlo
+
+- **Probar una rama antes de mergearla:** *Run workflow* → esa rama →
+  `staging`. Habla con el bot de pruebas.
+- **Empezar de cero:** en staging no hace falta borrar filas a mano:
+  `supabase db reset --linked` con staging enlazado, y se vuelven a aplicar
+  las migraciones.
+
+> ⚠️ Una migración de una rama sin mergear queda aplicada en staging. Si
+> después la cambias antes de mergear, staging queda desalineado: resetéalo.
 
 ## Comandos
 
