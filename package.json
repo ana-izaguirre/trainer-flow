@@ -25,13 +25,7 @@
     "dev:tunnel": "bash scripts/dev-tunnel.sh",
     "deno:test": "deno test --allow-env --config supabase/functions/deno.json supabase/functions"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.18.0",
-      "onFail": "download"
-    }
-  },
+  "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "@supabase/supabase-js": "^2.116.0",
     "@types/node": "^22.10.0",
