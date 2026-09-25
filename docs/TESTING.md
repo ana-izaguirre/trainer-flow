@@ -117,7 +117,14 @@ solicita generación → el proveedor devuelve 429
 
 Prueba la degradación controlada de extremo a extremo.
 
-### E2E-4 — Solicitud de cambio
+### E2E-4 — Solicitud de cambio ✅ IMPLEMENTADO
+
+`tests/e2e/change-request.test.ts`. Mismo alcance que E2E-1: el flujo de
+dominio completo contra PostgreSQL real —autorización, el contrato del
+`callback_data`, editor, validación y máquina de estados—, sin transporte
+HTTP ni API de Telegram (la entrega usa la transición directa, igual que
+E2E-1; `deliverVersion` ya tiene su propio test unitario con el
+`TelegramSender` mockeado).
 
 ```
 v1 SENT → el cliente pide un cambio → el entrenador crea v2

@@ -4,7 +4,7 @@
 |---|---|
 | **Estado** | **IMPLEMENTADA** |
 | **Depende de** | SPEC-005, SPEC-008 |
-| **Sesiones** | S-22, S-23 |
+| **Sesiones** | S-22, S-23, S-24 |
 
 ## Resultado
 
@@ -14,6 +14,7 @@
 | Los cuatro flujos (aceptar, pedir, comentar, revisar) | ✅ 33 tests |
 | El enrutado, con cuatro prefijos por el mismo canal | ✅ 9 tests |
 | Las consultas y el UNIQUE parcial | ✅ 20 tests de integración |
+| **E2E-4** — el ciclo completo contra PostgreSQL real | ✅ `tests/e2e/change-request.test.ts` |
 
 ## 1. Objetivo
 
@@ -187,7 +188,7 @@ v2: DRAFT → APPROVED → SENT
 | Unit | `canRequestChange`: `SENT` propia sí; `DRAFT` no; ajena no |
 | Unit | `parseChangeReason` para los 7 motivos y uno desconocido |
 | Integration | CA-1 a CA-8 |
-| **E2E-4** | Ciclo completo, aserverando que v1 queda byte a byte igual |
+| **E2E-4** | ✅ Ciclo completo, aserverando que v1 queda byte a byte igual |
 
 ## 10. Archivos
 
