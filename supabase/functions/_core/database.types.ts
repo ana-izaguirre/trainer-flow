@@ -833,10 +833,7 @@ export type Database = {
         Returns: undefined
       }
       mark_checkin_sent: { Args: { p_checkin_id: string }; Returns: undefined }
-      mark_link_reminded: {
-        Args: { p_version_id: string }
-        Returns: undefined
-      }
+      mark_link_reminded: { Args: { p_version_id: string }; Returns: undefined }
       open_change_request_for_client: {
         Args: { p_profile_id: string }
         Returns: {
