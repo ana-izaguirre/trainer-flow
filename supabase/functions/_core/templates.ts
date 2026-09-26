@@ -12,6 +12,7 @@
  * de aprobar, igual que haría con una propuesta de la IA.
  */
 import type { Level } from './domain/assessment.ts';
+import { canDo, equipmentTier, type EquipmentTier } from './equipment.ts';
 import type { WorkoutConstraints, WorkoutDraft } from './domain/draft.ts';
 import type { Exercise, Workout, WorkoutDay } from './domain/workout.ts';
 
@@ -21,13 +22,15 @@ export interface WorkoutTemplate {
   readonly description: string;
   readonly daysPerWeek: number;
   readonly level: Level;
-  readonly equipment: string;
+  /** El nivel de equipamiento que NECESITA (SPEC-028). */
+  readonly equipment: EquipmentTier;
   readonly workout: Workout;
 }
 
 export interface TemplateCriteria {
   readonly daysPerWeek?: number;
   readonly level?: Level;
+  /** El texto del formulario tal cual llega («Mancuernas, Banco»). */
   readonly equipment?: string;
 }
 
@@ -113,7 +116,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Trabaja todo el cuerpo en cada sesión. Buen punto de partida para empezar.',
     daysPerWeek: 3,
     level: 'beginner',
-    equipment: 'Gimnasio',
+    equipment: 'gym',
     workout: {
       summary: 'Cuerpo completo tres veces por semana, con un día de descanso entre sesiones.',
       warnings: [],
@@ -158,7 +161,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Dos sesiones de torso y dos de pierna. El reparto más común a nivel intermedio.',
     daysPerWeek: 4,
     level: 'intermediate',
-    equipment: 'Gimnasio',
+    equipment: 'gym',
     workout: {
       summary: 'Torso y pierna alternados, cuatro sesiones por semana.',
       warnings: [],
@@ -215,7 +218,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Solo peso corporal. No hace falta nada de material.',
     daysPerWeek: 3,
     level: 'beginner',
-    equipment: 'Ninguno',
+    equipment: 'none',
     workout: {
       summary: 'Tres sesiones de peso corporal, sin ningún equipamiento.',
       warnings: [],
@@ -260,7 +263,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Alto volumen, seis sesiones. Para quien ya entrena con constancia.',
     daysPerWeek: 6,
     level: 'advanced',
-    equipment: 'Gimnasio',
+    equipment: 'gym',
     workout: {
       summary: 'Empuje, tirón y pierna, dos veces cada uno por semana.',
       warnings: [],
@@ -339,7 +342,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Una sesión que toca todos los grupos grandes. Con tan poca frecuencia, lo que cuenta es no saltarla.',
     daysPerWeek: 1,
     level: 'beginner',
-    equipment: 'Gimnasio',
+    equipment: 'gym',
     workout: {
       summary: 'Una sesión de cuerpo completo por semana.',
       warnings: [],
@@ -366,7 +369,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Cuerpo completo dos veces por semana. Para quien empieza con poco tiempo.',
     daysPerWeek: 2,
     level: 'beginner',
-    equipment: 'Gimnasio',
+    equipment: 'gym',
     workout: {
       summary: 'Cuerpo completo dos veces por semana, con al menos un día de descanso entre sesiones.',
       warnings: [],
@@ -403,7 +406,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Torso y pierna dos veces cada uno, con una sesión de cuerpo completo más ligera en medio.',
     daysPerWeek: 5,
     level: 'intermediate',
-    equipment: 'Gimnasio',
+    equipment: 'gym',
     workout: {
       summary: 'Torso y pierna dos veces por semana, con un día ligero de cuerpo completo en medio.',
       warnings: [],
@@ -433,7 +436,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
     description: 'Cuatro sesiones de fuerza y tres de recuperación activa. El descanso es parte del plan.',
     daysPerWeek: 7,
     level: 'intermediate',
-    equipment: 'Gimnasio',
+    equipment: 'gym',
     workout: {
       summary:
         'Cuatro sesiones de fuerza y tres de recuperación activa. Siete días de entrenamiento ' +
@@ -475,6 +478,100 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
       ],
     },
   },
+
+  // ── SPEC-028: en casa, con material ────────────────────────────────────
+  // Solo de 3 días: con el equipamiento pesando más que los días, `adaptDays`
+  // las lleva a los que pida el cliente. Una por combinación serían 28.
+
+  {
+    id: 'home-dumbbells-3d',
+    name: 'En casa, con mancuernas — 3 días',
+    description: 'Cuerpo completo con mancuernas. Sirve también con kettlebell o barra.',
+    daysPerWeek: 3,
+    level: 'beginner',
+    equipment: 'free_weights',
+    workout: {
+      summary: 'Cuerpo completo tres veces por semana, en casa, con mancuernas.',
+      warnings: [],
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'Cuerpo completo A',
+          exercises: [
+            ex('Sentadilla goblet', 3, '10-12', 90, 'Si usas kettlebell o barra, cambia por el equivalente'),
+            ex('Press de pecho con mancuernas en el suelo', 3, '10-12', 90),
+            ex('Remo con mancuerna', 3, '10-12 por brazo', 60),
+            ex('Plancha frontal', 3, '30 s', 45),
+          ],
+        },
+        {
+          dayNumber: 2,
+          focus: 'Cuerpo completo B',
+          exercises: [
+            ex('Peso muerto rumano con mancuernas', 3, '10-12', 90),
+            ex('Press de hombros con mancuernas', 3, '10-12', 90),
+            ex('Zancadas con mancuernas', 3, '10 por pierna', 90),
+            ex('Curl de bíceps', 2, '12-15', 60),
+          ],
+        },
+        {
+          dayNumber: 3,
+          focus: 'Cuerpo completo C',
+          exercises: [
+            ex('Sentadilla búlgara con mancuernas', 3, '8-10 por pierna', 90),
+            ex('Flexiones', 3, '10-15', 60),
+            ex('Remo inclinado con dos mancuernas', 3, '10-12', 60),
+            ex('Puente de glúteo con mancuerna', 3, '12-15', 60),
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    id: 'home-bands-3d',
+    name: 'En casa, con bandas — 3 días',
+    description: 'Cuerpo completo con bandas elásticas y peso corporal.',
+    daysPerWeek: 3,
+    level: 'beginner',
+    equipment: 'bands',
+    workout: {
+      summary: 'Cuerpo completo tres veces por semana, con bandas elásticas y peso corporal.',
+      warnings: [],
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'Cuerpo completo A',
+          exercises: [
+            ex('Sentadilla con banda', 3, '12-15', 60, 'Elige una banda que te deje terminar las repeticiones con buena técnica'),
+            ex('Flexiones', 3, '10-15', 60),
+            ex('Remo con banda', 3, '12-15', 60),
+            ex('Plancha frontal', 3, '30 s', 45),
+          ],
+        },
+        {
+          dayNumber: 2,
+          focus: 'Cuerpo completo B',
+          exercises: [
+            ex('Puente de glúteo con banda', 3, '15', 45),
+            ex('Press de hombros con banda', 3, '12-15', 60),
+            ex('Jalón con banda', 3, '12-15', 60),
+            ex('Caminata lateral con banda', 3, '12 por lado', 45),
+          ],
+        },
+        {
+          dayNumber: 3,
+          focus: 'Cuerpo completo C',
+          exercises: [
+            ex('Zancadas', 3, '10 por pierna', 60),
+            ex('Aperturas con banda', 3, '12-15', 60),
+            ex('Face pull con banda', 3, '15-20', 45, 'Cuida la postura del hombro'),
+            ex('Pallof press con banda', 3, '10 por lado', 45),
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -485,40 +582,39 @@ export function findTemplate(id: string): WorkoutTemplate | undefined {
   return TEMPLATES.find((template) => template.id === id);
 }
 
-/** Minúsculas y sin acentos, para comparar textos que escribe una persona. */
-function normalize(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim();
-}
-
-function equipmentMatches(templateEquipment: string, clientEquipment: string): boolean {
-  const a = normalize(templateEquipment);
-  const b = normalize(clientEquipment);
-  return a === b || a.includes(b) || b.includes(a);
-}
-
 /**
  * Las plantillas ordenadas por cuánto encajan con lo que pidió el cliente.
  *
  * **Ordena, no filtra.** Si filtrara, un cliente con criterios poco comunes se
  * quedaría sin ninguna opción justo cuando la IA acaba de fallar, que es
  * exactamente el momento en que las plantillas tienen que estar ahí.
+ *
+ * ┌─ EL ORDEN (SPEC-028 regla 1) ──────────────────────────────────────────┐
+ * │ 1. Las que PUEDE hacer con su equipo                                   │
+ * │ 2. Entre esas, las de SU nivel: con gimnasio, primero las de gimnasio  │
+ * │ 3. Los días exactos                                                    │
+ * │ 4. El nivel de experiencia                                             │
+ * │                                                                        │
+ * │ El equipamiento va antes que los días porque un ejercicio que no se    │
+ * │ puede hacer es peor que un número de días distinto, y eso último ya lo │
+ * │ ajusta `adaptDays`. Cada criterio pesa más que la suma de los de       │
+ * │ abajo, así que el orden es estricto.                                   │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * Con el equipamiento desconocido (sin evaluación, o solo «Otro»), los dos
+ * primeros no cuentan.
  */
 export function templatesFor(criteria: TemplateCriteria): readonly WorkoutTemplate[] {
+  const cliente = equipmentTier(criteria.equipment);
+
   const score = (template: WorkoutTemplate): number => {
     let points = 0;
+    if (cliente !== null && canDo(cliente, template.equipment)) points += 8;
+    if (cliente !== null && cliente === template.equipment) points += 4;
     if (criteria.daysPerWeek !== undefined && template.daysPerWeek === criteria.daysPerWeek) {
-      points += 3;
-    }
-    if (criteria.level !== undefined && template.level === criteria.level) {
       points += 2;
     }
-    if (criteria.equipment !== undefined && equipmentMatches(template.equipment, criteria.equipment)) {
-      points += 1;
-    }
+    if (criteria.level !== undefined && template.level === criteria.level) points += 1;
     return points;
   };
 

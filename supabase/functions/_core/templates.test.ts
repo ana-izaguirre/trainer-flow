@@ -13,6 +13,7 @@ import { LEVELS } from './domain/assessment.ts';
 import { validateDraft } from './domain/validate-draft.ts';
 import { WORKOUT_LIMITS } from './domain/workout.ts';
 import { formatForClient } from './telegram/client-format.ts';
+import { EQUIPMENT_TIERS } from './equipment.ts';
 import { TEMPLATES, adaptDays, applyTemplate, findTemplate, templatesFor } from './templates.ts';
 
 describe('el catálogo', () => {
@@ -28,9 +29,9 @@ describe('el catálogo', () => {
     }
   });
 
-  it('incluye al menos una que no necesita gimnasio', () => {
-    // Si el cliente no tiene equipo, tiene que haber una opción para él.
-    expect(TEMPLATES.some((t) => t.equipment.toLowerCase().includes('ninguno'))).toBe(true);
+  // SPEC-028: para cada nivel de equipamiento, al menos una que pueda hacer.
+  it.each(EQUIPMENT_TIERS)('incluye al menos una para el nivel %s', (nivel) => {
+    expect(TEMPLATES.some((t) => t.equipment === nivel)).toBe(true);
   });
 
   it('los ids son únicos', () => {
@@ -112,7 +113,7 @@ describe('templatesFor', () => {
     const resultado = templatesFor({
       daysPerWeek: 4,
       level: 'intermediate',
-      equipment: 'Gimnasio',
+      equipment: 'Máquinas de gimnasio',
     });
 
     expect(resultado[0]?.id).toBe('upper-lower-4d');
@@ -122,7 +123,7 @@ describe('templatesFor', () => {
     const resultado = templatesFor({
       daysPerWeek: 3,
       level: 'beginner',
-      equipment: 'Ninguno',
+      equipment: 'Sin equipamiento',
     });
 
     expect(resultado[0]?.id).toBe('home-bodyweight-3d');
@@ -349,7 +350,7 @@ describe('SPEC-008 ampliación — una plantilla para cada número de días', ()
     // Un principiante de 7 días: la de 7 es intermedia, y aun así va arriba.
     // Tres puntos por los días frente a dos por el nivel (regla 7).
     for (let dias = 1; dias <= 7; dias += 1) {
-      const primera = templatesFor({ daysPerWeek: dias, level: 'beginner', equipment: 'Gimnasio' })[0];
+      const primera = templatesFor({ daysPerWeek: dias, level: 'beginner', equipment: 'Máquinas de gimnasio' })[0];
       expect(primera?.daysPerWeek, `${dias} días`).toBe(dias);
     }
   });
@@ -416,5 +417,92 @@ describe('SPEC-008 ampliación — una plantilla para cada número de días', ()
       if (!result.ok) return;
       expect(result.workout.warnings[0]).toMatch(/se ajustaron los d[ií]as/i);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-028 — el equipamiento pesa más que los días', () => {
+  // ┌─ EL BUG QUE ESTO CIERRA ──────────────────────────────────────────────┐
+  // │ La plantilla de casa decía «Ninguno», que no es ninguna opción del    │
+  // │ formulario. A un cliente con «Sin equipamiento» le salía primero una  │
+  // │ de gimnasio. Los tests usaban «Ninguno» y no lo veían: estos usan los │
+  // │ textos REALES del formulario.                                         │
+  // └────────────────────────────────────────────────────────────────────────┘
+  const primera = (equipment: string | undefined, daysPerWeek?: number) =>
+    templatesFor({
+      ...(equipment === undefined ? {} : { equipment }),
+      ...(daysPerWeek === undefined ? {} : { daysPerWeek }),
+      level: 'beginner',
+    })[0]?.id;
+
+  it('CA-1 · sin equipo y 3 días → la de peso corporal', () => {
+    expect(primera('Sin equipamiento', 3)).toBe('home-bodyweight-3d');
+  });
+
+  it('CA-2 · sin equipo y 2 días → la de peso corporal, aunque sea de 3', () => {
+    expect(primera('Sin equipamiento', 2)).toBe('home-bodyweight-3d');
+  });
+
+  it('CA-3 · mancuernas y bandas → la de mancuernas', () => {
+    expect(primera('Mancuernas, Bandas elásticas', 3)).toBe('home-dumbbells-3d');
+    expect(primera('Mancuernas, Bandas elásticas', 5)).toBe('home-dumbbells-3d');
+  });
+
+  it('CA-4 · solo bandas → la de bandas, y lo que no puede hacer va al final', () => {
+    const orden = templatesFor({ equipment: 'Bandas elásticas', daysPerWeek: 2 });
+
+    expect(orden[0]?.id).toBe('home-bands-3d');
+    const primeraQueNoPuede = orden.findIndex((t) => t.equipment === 'gym' || t.equipment === 'free_weights');
+    const ultimaQuePuede = orden.findLastIndex((t) => t.equipment === 'bands' || t.equipment === 'none');
+    expect(ultimaQuePuede).toBeLessThan(primeraQueNoPuede);
+  });
+
+  it.each([1, 2, 3, 4, 5, 6, 7])('CA-5 · gimnasio y %i días → una de gimnasio de esos días', (dias) => {
+    const [t] = templatesFor({ equipment: 'Máquinas de gimnasio', daysPerWeek: dias, level: 'beginner' });
+    expect(t?.equipment).toBe('gym');
+    expect(t?.daysPerWeek).toBe(dias);
+  });
+
+  it('con gimnasio, las de casa van detrás de las de gimnasio', () => {
+    // Puede hacerlas, pero no es lo que tiene: primero las de su nivel.
+    const orden = templatesFor({ equipment: 'Máquinas de gimnasio', daysPerWeek: 3, level: 'beginner' });
+    expect(orden[0]?.id).toBe('full-body-3d');
+    expect(orden.findIndex((t) => t.equipment !== 'gym')).toBe(
+      orden.filter((t) => t.equipment === 'gym').length,
+    );
+  });
+
+  it.each([
+    ['solo «Otro»', 'Otro'],
+    ['sin evaluación', undefined],
+  ])('CA-6 · %s: el equipamiento no cuenta, solo días y nivel', (_caso, equipment) => {
+    for (let dias = 1; dias <= 7; dias += 1) {
+      expect(templatesFor({ ...(equipment === undefined ? {} : { equipment }), daysPerWeek: dias })[0]?.daysPerWeek).toBe(dias);
+    }
+  });
+
+  it('CA-7 · «Sin equipamiento, Mancuernas» cuenta como mancuernas', () => {
+    expect(primera('Sin equipamiento, Mancuernas', 3)).toBe('home-dumbbells-3d');
+  });
+
+  it.each([
+    'Sin equipamiento',
+    'Bandas elásticas',
+    'Mancuernas',
+    'Máquinas de gimnasio',
+    'Otro',
+  ])('CA-8 · con «%s» salen TODAS', (equipment) => {
+    expect(templatesFor({ equipment, daysPerWeek: 4 })).toHaveLength(TEMPLATES.length);
+  });
+
+  it('CA-8 · el catálogo son las 10', () => {
+    expect(TEMPLATES).toHaveLength(10);
+  });
+
+  // CA-9: las dos nuevas pasan por los `it.each` de arriba, que recorren
+  // todas las plantillas con sus días y ajustadas de 1 a 7. Aquí, que existen.
+  it.each(['home-dumbbells-3d', 'home-bands-3d'])('CA-9 · %s existe y es de 3 días', (id) => {
+    expect(findTemplate(id)?.daysPerWeek).toBe(3);
   });
 });

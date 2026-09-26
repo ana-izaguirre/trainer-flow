@@ -181,13 +181,14 @@ días ajustados pasa a ir antes que los avisos propios de la plantilla (hasta
 ahora ninguna tenía): es el que explica por qué la rutina no se parece a la
 elegida. `tpl:strength-recovery-7d:<uuid>` ocupa 61 de los 64 bytes.
 
-> **Abierto — el equipamiento pesa menos que los días.** Con una plantilla
+> **Resuelto en SPEC-028 — el equipamiento pesaba menos que los días.** Con una plantilla
 > para cada número de días, a un cliente **sin equipo** de 2 días le sale
 > primero `full-body-2d` (gimnasio): los días suman 3 y el equipamiento 1.
-> Antes le salía primero la de casa. Nada se rompe —se listan todas—, pero la
-> primera opción no le sirve. Además no hay plantillas para bandas ni para
-> mancuernas en casa. Queda para una spec propia, que necesita saber qué
-> opciones de «Equipamiento disponible» tiene el formulario de Tally.
+> Nada se rompe —se listan todas—, pero la primera opción no le sirve.
+> Además no hay plantillas para bandas ni para mancuernas en casa.
+> **Propuesta en SPEC-028**, que encontró además un bug anterior: la
+> plantilla de casa compara contra «Ninguno», que no es una opción del
+> formulario, así que nunca encajaba.
 
 ### Las tres fuentes convergen
 
@@ -284,6 +285,9 @@ explica la sintaxis esperada, no un error genérico.
    quedaría sin ninguna opción justo cuando la IA acaba de fallar, que es
    exactamente el momento en que las plantillas tienen que estar ahí.
    `templatesFor` nunca devuelve una lista vacía.
+   *Desde SPEC-028, el equipamiento va antes que los días: primero las que
+   el cliente puede hacer con su equipo, después su mismo nivel, después
+   los días y al final la experiencia.*
 8. **Nunca se selecciona una plantilla automáticamente** (§6). El entrenador
    elige siempre.
 9. **Si el cliente declaró limitaciones, `applyTemplate` inyecta un aviso.**
