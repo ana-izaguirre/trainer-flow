@@ -686,6 +686,7 @@ async function readDelivery(
     // versión se devuelve igual para poder avisar al entrenador (CA-3).
     clientChatId: toNumberOrNull(fila.client_chat_id),
     trainerChatId: Number(fila.trainer_chat_id),
+    versionNumber: Number(fila.version_number),
     // Los tres van juntos o no va ninguno: una rutina manual no tiene
     // formulario detrás (SPEC-005 regla 13).
     plan:

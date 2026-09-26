@@ -584,6 +584,7 @@ export type Database = {
           state: Database["public"]["Enums"]["version_state"]
           trainer_chat_id: number
           version_id: string
+          version_number: number
         }[]
       }
       assessment_for_version: {
@@ -903,6 +904,7 @@ export type Database = {
           state: Database["public"]["Enums"]["version_state"]
           trainer_chat_id: number
           version_id: string
+          version_number: number
         }[]
       }
       stale_generating_versions: {
@@ -1023,6 +1025,7 @@ export type Database = {
           state: Database["public"]["Enums"]["version_state"]
           trainer_chat_id: number
           version_id: string
+          version_number: number
         }[]
       }
       version_for_generation: {

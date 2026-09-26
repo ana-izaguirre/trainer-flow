@@ -119,7 +119,11 @@ async function atenderCliente(
     await sendLongMessage(
       deps.sender,
       actor.telegramChatId,
-      formatForClient(rutina.content, { clientName: rutina.clientName, plan: rutina.plan }),
+      formatForClient(rutina.content, {
+        clientName: rutina.clientName,
+        plan: rutina.plan,
+        versionNumber: rutina.versionNumber,
+      }),
       // Los mismos botones que traía al entregarse: sin ellos, «pedir un
       // cambio» solo existiría en el mensaje original (SPEC-010 regla 10).
       buildKeyboard(CLIENT_ACTIONS, rutina.versionId),

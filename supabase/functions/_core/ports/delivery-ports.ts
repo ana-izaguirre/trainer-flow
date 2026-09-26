@@ -44,6 +44,8 @@ export interface VersionForDelivery {
   readonly trainerChatId: number;
   /** `null` en una rutina manual o de plantilla (SPEC-005 regla 13). */
   readonly plan: PlanSummary | null;
+  /** SPEC-030 regla 10: `1` es la primera entrega, más que eso es una revisión. */
+  readonly versionNumber: number;
 }
 
 export interface DeliveryRepo {

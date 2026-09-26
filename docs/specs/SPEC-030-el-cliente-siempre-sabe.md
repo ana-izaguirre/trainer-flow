@@ -21,10 +21,25 @@
 | 14 | `/pendientes` con las dos listas (`DRAFT` y `APPROVED` sin abrir) | ✅ migración 0028, `trainer_awaiting_link` |
 | 3 | `force_reply` en cada pregunta de texto libre | ⏸️ Pendiente — ver nota |
 | 9 | Acuse por botón del check-in (`answerCallback` con texto) | ✅ `formatCheckinAck`, `ButtonReplyOutcome`, CA-9 |
-| 10 | Cabecera «actualizada» en la v2 | ⏸️ Pendiente |
+| 10 | Cabecera «actualizada» en la v2 | ✅ migración 0029, `versionNumber`, CA-10 |
 | 13 | Aviso de enlace sin abrir 48h | ⏸️ Pendiente — ver nota |
 
-**1590 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 101 Deno.**
+**1594 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 101 Deno.**
+
+### Regla 10 — de dónde salió `versionNumber`
+
+`version_for_delivery` (y las dos que se apoyan en ella, `approved_version_for_client`
+y `sent_version_for_profile`) no traía el número de versión: solo hacía falta
+para escribirle al cliente, y el cliente nunca lo había visto. La migración
+0029 lo suma a las tres, con el `DROP` + `CREATE` que exige cambiar un
+`returns table` (`create or replace` no puede).
+
+`formatForClient` decide la cabecera con un solo número: `versionNumber > 1`
+→ *"aquí está tu rutina actualizada"*; si no, la de siempre, *"tu rutina está
+lista"*. Como `/rutina` (SPEC-023) comparte la misma función de formato, un
+cliente que vuelve a pedir su rutina en la v2 también la ve como
+"actualizada" — no solo en el momento de la entrega, que es lo consistente:
+sigue siendo su v2 se mire cuando se mire.
 
 ### Regla 9 — cómo se resolvió el choque con «se responde antes del trabajo»
 
@@ -47,14 +62,11 @@ un `null` que nadie puede alcanzar escondido en el tipo compartido con
 `handleCheckinText` (que sí puede ser `null`: un mensaje de texto no tiene
 callback al que responder).
 
-### Por qué las reglas 3, 10 y 13 quedaron fuera de este PR
+### Por qué las reglas 3 y 13 quedaron fuera de este PR
 
 - **Regla 3** (`force_reply`) necesita un tipo nuevo en `TelegramSender` y
   tocar cada `sendMessage` de cada test del repo (~15 archivos): mucho para
   lo que resuelve, cuando el texto del mensaje ya dice dónde escribir.
-- **Regla 10** (cabecera «actualizada») necesita `versionNumber` en
-  `VersionForDelivery`, que hoy no lo lleva: toca su función SQL, el puerto
-  y el adaptador solo para un cambio de cabecera. Se hace junto con la 13.
 - **Regla 13** (aviso de enlace sin abrir 48h) es la única que agrega un
   **cron nuevo en producción** — y Ana ya tuvo que configurar pg_cron a
   mano esta sesión. `trainer_awaiting_link` (regla 14, ya implementada) es

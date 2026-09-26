@@ -35,7 +35,7 @@ const RUTINA: Workout = {
 };
 
 const PLAN = { goal: 'Ganancia muscular', daysPerWeek: 4, sessionMinutes: 60 };
-const CONTEXTO = { clientName: 'Carlos', plan: PLAN };
+const CONTEXTO = { clientName: 'Carlos', plan: PLAN, versionNumber: 1 };
 
 // ---------------------------------------------------------------------------
 
@@ -134,11 +134,33 @@ describe('el formato no se rompe', () => {
 describe('una rutina sin evaluación detrás', () => {
   it('omite la línea de objetivo en vez de inventarla', () => {
     // Regla 13: una rutina manual o de plantilla no tiene formulario de Tally.
-    const texto = formatForClient(RUTINA, { clientName: 'Carlos', plan: null });
+    const texto = formatForClient(RUTINA, { clientName: 'Carlos', plan: null, versionNumber: 1 });
 
     expect(texto).toContain('Hola Carlos');
     expect(texto).not.toContain('🎯');
     // Y los ejercicios siguen ahí: es una rutina completa.
     expect(texto).toContain('Remo');
+  });
+});
+
+describe('SPEC-030 regla 10 · la v2 llega presentada como tal', () => {
+  it('CA-10 · la primera rutina dice que está lista', () => {
+    const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 1 });
+
+    expect(texto).toContain('tu rutina está lista');
+    expect(texto).not.toContain('actualizada');
+  });
+
+  it('CA-10 · una v2 dice que está actualizada, no que está «lista»', () => {
+    const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 2 });
+
+    expect(texto).toContain('tu rutina actualizada');
+    expect(texto).not.toContain('está lista');
+  });
+
+  it('una v3 (o más) también', () => {
+    const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 3 });
+
+    expect(texto).toContain('actualizada');
   });
 });

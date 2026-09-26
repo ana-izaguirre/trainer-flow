@@ -59,7 +59,10 @@ const CLIENTE: ClientForLink = {
 const USUARIO = { telegramUserId: 500, chatId: 500 };
 const PERFIL = { profileId: 'perfil-cliente', chatId: 500 };
 
-function version(state: VersionForDelivery['state'] = 'APPROVED'): VersionForDelivery {
+function version(
+  state: VersionForDelivery['state'] = 'APPROVED',
+  versionNumber = 1,
+): VersionForDelivery {
   return {
     versionId: 'v1',
     state,
@@ -68,6 +71,7 @@ function version(state: VersionForDelivery['state'] = 'APPROVED'): VersionForDel
     clientChatId: 500,
     trainerChatId: 10,
     plan: { goal: 'Fuerza', daysPerWeek: 3, sessionMinutes: 60 },
+    versionNumber,
   };
 }
 
@@ -449,6 +453,17 @@ describe('entregar', () => {
     const alCliente = mensajes.find((m) => m.chatId === 500)!;
     expect(alCliente.text).toContain('tu rutina está lista');
     expect(alCliente.text).not.toContain('🎯');
+  });
+
+  it('SPEC-030 regla 10 · una v2 se entrega presentada como «actualizada»', async () => {
+    const { deps, mensajes } = espia({ version: version('APPROVED', 2) });
+
+    const outcome = await deliverVersion('v1', deps);
+
+    expect(outcome.kind).toBe('delivered');
+    const alCliente = mensajes.find((m) => m.chatId === 500)!;
+    expect(alCliente.text).toContain('tu rutina actualizada');
+    expect(alCliente.text).not.toContain('está lista');
   });
 
   it('una versión que no existe no revienta', async () => {
