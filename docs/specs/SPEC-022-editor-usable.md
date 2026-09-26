@@ -402,3 +402,11 @@ mismo que moverlos.
 Y el formato **no cubre las notas por ejercicio**: siguen siendo `/nota`. Meterlas
 en el dictado pedía una segunda sintaxis dentro del renglón, y eso es
 exactamente lo que esta spec vino a quitar.
+
+## 14. Ampliación: `/crear_rutina <cliente>`, de un mensaje
+
+Ver **SPEC-031**. Añade que la primera línea de `/crear_rutina` pueda nombrar
+al cliente — `/cliente <nombre>` + ✍️/📋 + dictar, en un solo mensaje. No
+cambia nada de lo descrito arriba: sigue siendo el mismo comando, el mismo
+formato de días, y `currentDraft` sigue siendo el contexto cuando el nombre no
+matchea a nadie.

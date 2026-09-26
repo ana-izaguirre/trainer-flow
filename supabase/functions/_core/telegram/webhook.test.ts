@@ -1250,6 +1250,91 @@ describe('el camino sin IA se enruta', () => {
 
 // ---------------------------------------------------------------------------
 
+describe('SPEC-031 · /crear_rutina <cliente>, de un mensaje', () => {
+  /** Coincide con el `versionId` que `fakeCreation().findVersion()` da por defecto. */
+  const VERSION = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  function detalleNew() {
+    return {
+      clientId: 'c1',
+      fullName: 'Carlos',
+      versionState: 'NEW' as const,
+      versionNumber: 1,
+      linked: true,
+      pendingCheckinDays: null,
+      versionId: VERSION,
+      goal: null,
+      level: null,
+      daysPerWeek: null,
+      sessionMinutes: null,
+      equipment: null,
+      hasLimitations: false,
+      sentDaysAgo: null,
+      lastCheckin: null,
+      openChangeRequest: null,
+    };
+  }
+
+  it('un nombre que matchea llena la versión SIN pasar por el editor', async () => {
+    const commands = fakeCommands({
+      clientes: [{ clientId: 'c1', fullName: 'Carlos' }],
+      detalle: detalleNew(),
+    });
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(comando('/crear_rutina Carlos\nDía 1: Empuje\nPress banca 4x8 90'), {
+      commands,
+      creation,
+    });
+
+    expect(await result).toMatchObject({ quickCreate: { kind: 'filled', versionId: VERSION } });
+    expect(creation.pasos).toContain('fillVersion:manual');
+    // No pasó por `currentDraft`: el editor de siempre nunca se llamó.
+    expect(creation.pasos).not.toContain('currentDraft');
+  });
+
+  it('sin nombre que matchee, cae exactamente al editor de siempre', async () => {
+    const commands = fakeCommands(); // sin clientes: ningún nombre puede matchear
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(comando('/crear_rutina\nDía 1: Empuje\nPress banca 4x8 90'), {
+      commands,
+      creation,
+    });
+
+    const outcome = await result;
+    expect(outcome).not.toHaveProperty('quickCreate');
+    expect(outcome).toMatchObject({ editor: { kind: 'edited' } });
+    expect(creation.pasos).toContain('currentDraft');
+  });
+
+  it('un CLIENTE que escribe /crear_rutina no dispara el atajo', async () => {
+    const repo = fakeRepo({
+      findIdentity: async () => ({
+        profileId: 'p-cliente',
+        role: 'client' as const,
+        telegramUserId: 500,
+        telegramChatId: 500,
+      }),
+    });
+    const commands = fakeCommands({
+      clientes: [{ clientId: 'c1', fullName: 'Carlos' }],
+      detalle: detalleNew(),
+    });
+
+    const { result } = ejecutar(comando('/crear_rutina Carlos\nDía 1: Empuje\nPress banca 4x8 90'), {
+      repo,
+      commands,
+    });
+
+    const outcome = await result;
+    expect(outcome).not.toHaveProperty('quickCreate');
+    expect(commands.pasos).not.toContain('clients');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('las solicitudes de cambio se enrutan', () => {
   const VERSION_SENT = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
 

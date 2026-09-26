@@ -221,6 +221,23 @@ export function formatAmbiguous(
   }));
 }
 
+/**
+ * SPEC-031 §3.6 — Ambigüedad al nombrar un cliente EN el mismo mensaje que
+ * la rutina. Sin botones a propósito: un botón `cli:` solo abre la ficha, y
+ * la rutina ya escrita se perdería. Se lista y se pide repetir el comando
+ * entero con un nombre más específico.
+ */
+export function formatQuickCreateAmbiguous(
+  clients: readonly { fullName: string }[],
+): string {
+  const nombres = clients.slice(0, PAGE_SIZE).map((c) => escapeMarkdownV2(c.fullName));
+
+  return [
+    `Hay varios clientes que encajan: ${nombres.join(', ')}\\.`,
+    `Repite el comando con el nombre completo, por ejemplo /crear\\_rutina ${nombres[0]}\\.`,
+  ].join('\n');
+}
+
 export function formatNotFound(suggestions: readonly { fullName: string }[]): string {
   if (suggestions.length === 0) return 'No tengo a nadie con ese nombre\\.';
 

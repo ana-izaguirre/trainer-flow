@@ -220,7 +220,13 @@ function parseSetNote(tokens: readonly string[]): ParseResult {
 // ---------------------------------------------------------------------------
 
 /** Los días se mantienen ordenados aunque se creen desordenados. */
-function withDays(workout: Workout, days: readonly WorkoutDay[]): Workout {
+/**
+ * Exportada: SPEC-031 la usa directo, sin pasar por `applyEditorCommand`.
+ * `setDays` nunca falla (no hay `ok:false` posible para ella), así que
+ * envolverla en `ApplyResult` allí solo obligaría a un `if (!ok)` que ningún
+ * test podría alcanzar — una rama muerta en un módulo con 100% obligatorio.
+ */
+export function withDays(workout: Workout, days: readonly WorkoutDay[]): Workout {
   return { ...workout, days: days.toSorted((a, b) => a.dayNumber - b.dayNumber) };
 }
 
