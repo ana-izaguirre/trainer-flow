@@ -12,6 +12,7 @@
  *
  * Qué hace cada botón al pulsarse es SPEC-004. Esto solo los dibuja.
  */
+import type { VersionState } from '../domain/version.ts';
 import { buildCallbackData, type CallbackAction } from './callback-data.ts';
 
 export interface InlineButton {
@@ -36,6 +37,7 @@ const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
   revise: '✏️ Crear v2',
   intake: '📄 Ver evaluación',
   link: '🔗 Reenviar enlace',
+  reassess: '📝 Pedir actualización',
 };
 
 /**
@@ -86,6 +88,31 @@ export const RETRYABLE_FALLBACK_ACTIONS: readonly CallbackAction[] = [
   'template',
   'manual',
 ];
+
+/**
+ * Qué se puede hacer con la versión vigente de un cliente, según su estado.
+ *
+ * La usan la ficha de `/cliente` (SPEC-007 regla 7) y el aviso de datos
+ * actualizados (SPEC-027): los mismos botones en los dos sitios. El porqué de
+ * cada exclusión está junto a `keyboardForDetail` y en docs/STATE-MACHINE.md.
+ */
+export function actionsForState(state: VersionState | null): readonly CallbackAction[] {
+  switch (state) {
+    case 'NEW':
+      return NEW_ACTIONS;
+    case 'GENERATING':
+      return ['intake'];
+    case 'DRAFT':
+      return ['approve', 'reject', 'intake'];
+    case 'APPROVED':
+      return ['reject', 'intake'];
+    case 'SENT':
+    case 'REJECTED':
+      return ['revise', 'intake'];
+    default:
+      return [];
+  }
+}
 
 /**
  * Una fila por defecto: en un móvil tres botones caben sin apretarse.

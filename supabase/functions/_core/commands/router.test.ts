@@ -461,6 +461,14 @@ describe('SPEC-023 · lo que SÍ puede hacer un cliente', () => {
     expect(mensajes[0]).not.toContain('solo lo puede consultar');
   });
 
+  it('SPEC-027 · su ayuda le dice que puede actualizar sus datos', async () => {
+    const { deps, mensajes } = espia();
+
+    await handleCommand('ayuda', '', CLIENTE, deps);
+
+    expect(mensajes[0]).toContain('/actualizar');
+  });
+
   it('un comando del entrenador le devuelve SU ayuda, no un muro', async () => {
     const { deps, pasos, mensajes } = espia();
 

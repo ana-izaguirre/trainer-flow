@@ -29,6 +29,7 @@ import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { GenerationTrigger } from '../_core/ports/generation-trigger.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
+import type { UpdateTokenRepo } from '../_core/ports/update-ports.ts';
 import { handleTelegramWebhook, outcomeToStatus } from '../_core/telegram/webhook.ts';
 import type { Logger } from '../_shared/logger.ts';
 import { createLogger } from '../_shared/logger.ts';
@@ -45,8 +46,10 @@ import {
   createDeliveryRepo,
   createQueryRepo,
   createTelegramRepo,
+  createUpdateTokenRepo,
 } from '../_shared/db.ts';
-import { requireEnv } from '../_shared/env.ts';
+import { optionalEnv, requireEnv } from '../_shared/env.ts';
+import { newLinkToken } from '../_shared/link-token.ts';
 
 const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
@@ -73,6 +76,16 @@ export interface HandlerDeps {
   readonly linkRepo: () => LinkResendRepo;
   /** Sin `@`. Arma el deep link al reenviar (SPEC-014). */
   readonly botUsername: string;
+  /** SPEC-027: emite el token de actualización de datos. */
+  readonly updateTokenRepo: () => UpdateTokenRepo;
+  /** Genera el token. El mismo CSPRNG que el `link_token`. */
+  readonly newToken: () => string;
+  /**
+   * SPEC-027 §12: el enlace público del formulario. Opcional A PROPÓSITO: sin
+   * él, el bot sigue funcionando y `/actualizar` explica que falta, en vez
+   * de que la función entera no arranque.
+   */
+  readonly tallyFormUrl: string | null;
 }
 
 /**
@@ -103,6 +116,10 @@ export function readDeps(): HandlerDeps {
     changeRepo: (requestId) => createChangeRequestRepo(db, requestId),
     intakeRepo: () => createIntakeRepo(db),
     linkRepo: () => createLinkResendRepo(db),
+    updateTokenRepo: () => createUpdateTokenRepo(db),
+    newToken: newLinkToken,
+    // No es un secreto: es el enlace público que ya se le manda a cada cliente.
+    tallyFormUrl: optionalEnv('TALLY_FORM_URL'),
   };
 }
 
@@ -147,6 +164,13 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
           changes: { repo: deps.changeRepo(requestId), sender },
           intake: { repo: deps.intakeRepo(), sender },
           link: { repo: deps.linkRepo(), sender, botUsername: deps.botUsername },
+          updates: {
+            repo: deps.updateTokenRepo(),
+            clients: deps.linkRepo(),
+            sender,
+            newToken: deps.newToken,
+            formUrl: deps.tallyFormUrl,
+          },
         },
       );
 

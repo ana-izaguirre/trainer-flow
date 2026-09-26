@@ -231,6 +231,22 @@ describe('los botones de la ficha — SPEC-007 regla 7', () => {
       expect(acciones.some((c) => c.startsWith('act:link:'))).toBe(false);
     });
 
+    // SPEC-027 regla 3. Vinculado, en su lugar va «📝 Pedir actualización»:
+    // sin vincular no hay a quién mandarle el enlace del formulario.
+    it.each(['NEW', 'GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED'] as const)(
+      'vinculado, ofrece pedir la actualización de datos (%s), en su propia fila',
+      (estado) => {
+        const t = keyboardForDetail(ficha({ versionState: estado, linked: true }))!;
+        const ultimaFila = t.inline_keyboard.at(-1)!.map((b) => b.callback_data);
+        expect(ultimaFila).toEqual([`act:reassess:${t.inline_keyboard[0]![0]!.callback_data.split(':')[2]}`]);
+      },
+    );
+
+    it('sin vincular, NO ofrece pedir la actualización', () => {
+      const acciones = accionesDe(keyboardForDetail(ficha({ versionState: 'SENT', linked: false })));
+      expect(acciones.some((c) => c.startsWith('act:reassess:'))).toBe(false);
+    });
+
     it.each(['NEW', 'GENERATING', 'DRAFT', 'APPROVED', 'SENT', 'REJECTED'] as const)(
       'sin vincular, aparece pase lo que pase con el estado (%s)',
       (estado) => {

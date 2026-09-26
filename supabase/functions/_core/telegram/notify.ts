@@ -13,11 +13,14 @@
  *
  * Qué pasa al pulsar cada botón es SPEC-004. Aquí solo se compone el mensaje.
  */
+import { formatChanges, type AssessmentChange } from '../assessment/changes.ts';
 import type { Level } from '../domain/assessment.ts';
+import type { VersionState } from '../domain/version.ts';
 import type { Workout } from '../domain/workout.ts';
 import type { AIFailureReason } from '../ports/ai-provider.ts';
 import { escapeMarkdownV2, formatWorkout, type FormatContext } from './format.ts';
 import {
+  actionsForState,
   buildKeyboard,
   DRAFT_ACTIONS,
   FALLBACK_ACTIONS,
@@ -116,6 +119,66 @@ export function buildAssessmentArrived(
   lines.push('', '¿Cómo preparamos la rutina?');
 
   return { text: lines.join('\n'), keyboard: buildKeyboard(NEW_ACTIONS, versionId) };
+}
+
+/**
+ * SPEC-027 §8 — La línea que se antepone al aviso de evaluación nueva cuando
+ * llegó con un enlace de actualización que ya no vale. No se fusiona nada a
+ * ciegas: se crea el cliente, y el entrenador decide si es uno que ya tiene.
+ */
+export const STALE_UPDATE_LINK =
+  '⚠️ Llegó con un enlace de actualización que ya no vale\\. Puede ser un cliente que ya tienes\\.';
+
+/** SPEC-027 — Al cliente, cuando su actualización llegó. Sin datos. */
+export const UPDATE_RECEIVED =
+  '✅ Recibido\\. Tu entrenador ya tiene tus datos nuevos\\. Tu rutina actual sigue igual hasta que la revise\\.';
+
+export interface AssessmentUpdated {
+  readonly clientName: string;
+  readonly changes: readonly AssessmentChange[];
+  readonly versionId: string | null;
+  readonly versionState: VersionState | null;
+}
+
+/**
+ * SPEC-027 — Un cliente actualizó sus datos.
+ *
+ * Dice QUÉ cambió (regla 8: lo sensible, solo por nombre) y lleva los mismos
+ * botones que la ficha para el estado de su rutina: con una `SENT`, «Crear
+ * v2». La rutina no cambia sola; decidir si hace falta otra es del
+ * entrenador (principio 1).
+ */
+export function buildAssessmentUpdated(update: AssessmentUpdated): Notification {
+  const nombre = escapeMarkdownV2(update.clientName);
+  const teclado = (acciones: Parameters<typeof buildKeyboard>[0]) =>
+    update.versionId === null ? null : buildKeyboard(acciones, update.versionId);
+
+  // Regla 9: sin cambios, se dice, y no se ofrece una v2 que no hace falta.
+  if (update.changes.length === 0) {
+    return {
+      text: `📝 ${nombre} volvió a enviar su evaluación, sin cambios\\.`,
+      keyboard: teclado(['intake']),
+    };
+  }
+
+  const lines = [
+    `📝 ${nombre} actualizó sus datos`,
+    '',
+    `Cambió: ${escapeMarkdownV2(formatChanges(update.changes))}`,
+  ];
+
+  // Regla 7: ese borrador se hizo con los datos de antes, y al aprobarlo se
+  // valida contra los nuevos.
+  if (update.versionState === 'DRAFT' || update.versionState === 'GENERATING') {
+    lines.push(
+      '',
+      `⚠️ Tienes un borrador para ${nombre} hecho con los datos anteriores\\. Al aprobarlo se valida contra los nuevos\\.`,
+    );
+  }
+
+  lines.push('', 'Su rutina actual no cambió\\.');
+
+  return { text: lines.join('\n'), keyboard: teclado(actionsForState(update.versionState)) };
 }
 
 /** El borrador está listo y hay que decidir sobre él. */

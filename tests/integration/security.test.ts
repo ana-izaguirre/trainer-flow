@@ -27,6 +27,7 @@ import {
 } from '../../supabase/functions/_core/authorization.ts';
 import { startManual } from '../../supabase/functions/_core/creation/flows.ts';
 import { FICHA_NO_DISPONIBLE, showClient } from '../../supabase/functions/_core/commands/router.ts';
+import { requestClientUpdate } from '../../supabase/functions/_core/assessment/update-request.ts';
 import type { ClientSummary, QueryRepo } from '../../supabase/functions/_core/ports/query-ports.ts';
 import type { Identity } from '../../supabase/functions/_core/domain/identity.ts';
 import type { CreationRepo } from '../../supabase/functions/_core/ports/creation-ports.ts';
@@ -293,6 +294,95 @@ describe('Caso 3 bis · el botón cli: no abre la ficha de otro entrenador', () 
 
     expect(outcome).toMatchObject({ kind: 'answered' });
     expect(mensajes[0]).toContain('Cliente A');
+  });
+});
+
+/**
+ * SPEC-027 CA-9. El botón 📝 EMITE una credencial que permite reescribir la
+ * evaluación de un cliente, datos de salud incluidos. Aquí se comprueba con
+ * las funciones reales que un entrenador no puede emitirla para el cliente
+ * de otro: `issue_update_token_for_client` no mira de quién es, así que lo
+ * que protege es la comprobación de `_core` antes de llamarla.
+ */
+describe('Caso 3 ter · 📝 no emite el enlace de actualización de un cliente ajeno', () => {
+  function deps(emitidos: string[], mensajes: number[]) {
+    return {
+      repo: {
+        issueForProfile: () => Promise.reject(new Error('no se usa aquí')),
+        issueForClient: async (clientId: string, token: string) => {
+          emitidos.push(clientId);
+          const { rows } = await db.query(`SELECT issue_update_token_for_client($1, $2) AS chat`, [
+            clientId,
+            token,
+          ]);
+          return (rows[0]!['chat'] as number | null) ?? null;
+        },
+      },
+      clients: {
+        findClientForVersion: async (versionId: string) => {
+          const { rows } = await db.query(`SELECT * FROM client_for_resend($1)`, [versionId]);
+          const r = rows[0];
+          return r === undefined
+            ? null
+            : {
+                client: {
+                  clientId: r['client_id'] as string,
+                  trainerId: r['trainer_id'] as string,
+                  profileId: (r['profile_id'] as string | null) ?? null,
+                },
+                fullName: r['full_name'] as string,
+                linked: r['linked'] === true,
+                linkToken: r['link_token'] as string,
+              };
+        },
+      },
+      sender: {
+        sendMessage: (chatId: number) => {
+          mensajes.push(chatId);
+          return Promise.resolve();
+        },
+        answerCallback: () => Promise.resolve(),
+      },
+      newToken: () => 'token_de_prueba_0000000000000000000000000',
+      formUrl: 'https://tally.so/r/abc123',
+    };
+  }
+
+  it('CA-9 · entrenador A pulsa 📝 sobre la rutina de B → nada emitido, nada enviado', async () => {
+    const { trainerA, clientB, versionB } = await dosCarteras();
+    await db.query(`UPDATE clients SET profile_id = $2, linked_at = now() WHERE id = $1`, [
+      clientB,
+      await createProfile(db, 'client', 'Cliente B'),
+    ]);
+    const emitidos: string[] = [];
+    const mensajes: number[] = [];
+
+    const outcome = await requestClientUpdate(
+      versionB,
+      identidad(trainerA, 'trainer'),
+      deps(emitidos, mensajes),
+    );
+
+    expect(outcome).toEqual({ kind: 'rejected' });
+    expect(emitidos).toEqual([]);
+    // Solo la respuesta neutra, al propio entrenador (chat 1 en `identidad`).
+    expect(mensajes).toEqual([1]);
+    const { rows } = await db.query(`SELECT update_token_hash FROM clients WHERE id = $1`, [clientB]);
+    expect(rows[0]!['update_token_hash']).toBeNull();
+  });
+
+  it('y el dueño sí puede', async () => {
+    const { trainerB, clientB, versionB } = await dosCarteras();
+    await db.query(`UPDATE clients SET profile_id = $2, linked_at = now() WHERE id = $1`, [
+      clientB,
+      await createProfile(db, 'client', 'Cliente B'),
+    ]);
+
+    const outcome = await requestClientUpdate(versionB, identidad(trainerB, 'trainer'), deps([], []));
+
+    expect(outcome).toEqual({ kind: 'sent', clientId: clientB });
+    const { rows } = await db.query(`SELECT update_token_hash FROM clients WHERE id = $1`, [clientB]);
+    expect(rows[0]!['update_token_hash']).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 

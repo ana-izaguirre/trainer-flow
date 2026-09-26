@@ -22,14 +22,21 @@
  * reclama el evento. Así Tally reintenta y el envío no se pierde, en vez de
  * quedar marcado como procesado sin haber creado nada.
  */
+import { assessmentChanges } from '../assessment/changes.ts';
 import { mapFormFields } from '../assessment/field-mapping.ts';
 import { TALLY_MAPPING } from '../assessment/mapping.ts';
 import { parseTallyEnvelope, redactCredentialUrls } from '../assessment/tally-envelope.ts';
+import { readUpdateToken, redactUpdateToken } from '../assessment/update-token.ts';
 import { validateAssessment } from '../assessment/validate-assessment.ts';
 import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
-import { buildAssessmentArrived } from '../telegram/notify.ts';
+import {
+  buildAssessmentArrived,
+  buildAssessmentUpdated,
+  STALE_UPDATE_LINK,
+  UPDATE_RECEIVED,
+} from '../telegram/notify.ts';
 import { buildDeepLink } from '../telegram/start.ts';
 
 export type TallyOutcome =
@@ -50,6 +57,23 @@ export type TallyOutcome =
        * `mapping.ts` no coincide y el dato se está perdiendo en silencio.
        */
       readonly camposAusentes: readonly string[];
+      /**
+       * SPEC-027 §8: llegó con un enlace de actualización que ya no vale, y
+       * se creó un cliente nuevo. Solo aparece cuando es `true`.
+       */
+      readonly staleUpdateLink?: true;
+    }
+  /**
+   * SPEC-027: la evaluación era de un cliente que ya existía, por su token.
+   * `changed` son NOMBRES de campo («días», «limitaciones»), nunca valores.
+   * Ni el token ni ningún dato de salud: el handler loguea el outcome entero.
+   */
+  | {
+      readonly kind: 'updated';
+      readonly eventId: string;
+      readonly clientId: string;
+      readonly assessmentId: string;
+      readonly changed: readonly string[];
     }
   /**
    * El sobre estaba bien pero las respuestas no. El evento queda guardado y
@@ -129,7 +153,10 @@ export async function handleTallyWebhook(
   if (!sobre.ok) return { kind: 'malformed', reason: sobre.error };
 
   const { eventId } = sobre.value;
-  const rawPayload = redactCredentialUrls(body);
+  // SPEC-027: el token de actualización sale del payload ANTES de guardarlo.
+  // Si la ingesta falla, sigue vivo, y no puede quedar en `webhook_events`.
+  const rawPayload = redactUpdateToken(redactCredentialUrls(body));
+  const actualizacion = readUpdateToken(sobre.value.fields);
 
   try {
     // ── 3. El entrenador, antes de reclamar ──────────────────────────────
@@ -172,6 +199,43 @@ export async function handleTallyWebhook(
       return { kind: 'invalid', eventId, fields };
     }
 
+    // ── 5b. ¿Es un cliente que ya existe? (SPEC-027) ────────────────────
+    // Solo con un token que la base reconozca. Si no vale, se sigue por el
+    // camino de siempre: cliente nuevo, con un aviso (§8). Nunca se fusiona
+    // por el nombre (SPEC-001 §5).
+    if (actualizacion.kind === 'present') {
+      const { fullName: _nombre, ...datos } = parsed.value;
+      const hecha = await deps.repo.ingestAssessmentUpdate({
+        ...datos,
+        token: actualizacion.token,
+        rawPayload,
+      });
+
+      if (hecha !== null) {
+        const changes = assessmentChanges(hecha.previous, datos);
+        const aviso = buildAssessmentUpdated({
+          clientName: hecha.clientName,
+          changes,
+          versionId: hecha.versionId,
+          versionState: hecha.versionState,
+        });
+        await deps.sender.sendMessage(trainer.chatId, aviso.text, aviso.keyboard);
+        if (hecha.clientChatId !== null) {
+          await deps.sender.sendMessage(hecha.clientChatId, UPDATE_RECEIVED);
+        }
+
+        await deps.repo.markProcessed(eventId);
+        return {
+          kind: 'updated',
+          eventId,
+          clientId: hecha.clientId,
+          assessmentId: hecha.assessmentId,
+          changed: changes.map((c) => c.label),
+        };
+      }
+    }
+    const staleUpdateLink = actualizacion.kind !== 'none';
+
     // ── 6. Las cuatro filas, en una sola operación ───────────────────────
     // El token se guarda EN UNA VARIABLE porque ahora también hay que
     // enseñárselo al entrenador. Antes se generaba dentro de la llamada y
@@ -195,13 +259,23 @@ export async function handleTallyWebhook(
       ids.versionId,
       buildDeepLink(deps.botUsername, linkToken),
     );
-    await deps.sender.sendMessage(trainer.chatId, aviso.text, aviso.keyboard);
+    await deps.sender.sendMessage(
+      trainer.chatId,
+      staleUpdateLink ? `${STALE_UPDATE_LINK}\n\n${aviso.text}` : aviso.text,
+      aviso.keyboard,
+    );
 
     await deps.repo.markProcessed(eventId);
 
     // `ingested` NO lleva el token: el handler loguea `{ ...outcome }` y una
     // credencial en un log es un incidente (SPEC-014 regla 1).
-    return { kind: 'ingested', eventId, ...ids, camposAusentes };
+    return {
+      kind: 'ingested',
+      eventId,
+      ...ids,
+      camposAusentes,
+      ...(staleUpdateLink ? { staleUpdateLink: true } : {}),
+    };
   } catch (error) {
     return {
       kind: 'failed',

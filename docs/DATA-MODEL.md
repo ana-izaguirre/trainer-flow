@@ -75,6 +75,12 @@ webhook de Telegram, verificado server-side.
 | `link_token` | `text` UNIQUE NOT NULL | `CHECK length BETWEEN 16 AND 64` |
 | `linked_at` | `timestamptz` | |
 | `created_at` | `timestamptz` | |
+| `update_token_hash` | `text` UNIQUE | SPEC-027: `sha256` del token de actualización. NULL si no hay uno vivo |
+| `update_token_expires_at` | `timestamptz` | NULL con el hash; `CHECK` los dos o ninguno |
+
+**A lo sumo un token de actualización vivo por cliente**, por construcción:
+emitir otro reemplaza al anterior. Consumirlo es un `UPDATE` que lo borra,
+así que dos envíos simultáneos no pueden usarlo los dos (migración 0026).
 
 **El rol se valida en la base de datos**, no solo en código, mediante una FK
 compuesta contra `profiles (id, role)`:

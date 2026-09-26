@@ -136,6 +136,12 @@ function espia(identity: Identity | null = null): Espia {
       intakeRepo: () => ({ findIntake: () => Promise.resolve(null) }),
       linkRepo: () => ({ findClientForVersion: () => Promise.resolve(null) }),
       botUsername: 'mibot',
+      updateTokenRepo: () => ({
+        issueForProfile: () => Promise.resolve(null),
+        issueForClient: () => Promise.resolve(null),
+      }),
+      newToken: () => 'token-de-prueba-000000000000',
+      tallyFormUrl: null,
       generation: () => ({
         trigger: (versionId) => {
           usosDelRepo.push(`trigger:${versionId}`);

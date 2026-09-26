@@ -78,6 +78,27 @@ bot en todo lo que sigue.
       las generaciones fallan con 404 y esto lo arregla en un minuto. Por
       defecto se usa un alias móvil justamente para que eso no pase solo.
 
+- [ ] **4b. Actualizar datos: el enlace del formulario** (SPEC-027).
+      Para que un cliente pueda cambiar sus datos con `/actualizar`, o que tú
+      se lo pidas con 📝 desde su ficha:
+
+      1. En Tally, añade al formulario un **campo oculto** llamado exactamente
+         `update` (Integrations → Hidden fields, o el bloque *Hidden fields*).
+      2. Pasa al bot el enlace público del formulario:
+
+         ```bash
+         supabase secrets set TALLY_FORM_URL='https://tally.so/r/<id>'
+         ```
+
+      No es un secreto —es el mismo enlace que le mandas a cada cliente—,
+      pero va por el mismo sitio. **Es opcional**: sin él, el bot funciona
+      igual y `/actualizar` responde que todavía no está disponible.
+
+      > ⚠️ **Sin el campo oculto, un envío por el enlace de actualización se
+      > procesa como un cliente nuevo**: Tally no devuelve el token, y el bot
+      > no tiene forma de saber que es la misma persona. No se pierde el
+      > dato, pero aparece duplicado.
+
 ## B. Desplegar
 
 - [ ] **5. Mergear a `main`.** El CI corre; si pasa, el deploy aplica las

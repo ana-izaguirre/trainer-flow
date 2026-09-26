@@ -2,10 +2,42 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **BORRADOR — pendiente de aprobación** |
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
 | **Depende de** | SPEC-001, SPEC-009, SPEC-010, SPEC-015, SPEC-023 |
 | **Sesiones** | Por asignar |
 | **Origen** | Pedido de Ana (septiembre 2026): un cliente que cambia de objetivo, de días, de tiempo o de cualquier dato del formulario |
+
+## Resultado
+
+| Pieza | Dónde | Estado |
+|---|---|---|
+| Token: hash, 7 días, un solo uso, uno vivo por cliente | migración 0026 | ✅ 16 tests de integración, con dos envíos simultáneos |
+| Leer el token del formulario y quitarlo del payload | `_core/assessment/update-token.ts` | ✅ |
+| Qué cambió: cerrados antes → después, salud por nombre | `_core/assessment/changes.ts` | ✅ CA-4, CA-5, CA-10 |
+| `/actualizar` y 📝 Pedir actualización | `_core/assessment/update-request.ts` | ✅ CA-1, CA-9 |
+| La ingesta con token, y el ⚠️ si no vale | `_core/tally/webhook.ts` | ✅ CA-2, CA-6, CA-7, CA-8, CA-11 |
+| CA-9 contra la base real | `tests/integration/security.test.ts` | ✅ |
+| De punta a punta, con el payload real de Tally | `tests/e2e/assessment-update.test.ts` | ✅ |
+
+**Decisiones tomadas al implementar**, dentro de lo aprobado:
+
+- **El hash vive en `clients`**, no en una tabla propia (§14 decía «tabla»).
+  Dos columnas garantizan por construcción que haya un solo token vivo por
+  cliente (regla 4), igual que `link_token` vive ahí, y no cambian las 10
+  tablas del modelo.
+- **El hash lo calcula PostgreSQL** (`sha256`, nativa): `_core` no tiene
+  crypto y `_shared` no necesita más código.
+- **Los botones del aviso son los de la ficha para el estado de la rutina**
+  (`actionsForState`, compartida con `/cliente`). Con una rutina `SENT`, que
+  es el caso de CA-4, son exactamente 📄 y ✏️ Crear v2. Con un borrador,
+  aprobar o rechazar: nunca se ofrece un botón que la máquina de estados
+  vaya a rechazar.
+- **En la ficha, 📝 ocupa la fila de 🔗**: vinculado, uno; sin vincular, el
+  otro. Sin vincular no hay a quién mandarle el formulario.
+- **`TALLY_FORM_URL` es opcional.** Sin ella la función arranca igual y
+  `/actualizar` dice que no está disponible, en vez de tumbar el bot entero.
+- **El aviso va sin negritas**, a diferencia del de evaluación nueva: así el
+  detector de MarkdownV2 de los tests lo revisa entero.
 
 ## 1. Objetivo
 
@@ -262,9 +294,13 @@ Sin el paso 1, todo envío con enlace se procesaría como un cliente nuevo
 ## 14. Archivos que toca
 
 ```
-supabase/migrations/00XX_assessment_update_tokens.sql   tabla + funciones
-supabase/functions/_core/assessment/update-token.ts     generar y validar forma
+supabase/migrations/0026_assessment_update_tokens.sql   columnas + funciones
+supabase/functions/_core/assessment/update-token.ts     leer, redactar, armar el enlace
+supabase/functions/_core/assessment/update-request.ts   /actualizar y 📝
 supabase/functions/_core/assessment/changes.ts          qué campos cambiaron
+supabase/functions/_core/ports/update-ports.ts          emitir el token
+supabase/functions/_core/telegram/notify.ts             los avisos
+supabase/functions/_core/telegram/keyboard.ts           actionsForState, compartida
 supabase/functions/_core/tally/webhook.ts               la rama con token
 supabase/functions/_core/commands/router.ts             /actualizar
 supabase/functions/_core/commands/format.ts             botón en la ficha, ayuda

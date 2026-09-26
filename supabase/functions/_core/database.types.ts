@@ -277,6 +277,8 @@ export type Database = {
           profile_id: string | null
           trainer_id: string
           trainer_role: Database["public"]["Enums"]["user_role"]
+          update_token_expires_at: string | null
+          update_token_hash: string | null
         }
         Insert: {
           client_role?: Database["public"]["Enums"]["user_role"]
@@ -288,6 +290,8 @@ export type Database = {
           profile_id?: string | null
           trainer_id: string
           trainer_role?: Database["public"]["Enums"]["user_role"]
+          update_token_expires_at?: string | null
+          update_token_hash?: string | null
         }
         Update: {
           client_role?: Database["public"]["Enums"]["user_role"]
@@ -299,6 +303,8 @@ export type Database = {
           profile_id?: string | null
           trainer_id?: string
           trainer_role?: Database["public"]["Enums"]["user_role"]
+          update_token_expires_at?: string | null
+          update_token_hash?: string | null
         }
         Relationships: [
           {
@@ -764,6 +770,50 @@ export type Database = {
           version_id: string
         }[]
       }
+      ingest_assessment_update: {
+        Args: {
+          p_age?: number
+          p_birth_date?: string
+          p_chronic_conditions?: string
+          p_days_per_week: number
+          p_equipment: string
+          p_equipment_detail?: string
+          p_gender?: string
+          p_goal: string
+          p_has_limitations: boolean
+          p_height_cm?: number
+          p_last_weighed?: string
+          p_level: string
+          p_lifestyle?: string
+          p_limitations_detail?: string
+          p_medications?: string
+          p_menopause_stage?: string
+          p_notes?: string
+          p_quit_reasons?: string
+          p_raw_payload: Json
+          p_session_minutes: number
+          p_token: string
+          p_weight_kg?: number
+        }
+        Returns: {
+          assessment_id: string
+          client_chat_id: number
+          client_id: string
+          client_name: string
+          plan_id: string
+          previous: Json
+          version_id: string
+          version_state: Database["public"]["Enums"]["version_state"]
+        }[]
+      }
+      issue_update_token_for_client: {
+        Args: { p_client_id: string; p_token: string }
+        Returns: number
+      }
+      issue_update_token_for_profile: {
+        Args: { p_profile_id: string; p_token: string }
+        Returns: string
+      }
       link_client: {
         Args: { p_client_id: string; p_profile_id: string }
         Returns: boolean
@@ -902,6 +952,7 @@ export type Database = {
           week_number: number
         }[]
       }
+      update_token_hash: { Args: { p_token: string }; Returns: string }
       version_for_action: {
         Args: { p_version_id: string }
         Returns: {

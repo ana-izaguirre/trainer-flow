@@ -489,6 +489,46 @@ function fakeLink(cliente: unknown = undefined) {
   };
 }
 
+/** SPEC-027: pedir la actualización de datos. Por defecto, todo sale bien. */
+function fakeUpdates() {
+  const pasos: string[] = [];
+  return {
+    pasos,
+    deps: {
+      repo: {
+        issueForProfile: (profileId: string) => {
+          pasos.push(`issueForProfile:${profileId}`);
+          return Promise.resolve('c1');
+        },
+        issueForClient: (clientId: string) => {
+          pasos.push(`issueForClient:${clientId}`);
+          return Promise.resolve(700);
+        },
+      },
+      clients: {
+        findClientForVersion: () => {
+          pasos.push('findClientForVersion');
+          return Promise.resolve({
+            client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
+            fullName: 'Carlos',
+            linked: true,
+            linkToken: 'no-se-usa-aqui-000000000',
+          });
+        },
+      },
+      sender: {
+        sendMessage: (chatId: number) => {
+          pasos.push(`sendMessage:${chatId}`);
+          return Promise.resolve();
+        },
+        answerCallback: () => Promise.resolve(),
+      },
+      newToken: () => 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde',
+      formUrl: 'https://tally.so/r/abc123',
+    },
+  };
+}
+
 function ejecutar(
   body: unknown,
   opts: {
@@ -501,6 +541,7 @@ function ejecutar(
     commands?: ReturnType<typeof fakeCommands>;
     creation?: ReturnType<typeof fakeCreation>;
     changes?: ReturnType<typeof fakeChanges>;
+    updates?: ReturnType<typeof fakeUpdates>;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -524,6 +565,7 @@ function ejecutar(
         actions: opts.actions ?? vacioActions(),
         intake: fakeIntake().deps,
         link: fakeLink().deps,
+        updates: (opts.updates ?? fakeUpdates()).deps,
       },
     ),
   };
@@ -1374,6 +1416,7 @@ describe('un callback fabricado no da acceso ajeno', () => {
           actions: vacioActions(),
           intake: fakeIntake().deps,
         link: fakeLink().deps,
+        updates: fakeUpdates().deps,
         },
       ),
     };
@@ -1432,6 +1475,7 @@ describe('la ficha de admisión', () => {
         actions: vacioActions(),
         intake: intake.deps,
         link: fakeLink().deps,
+        updates: fakeUpdates().deps,
       },
     );
 
@@ -1471,6 +1515,7 @@ describe('la ficha de admisión', () => {
         },
         intake: intake.deps,
         link: fakeLink().deps,
+        updates: fakeUpdates().deps,
       },
     );
 
@@ -1512,6 +1557,7 @@ describe('reenviar el enlace de vinculación', () => {
         actions: vacioActions(),
         intake: fakeIntake().deps,
         link: link.deps,
+        updates: fakeUpdates().deps,
       },
     );
 
@@ -1551,6 +1597,7 @@ describe('reenviar el enlace de vinculación', () => {
         },
         intake: fakeIntake().deps,
         link: link.deps,
+        updates: fakeUpdates().deps,
       },
     );
 
@@ -1580,6 +1627,7 @@ describe('reenviar el enlace de vinculación', () => {
         actions: vacioActions(),
         intake: fakeIntake().deps,
         link: link.deps,
+        updates: fakeUpdates().deps,
       },
     );
 
@@ -1663,5 +1711,68 @@ describe('SPEC-022 M4 · el botón cli: se enruta', () => {
     expect(creation.pasos).toEqual([]);
     expect(changes.pasos).toEqual([]);
     expect(checkins.pasos).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-027 · pedir la actualización de datos se enruta', () => {
+  const VERSION = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 500,
+    telegramChatId: 500,
+  };
+  const boton = (data: string) => ({
+    update_id: 1,
+    callback_query: {
+      id: 'cb-1',
+      from: FROM,
+      message: { message_id: 9, chat: { id: 500 } },
+      data,
+    },
+  });
+
+  it('/actualizar de un CLIENTE emite SU enlace', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const updates = fakeUpdates();
+    const commands = fakeCommands();
+
+    const { result } = ejecutar(comando('/actualizar'), { repo, updates, commands });
+
+    expect(await result).toMatchObject({ update: { kind: 'sent', clientId: 'c1' } });
+    expect(updates.pasos).toContain('issueForProfile:p-cliente');
+    // No cae además en la ayuda del cliente.
+    expect(commands.pasos).toEqual([]);
+  });
+
+  it('/actualizar del ENTRENADOR no emite nada: es un comando del cliente', async () => {
+    const updates = fakeUpdates();
+
+    const { result } = ejecutar(comando('/actualizar'), { updates });
+
+    expect(await result).toMatchObject({ command: { kind: 'unknown' } });
+    expect(updates.pasos).toEqual([]);
+  });
+
+  it('📝 del entrenador emite el del cliente y se lo manda a él', async () => {
+    const updates = fakeUpdates();
+
+    const { result } = ejecutar(boton(`act:reassess:${VERSION}`), { updates });
+
+    expect(await result).toMatchObject({ update: { kind: 'sent', clientId: 'c1' } });
+    expect(updates.pasos).toContain('issueForClient:c1');
+    expect(updates.pasos).toContain('sendMessage:700');
+  });
+
+  it('🔴 un 📝 fabricado por un cliente no emite nada', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const updates = fakeUpdates();
+
+    const { result } = ejecutar(boton(`act:reassess:${VERSION}`), { repo, updates });
+
+    expect(await result).toMatchObject({ update: { kind: 'rejected' } });
+    expect(updates.pasos.some((p) => p.startsWith('issue'))).toBe(false);
   });
 });
