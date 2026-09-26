@@ -42,6 +42,12 @@
           { "name": "fetch", "message": "_core no hace I/O. Eso vive en _shared (ADR-001)." }
         ]
       }
+    },
+    {
+      "files": ["**/*.test.ts", "tests/**/*.ts"],
+      "rules": {
+        "unicorn/consistent-function-scoping": "off"
+      }
     }
   ]
 }

@@ -244,6 +244,127 @@ entrenador.
 guion bajo porque BotFather no admite guiones ni mayúsculas en los comandos
 registrados, y sin registrar no aparecen en el menú del `/`.
 
+## 12.ter Ampliación: mensajes que dicen el siguiente paso
+
+| Campo | Valor |
+|---|---|
+| **Estado** | **PROPUESTA — pendiente de aprobación** |
+| **Origen** | Uso real (septiembre 2026), tres mensajes seguidos sin salida |
+
+**Lo que pasó.** Ana pulsó ✍️ A mano, y el bot le explicó `/crear_rutina`
+con un ejemplo. Tocó `/crear_rutina` —en el menú de comandos de Telegram eso
+lo **envía al instante, sin nada debajo**— y recibió *«No encontré ningún
+día. Empieza por uno. Ejemplo: Día 1: Empuje»*, que se lee como si pidiera
+una rutina de un día. Después rechazó la rutina (*«Puedes empezar otra»*,
+sin decir cómo), volvió a mandar `/crear_rutina` y recibió *«Pulsa 📋 o ✍️
+en el aviso de un cliente»*, un aviso que ya estaba enterrado en el chat.
+
+Ninguno de los tres mensajes es incorrecto. Los tres dejan sin saber qué
+hacer a continuación. La regla que sale de aquí:
+
+> **Todo mensaje que corta un flujo dice el siguiente paso concreto, y si
+> ese paso es un botón que ya existe, lleva el botón.**
+
+### M1 — `/crear_rutina` sin días
+
+Sustituye la fila «Ningún día» de §8:
+
+```
+Escribe los días en el MISMO mensaje, debajo de /crear_rutina.
+Copia este ejemplo, cámbialo y envíalo:
+
+/crear_rutina
+Día 1: Cuerpo completo A
+Sentadilla 3x10 120
+Press banca 3x10 90
+
+Día 2: Cuerpo completo B
+Peso muerto rumano 3x10 120
+Jalón al pecho 3x12 90
+```
+
+El ejemplo va en bloque de código (MarkdownV2 ```` ``` ````): en Telegram se
+copia entero con un toque, y el `/crear_rutina` de dentro no se vuelve un
+enlace que al pulsarse repita el error.
+
+### M2 — Sin borrador abierto
+
+```
+No tienes ningún borrador abierto.
+Escribe /cliente y el nombre (por ejemplo /cliente Ana), pulsa
+📋 Plantilla o ✍️ A mano en su ficha, y después vuelve a /crear_rutina.
+```
+
+`/cliente <nombre>` ya lleva esos botones desde S-49 (SPEC-007 regla 7): el
+mensaje nombra un camino que existe, en vez de uno que se perdió en el
+scroll.
+
+### M3 — Después de rechazar (SPEC-004)
+
+El mensaje de rechazo pasa a llevar el botón **✏️ Crear v2**, la misma
+acción (`revise`, `startRevision`) que la ficha ya ofrece sobre una versión
+`REJECTED`:
+
+```
+❌ Rutina rechazada. Pulsa ✏️ Crear v2 para empezar otra
+para Ana Izaguirre Matamoros.
+
+[✏️ Crear v2]
+```
+
+**Sin estados ni transiciones nuevas.** Es un botón más sobre una acción que
+ya existe y ya está autorizada (`startRevision` comprueba que el entrenador
+sea el dueño). La v2 nace en `NEW` con los tres botones de siempre.
+
+### M4 — Varios clientes con el mismo nombre (SPEC-007)
+
+Hoy `/cliente Ana` con dos Anas responde *«🤔 Hay varios que encajan.
+¿Cuál?»* y una lista de texto: hay que volver a escribir el comando con el
+apellido. Cada nombre de la lista pasa a ser un **botón que abre su ficha**:
+
+```
+🤔 Hay varios que encajan. ¿Cuál?
+
+[Ana Izaguirre Matamoros]
+[Ana María López]
+```
+
+- Callback nuevo `cli:<clientId>`, con prefijo propio como `tpl:` y `chg:`:
+  no es una acción sobre una versión, sino elegir a quién mirar. Ocupa 40
+  de los 64 bytes.
+- **Solo lectura.** Abre la misma ficha que `/cliente <nombre>`, con sus
+  botones (SPEC-007 regla 7).
+- **Misma autorización que el resto.** Se comprueba que el cliente sea del
+  entrenador que pulsa (`canViewClient`). Un id ajeno y uno inexistente
+  responden igual (SPEC-013 regla 2), así que probar ids no revela cuáles
+  existen.
+- La lista sigue partida en páginas de 20 (SPEC-007 regla 4).
+
+### Criterios de aceptación
+
+- **CA-M1** — DADO un borrador abierto, CUANDO llega `/crear_rutina` sin
+  días, ENTONCES la respuesta dice «en el MISMO mensaje» y trae el ejemplo en
+  bloque de código.
+- **CA-M2** — DADO ningún borrador abierto, CUANDO llega un comando del
+  editor, ENTONCES la respuesta nombra `/cliente`.
+- **CA-M3** — DADO una versión rechazada, CUANDO se confirma el rechazo,
+  ENTONCES el mensaje lleva el botón `revise` con el `versionId` rechazado,
+  y pulsarlo crea la v2 en `NEW`.
+- **CA-M4** — DADO dos clientes que contienen «Ana», CUANDO el entrenador
+  escribe `/cliente Ana`, ENTONCES cada una sale como botón `cli:<clientId>`,
+  y pulsarlo abre su ficha con los botones de su estado.
+- **CA-M5** — DADO un `cli:` con el id de un cliente de OTRO entrenador, o
+  uno que no existe, CUANDO se pulsa, ENTONCES los dos reciben la misma
+  respuesta neutra y ninguna ficha.
+- **CA-M6** — Los cuatro mensajes pasan el detector de MarkdownV2 sin
+  escapar (`tests/helpers/markdown.ts`), con un nombre de cliente con guion.
+
+**Tests** — `bulk.test.ts` (M1), `editor-session.test.ts` (M2),
+`actions.test.ts` (M3), `router.test.ts` y `callback-data.test.ts` (M4), más
+casos en `webhook.test.ts` que pulsan los botones de M3 y M4 de punta a
+punta. CA-M5 va también a `tests/integration/security.test.ts`: es un caso
+de autorización.
+
 ## 13. Lo que queda abierto
 
 **Reordenar y duplicar días sigue siendo incómodo**, igual que reconocía

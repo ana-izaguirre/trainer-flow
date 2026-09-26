@@ -28,9 +28,48 @@ import type { ClientSummary, QueryRepo } from '../_core/ports/query-ports.ts';
 import type { DeliveryRepo, VersionForDelivery } from '../_core/ports/delivery-ports.ts';
 import type { SweepRepo } from '../_core/ports/sweep-ports.ts';
 import type { TelegramRepo } from '../_core/ports/telegram-ports.ts';
+import type { Database, Json } from '../_core/database.types.ts';
 import { requireEnv } from './env.ts';
 
-export type Db = SupabaseClient;
+/**
+ * Tipado con `database.types.ts`, que CI genera desde las migraciones: un
+ * nombre de función, de argumento o de columna que no exista rompe
+ * `deno check`, en vez de leerse como `undefined` en producción.
+ *
+ * ┌─ LO QUE LOS TIPOS GENERADOS NO SABEN ──────────────────────────────────┐
+ * │ postgres-meta no modela la nulidad en las funciones SQL:               │
+ * │                                                                        │
+ * │  · un ARGUMENTO sin default sale como no nulo, aunque SQL acepte NULL  │
+ * │    → `nullArg`                                                         │
+ * │  · una COLUMNA devuelta sale como no nula, aunque venga de un LEFT     │
+ * │    JOIN → por eso los `?? null` y `toNumberOrNull` se quedan           │
+ * │                                                                        │
+ * │ Los tipos garantizan los NOMBRES; la nulidad sigue siendo cosa nuestra. │
+ * └────────────────────────────────────────────────────────────────────────┘
+ */
+export type Db = SupabaseClient<Database>;
+
+/**
+ * Un argumento que puede ser NULL. Se sigue enviando `null`, igual que antes:
+ * solo le dice al compilador lo que SQL ya acepta.
+ */
+function nullArg<T>(value: T | null): T {
+  return value as T;
+}
+
+/**
+ * Un valor de dominio hacia una columna `jsonb`. `Workout` o `CheckinAnswers`
+ * son JSON puro, pero una interfaz no encaja con la firma de índice de `Json`.
+ * Es la única conversión hacia la base: centralizada para que no se reparta.
+ */
+function toJson(value: unknown): Json {
+  return value as Json;
+}
+
+/** El camino de vuelta de `toJson`: lo que se guardó como dominio, se lee así. */
+function fromJson<T>(value: Json): T {
+  return value as unknown as T;
+}
 
 export function createDb(): Db {
   return createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
@@ -53,7 +92,7 @@ export async function claimWebhookEvent(
 ): Promise<boolean> {
   const { error } = await db
     .from('webhook_events')
-    .insert({ source, external_id: externalId, payload, request_id: requestId });
+    .insert({ source, external_id: externalId, payload: toJson(payload), request_id: requestId });
 
   if (error === null) return true;
   if (error.code === '23505') return false; // ya procesado
@@ -170,29 +209,29 @@ async function ingestAssessment(
       p_trainer_id: input.trainerId,
       p_full_name: input.fullName,
       p_link_token: input.linkToken,
-      p_raw_payload: input.rawPayload,
+      p_raw_payload: toJson(input.rawPayload),
       p_goal: input.goal,
       p_level: input.level,
       p_days_per_week: input.daysPerWeek,
       p_session_minutes: input.sessionMinutes,
       p_equipment: input.equipment,
       p_has_limitations: input.hasLimitations,
-      p_limitations_detail: input.limitationsDetail,
-      p_lifestyle: input.lifestyle,
-      p_notes: input.notes,
+      p_limitations_detail: nullArg(input.limitationsDetail),
+      p_lifestyle: nullArg(input.lifestyle),
+      p_notes: nullArg(input.notes),
       p_request_id: requestId,
       // SPEC-016
-      p_gender: input.gender,
-      p_age: input.age,
-      p_weight_kg: input.weightKg,
-      p_height_cm: input.heightCm,
-      p_last_weighed: input.lastWeighed,
-      p_quit_reasons: input.quitReasons,
-      p_menopause_stage: input.menopauseStage,
-      p_chronic_conditions: input.chronicConditions,
-      p_birth_date: input.birthDate,
-      p_medications: input.medications,
-      p_equipment_detail: input.equipmentDetail,
+      p_gender: nullArg(input.gender),
+      p_age: nullArg(input.age),
+      p_weight_kg: nullArg(input.weightKg),
+      p_height_cm: nullArg(input.heightCm),
+      p_last_weighed: nullArg(input.lastWeighed),
+      p_quit_reasons: nullArg(input.quitReasons),
+      p_menopause_stage: nullArg(input.menopauseStage),
+      p_chronic_conditions: nullArg(input.chronicConditions),
+      p_birth_date: nullArg(input.birthDate),
+      p_medications: nullArg(input.medications),
+      p_equipment_detail: nullArg(input.equipmentDetail),
     })
     .single();
 
@@ -202,7 +241,7 @@ async function ingestAssessment(
     throw new Error(`No se pudo guardar la evaluación: ${error?.code ?? 'sin datos'}`);
   }
 
-  const fila = data as { client_id: string; plan_id: string; version_id: string };
+  const fila = data;
   return { clientId: fila.client_id, planId: fila.plan_id, versionId: fila.version_id };
 }
 
@@ -289,7 +328,7 @@ export function createGenerationRepo(db: Db, requestId: string): GenerationRepo 
     async saveContent(versionId, workout: Workout) {
       const { error } = await db
         .from('workout_versions')
-        .update({ content: workout })
+        .update({ content: toJson(workout) })
         .eq('id', versionId);
 
       if (error !== null) throw new Error(`No se pudo guardar la rutina: ${error.code}`);
@@ -314,43 +353,43 @@ async function findVersionForGeneration(
   if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
   if (data === null) return null;
 
-  const fila = data as Record<string, unknown>;
-  const limitations = (fila['limitations'] as string | null) ?? null;
+  const fila = data;
+  const limitations = (fila.limitations as string | null) ?? null;
 
   return {
-    versionId: fila['version_id'] as string,
-    state: fila['state'] as VersionState,
-    clientName: fila['client_name'] as string,
-    versionNumber: Number(fila['version_number']),
+    versionId: fila.version_id as string,
+    state: fila.state as VersionState,
+    clientName: fila.client_name as string,
+    versionNumber: Number(fila.version_number),
     request: {
-      goal: fila['goal'] as string,
-      level: fila['level'] as Level,
-      daysPerWeek: fila['days_per_week'] as number,
-      sessionMinutes: fila['session_minutes'] as number,
-      equipment: fila['equipment'] as string,
+      goal: fila.goal as string,
+      level: fila.level as Level,
+      daysPerWeek: fila.days_per_week as number,
+      sessionMinutes: fila.session_minutes as number,
+      equipment: fila.equipment as string,
       limitations,
       // Generar desde cero, no editar. La edición llega en el bloque 7.
       instruction: null,
       // SPEC-016. `chronicConditions` no está aquí porque `AIRequest` no lo
       // tiene, y `version_for_generation` tampoco lo devuelve.
-      gender: (fila['gender'] as string | null) ?? null,
-      age: fila['age'] === null ? null : Number(fila['age']),
-      weightKg: fila['weight_kg'] === null ? null : Number(fila['weight_kg']),
-      heightCm: fila['height_cm'] === null ? null : Number(fila['height_cm']),
-      quitReasons: (fila['quit_reasons'] as string | null) ?? null,
-      menopauseStage: (fila['menopause_stage'] as string | null) ?? null,
-      lastWeighed: (fila['last_weighed'] as string | null) ?? null,
-      chronicConditions: (fila['chronic_conditions'] as string | null) ?? null,
-      medications: (fila['medications'] as string | null) ?? null,
-      equipmentDetail: (fila['equipment_detail'] as string | null) ?? null,
-      lifestyle: (fila['lifestyle'] as string | null) ?? null,
-      notes: (fila['notes'] as string | null) ?? null,
+      gender: (fila.gender as string | null) ?? null,
+      age: fila.age === null ? null : Number(fila.age),
+      weightKg: fila.weight_kg === null ? null : Number(fila.weight_kg),
+      heightCm: fila.height_cm === null ? null : Number(fila.height_cm),
+      quitReasons: (fila.quit_reasons as string | null) ?? null,
+      menopauseStage: (fila.menopause_stage as string | null) ?? null,
+      lastWeighed: (fila.last_weighed as string | null) ?? null,
+      chronicConditions: (fila.chronic_conditions as string | null) ?? null,
+      medications: (fila.medications as string | null) ?? null,
+      equipmentDetail: (fila.equipment_detail as string | null) ?? null,
+      lifestyle: (fila.lifestyle as string | null) ?? null,
+      notes: (fila.notes as string | null) ?? null,
     },
     constraints: {
-      daysPerWeek: fila['days_per_week'] as number,
-      hasLimitations: fila['has_limitations'] as boolean,
+      daysPerWeek: fila.days_per_week as number,
+      hasLimitations: fila.has_limitations as boolean,
     },
-    trainerChatId: Number(fila['trainer_chat_id']),
+    trainerChatId: Number(fila.trainer_chat_id),
   };
 }
 
@@ -372,11 +411,11 @@ export function createSweepRepo(db: Db): SweepRepo {
         throw new Error(`No se pudieron leer las generaciones atascadas: ${error.code}`);
       }
 
-      return (data ?? []).map((fila: Record<string, unknown>) => ({
-        versionId: fila['version_id'] as string,
-        trainerChatId: Number(fila['trainer_chat_id']),
-        clientName: fila['client_name'] as string,
-        minutesStuck: Number(fila['minutes_stuck']),
+      return (data ?? []).map((fila) => ({
+        versionId: fila.version_id as string,
+        trainerChatId: Number(fila.trainer_chat_id),
+        clientName: fila.client_name as string,
+        minutesStuck: Number(fila.minutes_stuck),
       }));
     },
 
@@ -418,14 +457,14 @@ export function createDeliveryRepo(db: Db): DeliveryRepo {
       if (error !== null) throw new Error(`No se pudo buscar el enlace: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
-      const chatDelEntrenador = fila['trainer_chat_id'];
+      const fila = data;
+      const chatDelEntrenador = fila.trainer_chat_id;
 
       return {
-        clientId: fila['client_id'] as string,
-        fullName: fila['full_name'] as string,
-        linkedProfileId: (fila['linked_profile_id'] as string | null) ?? null,
-        linkedTelegramUserId: toNumberOrNull(fila['linked_telegram_user_id']),
+        clientId: fila.client_id as string,
+        fullName: fila.full_name as string,
+        linkedProfileId: (fila.linked_profile_id as string | null) ?? null,
+        linkedTelegramUserId: toNumberOrNull(fila.linked_telegram_user_id),
         trainerChatId: Number(chatDelEntrenador),
       };
     },
@@ -499,28 +538,30 @@ function toNumberOrNull(value: unknown): number | null {
  * leen con el mismo código: dos lecturas que deben coincidir acaban sin
  * coincidir.
  */
+type DeliveryFn = 'version_for_delivery' | 'approved_version_for_client' | 'sent_version_for_profile';
+
 async function readDelivery(
   db: Db,
-  fn: 'version_for_delivery' | 'approved_version_for_client' | 'sent_version_for_profile',
-  args: Record<string, string>,
+  fn: DeliveryFn,
+  args: Database['public']['Functions'][DeliveryFn]['Args'],
 ): Promise<VersionForDelivery | null> {
   const { data, error } = await db.rpc(fn, args).maybeSingle();
 
   if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
   if (data === null) return null;
 
-  const fila = data as Record<string, unknown>;
-  const goal = fila['goal'] as string | null;
+  const fila = data;
+  const goal = fila.goal as string | null;
 
   return {
-    versionId: fila['version_id'] as string,
-    state: fila['state'] as VersionState,
-    content: fila['content'] as Workout,
-    clientName: fila['client_name'] as string,
+    versionId: fila.version_id as string,
+    state: fila.state as VersionState,
+    content: fromJson<Workout>(fila.content),
+    clientName: fila.client_name as string,
     // NULL si aún no canjeó su enlace: no hay dónde escribirle, pero la
     // versión se devuelve igual para poder avisar al entrenador (CA-3).
-    clientChatId: toNumberOrNull(fila['client_chat_id']),
-    trainerChatId: Number(fila['trainer_chat_id']),
+    clientChatId: toNumberOrNull(fila.client_chat_id),
+    trainerChatId: Number(fila.trainer_chat_id),
     // Los tres van juntos o no va ninguno: una rutina manual no tiene
     // formulario detrás (SPEC-005 regla 13).
     plan:
@@ -528,8 +569,8 @@ async function readDelivery(
         ? null
         : {
             goal,
-            daysPerWeek: Number(fila['days_per_week']),
-            sessionMinutes: Number(fila['session_minutes']),
+            daysPerWeek: Number(fila.days_per_week),
+            sessionMinutes: Number(fila.session_minutes),
           },
   };
 }
@@ -556,27 +597,27 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
       if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
-        versionId: fila['version_id'] as string,
-        state: fila['state'] as VersionState,
-        versionNumber: Number(fila['version_number']),
-        content: (fila['content'] as Workout | null) ?? null,
-        clientName: fila['client_name'] as string,
+        versionId: fila.version_id as string,
+        state: fila.state as VersionState,
+        versionNumber: Number(fila.version_number),
+        content: fila.content === null ? null : fromJson<Workout>(fila.content),
+        clientName: fila.client_name as string,
         client: {
-          clientId: fila['client_id'] as string,
-          trainerId: fila['trainer_id'] as string,
-          profileId: (fila['client_profile_id'] as string | null) ?? null,
+          clientId: fila.client_id as string,
+          trainerId: fila.trainer_id as string,
+          profileId: (fila.client_profile_id as string | null) ?? null,
         },
         // `null` si el plan no viene de Tally: entonces al aprobar se valida
         // la forma, no el encaje con unos criterios que no existen.
         constraints:
-          fila['days_per_week'] === null || fila['days_per_week'] === undefined
+          fila.days_per_week === null || fila.days_per_week === undefined
             ? null
             : {
-                daysPerWeek: Number(fila['days_per_week']),
-                hasLimitations: fila['has_limitations'] === true,
+                daysPerWeek: Number(fila.days_per_week),
+                hasLimitations: fila.has_limitations === true,
               },
       };
     },
@@ -617,14 +658,14 @@ export function createCheckinRepo(db: Db): CheckinRepo {
 
       if (error !== null) throw new Error(`No se pudieron leer los candidatos: ${error.code}`);
 
-      return (data ?? []).map((fila: Record<string, unknown>) => ({
-        clientId: fila['client_id'] as string,
-        clientName: fila['client_name'] as string,
-        clientChatId: toNumberOrNull(fila['client_chat_id']),
-        versionId: fila['version_id'] as string,
-        state: fila['state'] as VersionState,
-        sentAt: new Date(fila['sent_at'] as string),
-        lastWeekSent: Number(fila['last_week_sent']),
+      return (data ?? []).map((fila) => ({
+        clientId: fila.client_id as string,
+        clientName: fila.client_name as string,
+        clientChatId: toNumberOrNull(fila.client_chat_id),
+        versionId: fila.version_id as string,
+        state: fila.state as VersionState,
+        sentAt: new Date(fila.sent_at as string),
+        lastWeekSent: Number(fila.last_week_sent),
       }));
     },
 
@@ -652,16 +693,16 @@ export function createCheckinRepo(db: Db): CheckinRepo {
 
       if (error !== null) throw new Error(`No se pudieron leer los pendientes: ${error.code}`);
 
-      return (data ?? []).map((fila: Record<string, unknown>) => ({
-        checkinId: fila['checkin_id'] as string,
-        clientChatId: Number(fila['client_chat_id']),
-        weekNumber: Number(fila['week_number']),
-        state: fila['state'] as 'PENDING' | 'COMPLETED',
-        sentAt: new Date(fila['sent_at'] as string),
+      return (data ?? []).map((fila) => ({
+        checkinId: fila.checkin_id as string,
+        clientChatId: Number(fila.client_chat_id),
+        weekNumber: Number(fila.week_number),
+        state: fila.state as 'PENDING' | 'COMPLETED',
+        sentAt: new Date(fila.sent_at as string),
         reminderSentAt:
-          fila['reminder_sent_at'] === null
+          fila.reminder_sent_at === null
             ? null
-            : new Date(fila['reminder_sent_at'] as string),
+            : new Date(fila.reminder_sent_at as string),
       }));
     },
 
@@ -679,7 +720,7 @@ export function createCheckinRepo(db: Db): CheckinRepo {
     async saveAnswers(checkinId, answers, completed) {
       const { error } = await db.rpc('save_checkin_answers', {
         p_checkin_id: checkinId,
-        p_answers: answers,
+        p_answers: toJson(answers),
         p_completed: completed,
       });
 
@@ -690,26 +731,28 @@ export function createCheckinRepo(db: Db): CheckinRepo {
 }
 
 /** Las dos consultas de check-in devuelven la misma fila: se leen igual. */
+type CheckinFn = 'checkin_for_reply' | 'open_checkin_for_profile';
+
 async function readCheckin(
   db: Db,
-  fn: 'checkin_for_reply' | 'open_checkin_for_profile',
-  args: Record<string, string>,
+  fn: CheckinFn,
+  args: Database['public']['Functions'][CheckinFn]['Args'],
 ): Promise<CheckinForReply | null> {
   const { data, error } = await db.rpc(fn, args).maybeSingle();
 
   if (error !== null) throw new Error(`No se pudo leer el check-in: ${error.code}`);
   if (data === null) return null;
 
-  const fila = data as Record<string, unknown>;
-  const guardadas = (fila['answers'] ?? {}) as Partial<CheckinAnswers>;
+  const fila = data;
+  const guardadas = (fila.answers ?? {}) as Partial<CheckinAnswers>;
 
   return {
-    checkinId: fila['checkin_id'] as string,
-    clientProfileId: (fila['client_profile_id'] as string | null) ?? null,
-    clientName: fila['client_name'] as string,
-    weekNumber: Number(fila['week_number']),
-    state: fila['state'] as 'PENDING' | 'COMPLETED',
-    sentAt: new Date((fila['sent_at'] ?? new Date(0).toISOString()) as string),
+    checkinId: fila.checkin_id as string,
+    clientProfileId: (fila.client_profile_id as string | null) ?? null,
+    clientName: fila.client_name as string,
+    weekNumber: Number(fila.week_number),
+    state: fila.state as 'PENDING' | 'COMPLETED',
+    sentAt: new Date((fila.sent_at ?? new Date(0).toISOString()) as string),
     // `answers` es NULL mientras no conteste nada: los tres campos a `null`
     // significan «sin contestar», que no es lo mismo que «ninguna».
     answers: {
@@ -717,8 +760,8 @@ async function readCheckin(
       feeling: guardadas.feeling ?? null,
       discomfort: guardadas.discomfort ?? null,
     },
-    trainerChatId: Number(fila['trainer_chat_id']),
-    daysPerWeek: toNumberOrNull(fila['days_per_week']),
+    trainerChatId: Number(fila.trainer_chat_id),
+    daysPerWeek: toNumberOrNull(fila.days_per_week),
   };
 }
 
@@ -743,7 +786,7 @@ export function createQueryRepo(db: Db): QueryRepo {
 
       if (error !== null) throw new Error(`No se pudo leer la cartera: ${error.code}`);
 
-      return (data ?? []).map((fila: Record<string, unknown>) => leerResumen(fila));
+      return (data ?? []).map((fila) => leerResumen(fila));
     },
 
     async clientDetail(clientId) {
@@ -754,20 +797,20 @@ export function createQueryRepo(db: Db): QueryRepo {
       if (error !== null) throw new Error(`No se pudo leer la ficha: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
-      const respuestas = fila['last_answers'] as Record<string, unknown> | null;
-      const semana = fila['last_week_number'];
+      const fila = data;
+      const respuestas = fila.last_answers as Record<string, unknown> | null;
+      const semana = fila.last_week_number;
 
       return {
         ...leerResumen(fila),
-        versionId: (fila['version_id'] as string | null) ?? null,
-        goal: (fila['goal'] as string | null) ?? null,
-        level: (fila['level'] as Level | null) ?? null,
-        daysPerWeek: toNumberOrNull(fila['days_per_week']),
-        sessionMinutes: toNumberOrNull(fila['session_minutes']),
-        equipment: (fila['equipment'] as string | null) ?? null,
-        hasLimitations: fila['has_limitations'] === true,
-        sentDaysAgo: toNumberOrNull(fila['sent_days_ago']),
+        versionId: (fila.version_id as string | null) ?? null,
+        goal: (fila.goal as string | null) ?? null,
+        level: (fila.level as Level | null) ?? null,
+        daysPerWeek: toNumberOrNull(fila.days_per_week),
+        sessionMinutes: toNumberOrNull(fila.session_minutes),
+        equipment: (fila.equipment as string | null) ?? null,
+        hasLimitations: fila.has_limitations === true,
+        sentDaysAgo: toNumberOrNull(fila.sent_days_ago),
         // Sin respuestas no hay check-in que contar: uno a medias y uno que
         // no existe se distinguen por este `null`.
         lastCheckin:
@@ -789,11 +832,11 @@ export function createQueryRepo(db: Db): QueryRepo {
 
       if (error !== null) throw new Error(`No se pudieron leer las pendientes: ${error.code}`);
 
-      return (data ?? []).map((fila: Record<string, unknown>) => ({
-        versionId: fila['version_id'] as string,
-        clientName: fila['client_name'] as string,
-        versionNumber: Number(fila['version_number']),
-        daysWaiting: Number(fila['days_waiting']),
+      return (data ?? []).map((fila) => ({
+        versionId: fila.version_id as string,
+        clientName: fila.client_name as string,
+        versionNumber: Number(fila.version_number),
+        daysWaiting: Number(fila.days_waiting),
       }));
     },
 
@@ -805,11 +848,11 @@ export function createQueryRepo(db: Db): QueryRepo {
 
       if (error !== null) throw new Error(`No se pudieron leer los check-ins: ${error.code}`);
 
-      return (data ?? []).map((fila: Record<string, unknown>) => ({
-        clientName: fila['client_name'] as string,
-        weekNumber: Number(fila['week_number']),
-        daysWaiting: Number(fila['days_waiting']),
-        reminded: fila['reminded'] === true,
+      return (data ?? []).map((fila) => ({
+        clientName: fila.client_name as string,
+        weekNumber: Number(fila.week_number),
+        daysWaiting: Number(fila.days_waiting),
+        reminded: fila.reminded === true,
       }));
     },
 
@@ -822,14 +865,20 @@ export function createQueryRepo(db: Db): QueryRepo {
 }
 
 /** La parte que `/clientes` y `/cliente` comparten, leída una sola vez. */
-function leerResumen(fila: Record<string, unknown>): ClientSummary {
+/** Las columnas que lee `leerResumen`: las devuelven las DOS consultas que la usan. */
+type ResumenFila = Pick<
+  Database['public']['Functions']['trainer_clients']['Returns'][number],
+  'client_id' | 'full_name' | 'version_state' | 'version_number' | 'linked' | 'pending_checkin_days'
+>;
+
+function leerResumen(fila: ResumenFila): ClientSummary {
   return {
-    clientId: fila['client_id'] as string,
-    fullName: fila['full_name'] as string,
-    versionState: (fila['version_state'] as VersionState | null) ?? null,
-    versionNumber: toNumberOrNull(fila['version_number']),
-    linked: fila['linked'] === true,
-    pendingCheckinDays: toNumberOrNull(fila['pending_checkin_days']),
+    clientId: fila.client_id as string,
+    fullName: fila.full_name as string,
+    versionState: (fila.version_state as VersionState | null) ?? null,
+    versionNumber: toNumberOrNull(fila.version_number),
+    linked: fila.linked === true,
+    pendingCheckinDays: toNumberOrNull(fila.pending_checkin_days),
   };
 }
 
@@ -860,42 +909,42 @@ export function createIntakeRepo(db: Db): IntakeRepo {
       if (error !== null) throw new Error(`No se pudo leer la evaluación: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
-        versionId: fila['version_id'] as string,
-        state: fila['state'] as VersionState,
+        versionId: fila.version_id as string,
+        state: fila.state as VersionState,
         client: {
-          clientId: fila['client_id'] as string,
-          trainerId: fila['trainer_id'] as string,
-          profileId: (fila['client_profile_id'] as string | null) ?? null,
+          clientId: fila.client_id as string,
+          trainerId: fila.trainer_id as string,
+          profileId: (fila.client_profile_id as string | null) ?? null,
         },
-        clientName: fila['client_name'] as string,
-        goal: fila['goal'] as string,
-        level: fila['level'] as Level,
-        daysPerWeek: Number(fila['days_per_week']),
-        sessionMinutes: Number(fila['session_minutes']),
-        equipment: fila['equipment'] as string,
-        hasLimitations: fila['has_limitations'] === true,
-        limitationsDetail: (fila['limitations_detail'] as string | null) ?? null,
-        lifestyle: (fila['lifestyle'] as string | null) ?? null,
-        notes: (fila['notes'] as string | null) ?? null,
-        submittedAt: new Date(fila['submitted_at'] as string),
-        gender: (fila['gender'] as string | null) ?? null,
-        age: fila['age'] === null ? null : Number(fila['age']),
+        clientName: fila.client_name as string,
+        goal: fila.goal as string,
+        level: fila.level as Level,
+        daysPerWeek: Number(fila.days_per_week),
+        sessionMinutes: Number(fila.session_minutes),
+        equipment: fila.equipment as string,
+        hasLimitations: fila.has_limitations === true,
+        limitationsDetail: (fila.limitations_detail as string | null) ?? null,
+        lifestyle: (fila.lifestyle as string | null) ?? null,
+        notes: (fila.notes as string | null) ?? null,
+        submittedAt: new Date(fila.submitted_at as string),
+        gender: (fila.gender as string | null) ?? null,
+        age: fila.age === null ? null : Number(fila.age),
         // `numeric` llega como string por PostgREST: sin el Number, el peso se
         // pintaría bien por casualidad y fallaría en cuanto alguien lo sume.
-        weightKg: fila['weight_kg'] === null ? null : Number(fila['weight_kg']),
-        heightCm: fila['height_cm'] === null ? null : Number(fila['height_cm']),
-        lastWeighed: (fila['last_weighed'] as string | null) ?? null,
-        quitReasons: (fila['quit_reasons'] as string | null) ?? null,
-        menopauseStage: (fila['menopause_stage'] as string | null) ?? null,
-        chronicConditions: (fila['chronic_conditions'] as string | null) ?? null,
-        medications: (fila['medications'] as string | null) ?? null,
-          equipmentDetail: (fila['equipment_detail'] as string | null) ?? null,
+        weightKg: fila.weight_kg === null ? null : Number(fila.weight_kg),
+        heightCm: fila.height_cm === null ? null : Number(fila.height_cm),
+        lastWeighed: (fila.last_weighed as string | null) ?? null,
+        quitReasons: (fila.quit_reasons as string | null) ?? null,
+        menopauseStage: (fila.menopause_stage as string | null) ?? null,
+        chronicConditions: (fila.chronic_conditions as string | null) ?? null,
+        medications: (fila.medications as string | null) ?? null,
+          equipmentDetail: (fila.equipment_detail as string | null) ?? null,
         // `date` llega como string por PostgREST, y así se queda: convertirlo
         // metería la zona horaria del servidor en una fecha de nacimiento.
-        birthDate: (fila['birth_date'] as string | null) ?? null,
+        birthDate: (fila.birth_date as string | null) ?? null,
       };
     },
   };
@@ -917,17 +966,17 @@ export function createLinkResendRepo(db: Db): LinkResendRepo {
       if (error !== null) throw new Error(`No se pudo leer el cliente: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
         client: {
-          clientId: fila['client_id'] as string,
-          trainerId: fila['trainer_id'] as string,
-          profileId: (fila['profile_id'] as string | null) ?? null,
+          clientId: fila.client_id as string,
+          trainerId: fila.trainer_id as string,
+          profileId: (fila.profile_id as string | null) ?? null,
         },
-        fullName: fila['full_name'] as string,
-        linked: fila['linked'] === true,
-        linkToken: fila['link_token'] as string,
+        fullName: fila.full_name as string,
+        linked: fila.linked === true,
+        linkToken: fila.link_token as string,
       };
     },
   };
@@ -945,24 +994,24 @@ export function createCreationRepo(db: Db, requestId: string): CreationRepo {
       if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
-        versionId: fila['version_id'] as string,
-        state: fila['state'] as VersionState,
+        versionId: fila.version_id as string,
+        state: fila.state as VersionState,
         // SPEC-013: sin esto, los tres flujos de creación no podían
         // comprobar de quién era la versión sobre la que actuaban.
         client: {
-          clientId: fila['client_id'] as string,
-          trainerId: fila['trainer_id'] as string,
-          profileId: (fila['client_profile_id'] as string | null) ?? null,
+          clientId: fila.client_id as string,
+          trainerId: fila.trainer_id as string,
+          profileId: (fila.client_profile_id as string | null) ?? null,
         },
-        clientName: fila['client_name'] as string,
-        versionNumber: Number(fila['version_number']),
-        daysPerWeek: toNumberOrNull(fila['days_per_week']),
-        level: (fila['level'] as Level | null) ?? null,
-        equipment: (fila['equipment'] as string | null) ?? null,
-        hasLimitations: fila['has_limitations'] === true,
+        clientName: fila.client_name as string,
+        versionNumber: Number(fila.version_number),
+        daysPerWeek: toNumberOrNull(fila.days_per_week),
+        level: (fila.level as Level | null) ?? null,
+        equipment: (fila.equipment as string | null) ?? null,
+        hasLimitations: fila.has_limitations === true,
       };
     },
 
@@ -971,8 +1020,8 @@ export function createCreationRepo(db: Db, requestId: string): CreationRepo {
         p_version_id: versionId,
         p_expected_state: expected,
         p_source: source,
-        p_template_id: templateId,
-        p_content: content,
+        p_template_id: nullArg(templateId),
+        p_content: toJson(content),
         p_request_id: requestId,
       });
 
@@ -989,20 +1038,20 @@ export function createCreationRepo(db: Db, requestId: string): CreationRepo {
       if (error !== null) throw new Error(`No se pudo leer el borrador: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
-        versionId: fila['version_id'] as string,
-        versionNumber: Number(fila['version_number']),
-        clientName: fila['client_name'] as string,
-        content: fila['content'] as Workout,
+        versionId: fila.version_id as string,
+        versionNumber: Number(fila.version_number),
+        clientName: fila.client_name as string,
+        content: fromJson<Workout>(fila.content),
       };
     },
 
     async saveDraft(versionId, content) {
       const { data, error } = await db.rpc('save_draft_content', {
         p_version_id: versionId,
-        p_content: content,
+        p_content: toJson(content),
       });
 
       if (error !== null) throw new Error(`No se pudo guardar la edición: ${error.code}`);
@@ -1033,19 +1082,19 @@ export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRe
       if (error !== null) throw new Error(`No se pudo leer la versión: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
-        versionId: fila['version_id'] as string,
-        state: fila['state'] as VersionState,
-        planId: fila['plan_id'] as string,
-        clientName: fila['client_name'] as string,
-        versionNumber: Number(fila['version_number']),
-        trainerChatId: Number(fila['trainer_chat_id']),
+        versionId: fila.version_id as string,
+        state: fila.state as VersionState,
+        planId: fila.plan_id as string,
+        clientName: fila.client_name as string,
+        versionNumber: Number(fila.version_number),
+        trainerChatId: Number(fila.trainer_chat_id),
         client: {
-          clientId: fila['client_id'] as string,
-          trainerId: fila['trainer_id'] as string,
-          profileId: (fila['client_profile_id'] as string | null) ?? null,
+          clientId: fila.client_id as string,
+          trainerId: fila.trainer_id as string,
+          profileId: (fila.client_profile_id as string | null) ?? null,
         },
       };
     },
@@ -1072,13 +1121,13 @@ export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRe
       if (error !== null) throw new Error(`No se pudo leer la solicitud: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
-        requestId: fila['request_id'] as string,
-        clientId: fila['client_id'] as string,
-        hasComment: fila['has_comment'] === true,
-        askedAt: new Date(fila['asked_at'] as string),
+        requestId: fila.request_id as string,
+        clientId: fila.client_id as string,
+        hasComment: fila.has_comment === true,
+        askedAt: new Date(fila.asked_at as string),
       };
     },
 
@@ -1104,19 +1153,19 @@ export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRe
       if (error !== null) throw new Error(`No se pudo leer la solicitud: ${error.code}`);
       if (data === null) return null;
 
-      const fila = data as Record<string, unknown>;
+      const fila = data;
 
       return {
-        requestId: fila['request_id'] as string,
-        versionId: fila['version_id'] as string,
-        planId: fila['plan_id'] as string,
-        versionNumber: Number(fila['version_number']),
-        state: fila['state'] as 'OPEN' | 'RESOLVED',
-        reason: fila['reason'] as ChangeReason,
-        comment: (fila['comment'] as string | null) ?? null,
-        clientName: fila['client_name'] as string,
-        trainerId: fila['trainer_id'] as string,
-        sentDaysAgo: toNumberOrNull(fila['sent_days_ago']),
+        requestId: fila.request_id as string,
+        versionId: fila.version_id as string,
+        planId: fila.plan_id as string,
+        versionNumber: Number(fila.version_number),
+        state: fila.state as 'OPEN' | 'RESOLVED',
+        reason: fila.reason as ChangeReason,
+        comment: (fila.comment as string | null) ?? null,
+        clientName: fila.client_name as string,
+        trainerId: fila.trainer_id as string,
+        sentDaysAgo: toNumberOrNull(fila.sent_days_ago),
       };
     },
 

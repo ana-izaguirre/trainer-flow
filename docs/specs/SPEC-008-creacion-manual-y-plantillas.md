@@ -75,6 +75,106 @@ export function templatesFor(criteria: TemplateCriteria): readonly WorkoutTempla
 | `home-bodyweight-3d` | Casa, peso corporal | 3 | principiante | Ninguno |
 | `push-pull-legs-6d` | Empuje / tirón / pierna | 6 | avanzado | Gimnasio |
 
+### Ampliación: una plantilla para cada número de días
+
+| Campo | Valor |
+|---|---|
+| **Estado** | **PROPUESTA — pendiente de aprobación** |
+| **Origen** | Uso real (septiembre 2026): una clienta de 2 días no vio ninguna plantilla de 2 días |
+
+**El hueco.** El formulario acepta de 1 a 7 días (`assessments_days_per_week_range`)
+y solo hay plantillas de 3, 4 y 6. `adaptDays` ya ajusta cualquier plantilla a
+los días pedidos (en ciclo, con aviso al entrenador), así que nada se rompe.
+Pero el ajuste solo es bueno cerca del original: con 7 días repite A, B, C, A,
+B, C, A —siete sesiones intensas sin descanso— y con 1 día toma solo la sesión
+A, que no está pensada para ir sola.
+
+**La propuesta.** Cuatro plantillas nuevas, una por cada número de días que
+falta. Con ellas, las 8 cubren del 1 al 7.
+
+| `id` | Nombre | Días | Nivel | Equipamiento |
+|---|---|---|---|---|
+| `full-body-1d` | Cuerpo completo — 1 día | 1 | principiante | Gimnasio |
+| `full-body-2d` | Cuerpo completo — 2 días | 2 | principiante | Gimnasio |
+| `upper-lower-full-5d` | Torso / Pierna / Cuerpo completo — 5 días | 5 | intermedio | Gimnasio |
+| `strength-recovery-7d` | Fuerza + recuperación activa — 7 días | 7 | intermedio | Gimnasio |
+
+Formato: ejercicio · series × repeticiones · descanso.
+
+**`full-body-1d`** — *Una sesión que toca todos los grupos grandes. Con tan
+poca frecuencia, lo que cuenta es no saltarla.*
+
+| Día | Ejercicios |
+|---|---|
+| 1 · Cuerpo completo | Sentadilla con barra 3×8-10 · 120 s *(baja hasta donde controles la postura)* · Press de banca 3×8-10 · 90 s · Remo con barra 3×10-12 · 90 s · Peso muerto rumano 3×8-10 · 120 s · Press militar con mancuernas 2×10-12 · 90 s · Plancha frontal 3×30 s · 60 s |
+
+**`full-body-2d`** — *Cuerpo completo dos veces por semana, con al menos un
+día de descanso entre sesiones.*
+
+| Día | Ejercicios |
+|---|---|
+| 1 · Cuerpo completo A | Sentadilla con barra 3×8-10 · 120 s · Press de banca 3×8-10 · 90 s · Remo con barra 3×10-12 · 90 s · Elevaciones laterales 2×12-15 · 60 s · Plancha frontal 3×30 s · 60 s |
+| 2 · Cuerpo completo B | Peso muerto rumano 3×8-10 · 120 s · Press militar con mancuernas 3×10-12 · 90 s · Jalón al pecho 3×10-12 · 90 s · Zancadas con mancuernas 2×10 por pierna · 90 s · Curl de bíceps 2×12-15 · 60 s |
+
+**`upper-lower-full-5d`** — *Torso y pierna dos veces cada uno, con una
+sesión de cuerpo completo más ligera en medio.*
+
+| Día | Ejercicios |
+|---|---|
+| 1 · Torso — fuerza | Press de banca 4×6-8 · 150 s · Remo con barra 4×6-8 · 150 s · Press militar 3×8-10 · 120 s · Jalón al pecho 3×10-12 · 90 s |
+| 2 · Pierna — fuerza | Sentadilla con barra 4×6-8 · 180 s · Peso muerto rumano 3×8-10 · 150 s · Prensa de piernas 3×10-12 · 120 s · Elevación de talones 4×12-15 · 60 s |
+| 3 · Cuerpo completo — ligero | Sentadilla goblet 3×12-15 · 90 s · Flexiones 3×10-15 · 60 s · Remo con mancuerna 3×12 por brazo · 60 s · Face pull 3×15-20 · 60 s *(cuida la postura del hombro)* · Plancha lateral 3×30 s por lado · 45 s |
+| 4 · Torso — volumen | Press inclinado con mancuernas 4×10-12 · 90 s · Remo en polea baja 4×10-12 · 90 s · Aperturas en polea 3×12-15 · 60 s · Elevaciones laterales 3×12-15 · 60 s · Curl de bíceps 3×12-15 · 60 s |
+| 5 · Pierna — volumen | Peso muerto convencional 3×5-6 · 180 s · Zancadas con mancuernas 3×10-12 · 90 s · Curl femoral 3×12-15 · 60 s · Extensión de cuádriceps 3×12-15 · 60 s |
+
+**`strength-recovery-7d`** — *Cuatro sesiones de fuerza y tres de
+recuperación activa. Siete días de entrenamiento intenso no dejan progresar:
+el descanso es parte del plan.*
+
+| Día | Ejercicios |
+|---|---|
+| 1 · Torso — fuerza | Igual que el día 1 de `upper-lower-full-5d` |
+| 2 · Pierna — fuerza | Igual que el día 2 de `upper-lower-full-5d` |
+| 3 · Recuperación activa | Caminata 1×30-40 min *(ritmo que permita conversar)* · Movilidad de cadera 2×10 por lado · 30 s · Movilidad de hombros 2×10 · 30 s · Estiramientos generales 1×10 min |
+| 4 · Torso — volumen | Igual que el día 4 de `upper-lower-full-5d` |
+| 5 · Pierna — volumen | Igual que el día 5 de `upper-lower-full-5d` |
+| 6 · Recuperación activa | Bicicleta o elíptica suave 1×20-30 min · Puente de glúteo 3×15 · 45 s · Plancha frontal 3×30 s · 45 s · Movilidad torácica 2×10 · 30 s |
+| 7 · Recuperación activa | Caminata 1×30-40 min · Estiramientos generales 1×15 min |
+
+Aviso para el entrenador (`warnings`, que **no** llega al cliente, SPEC-005
+regla 5): *«Siete días: los de recuperación activa son suaves a propósito.
+Si el cliente los convierte en entrenamiento intenso, pierde el descanso que
+necesita para progresar.»*
+
+**Reglas de la ampliación**
+
+- **R-A1.** Para cada número de días de 1 a 7 existe al menos una plantilla
+  con exactamente esos días.
+- **R-A2.** Siguen siendo constante en código, no tabla (§3): cero migración.
+- **R-A3.** Se listan las 8, ordenadas como hoy (regla 7): la de los días
+  exactos del cliente queda arriba. No se filtra: el entrenador puede preferir
+  otra y `adaptDays` la ajusta.
+- **R-A4.** Son un punto de partida, igual que las cuatro de hoy: el
+  entrenador las revisa y edita antes de aprobar. Los ejercicios de esta
+  propuesta los revisa Ana (o su entrenador) antes de implementar.
+
+**Criterios de aceptación**
+
+- **CA-A1** — DADO un cliente de *n* días, con *n* de 1 a 7, CUANDO se listan
+  las plantillas, ENTONCES la primera tiene exactamente *n* días.
+- **CA-A2** — DADO cualquiera de las 8 plantillas, CUANDO se carga con sus
+  propios días, ENTONCES pasa `validateDraft` sin avisos de ajuste.
+- **CA-A3** — DADO la plantilla de 7 días, CUANDO se carga, ENTONCES el
+  borrador lleva el aviso de recuperación para el entrenador, y el mensaje al
+  cliente no lo incluye.
+
+**Tests** — en `templates.test.ts`: CA-A1 para *n* = 1…7; las 8 plantillas
+pasan `validateDraft` (ya existe, se extiende solo); CA-A3 con `applyTemplate`
+y `formatForClient`.
+
+**Fuera de alcance** — que el entrenador cree o edite plantillas desde
+Telegram: eso es SPEC-017 (aprobada, pendiente).
+
 ### Las tres fuentes convergen
 
 ```

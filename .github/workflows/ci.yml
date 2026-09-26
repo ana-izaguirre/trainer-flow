@@ -128,6 +128,45 @@ jobs:
       - name: Integration and E2E · against PostgreSQL
         run: pnpm test:integration
 
+      # ┌─ database.types.ts IS GENERATED HERE, NEVER BY HAND ───────────────┐
+      # │ `_shared/db.ts` is typed with it, so a migration that renames a     │
+      # │ column breaks `deno check` instead of reading `undefined` in        │
+      # │ production. That only holds if the committed file matches the      │
+      # │ migrations — this step is the guard.                                │
+      # │                                                                     │
+      # │ Generating needs Docker (the CLI runs postgres-meta), which the     │
+      # │ runner has and a cloud session does not. So when they differ, the  │
+      # │ correct file is uploaded as an artifact: download it, commit it.    │
+      # └─────────────────────────────────────────────────────────────────────┘
+      - name: Types · database.types.ts matches the migrations
+        env:
+          TEST_DATABASE_NAME: types_from_migrations
+        run: |
+          node --experimental-strip-types --no-warnings \
+            -e "import('./tests/helpers/db.ts').then((m) => m.resetTestDatabase())"
+
+          pnpm exec supabase gen types typescript --agent no --schema public \
+            --db-url "postgresql://postgres:postgres@localhost:5432/types_from_migrations" \
+            > "$RUNNER_TEMP/database.types.ts"
+
+          # Against /dev/null when the file does not exist yet, so the log
+          # shows it whole: the artifact is not the only way to get it.
+          committed=supabase/functions/_core/database.types.ts
+          [ -f "$committed" ] || committed=/dev/null
+
+          if ! diff -u "$committed" "$RUNNER_TEMP/database.types.ts"; then
+            echo "::error::supabase/functions/_core/database.types.ts does not match the migrations. Download the 'database-types' artifact of this run and commit it in that path."
+            exit 1
+          fi
+
+      - name: Types · upload the regenerated file
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-types
+          path: ${{ runner.temp }}/database.types.ts
+          if-no-files-found: ignore
+
       # `always()` so the table also shows up when a threshold fails: that is
       # exactly when it is most useful.
       - name: Comment coverage on the PR

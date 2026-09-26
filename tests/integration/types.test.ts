@@ -1,13 +1,14 @@
 /**
  * SPEC-000 / CA-7 — los tipos generados coinciden con el esquema real.
  *
- * `database.types.ts` lo genera el CLI de Supabase y NUNCA se edita a mano:
+ * `database.types.ts` lo genera el CLI de Supabase y NUNCA se edita a mano.
+ * Generarlo necesita Docker; CI lo tiene y lo regenera en cada run (ci.yml,
+ * «database.types.ts matches the migrations»). Si difiere, ese paso falla y
+ * sube el archivo correcto como artefacto `database-types`.
  *
- *   pnpm types:local     # contra la base local
- *   pnpm types           # contra el proyecto vinculado
- *
- * Este test es el guardián contra la deriva: si alguien cambia el esquema y
- * olvida regenerar los tipos, falla aquí en vez de fallar en producción.
+ * Este test es la versión SIN Docker del mismo guardián: más gruesa (busca
+ * nombres, no compara byte a byte), pero corre en cualquier sitio donde
+ * corran los tests de integración.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -36,7 +37,7 @@ describe.skipIf(!typesExist)('CA-7 — tipos sincronizados con el esquema', () =
     await db?.end();
   });
 
-  it('declara las 8 tablas', async () => {
+  it('declara todas las tablas', async () => {
     const { rows } = await db.query<{ tablename: string }>(
       `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
     );
@@ -60,23 +61,28 @@ describe.skipIf(!typesExist)('CA-7 — tipos sincronizados con el esquema', () =
     ).toEqual([]);
   });
 
-  it('declara el enum plan_state con sus 10 valores', async () => {
-    const { rows } = await db.query<{ enumlabel: string }>(
-      `SELECT enumlabel FROM pg_enum e
+  it('declara todos los valores de todos los enums', async () => {
+    // Antes miraba solo `plan_state`, un enum que ya no es el modelo de
+    // estados (hoy es `version_state`). Recorrerlos todos evita repetirlo.
+    const { rows } = await db.query<{ typname: string; enumlabel: string }>(
+      `SELECT t.typname, e.enumlabel FROM pg_enum e
        JOIN pg_type t ON t.oid = e.enumtypid
-       WHERE t.typname = 'plan_state'`,
+       JOIN pg_namespace n ON n.oid = t.typnamespace
+       WHERE n.nspname = 'public'`,
     );
 
-    for (const { enumlabel } of rows) {
-      expect(types, `falta el estado ${enumlabel} en los tipos`).toContain(`"${enumlabel}"`);
+    expect(rows.length, 'el esquema debería tener enums').toBeGreaterThan(0);
+
+    for (const { typname, enumlabel } of rows) {
+      expect(types, `falta ${typname}.${enumlabel} en los tipos`).toContain(`"${enumlabel}"`);
     }
   });
 });
 
 describe.skipIf(typesExist)('CA-7 — pendiente', () => {
   it('database.types.ts todavía no se ha generado', () => {
-    // No se genera en este entorno: el CLI de Supabase necesita Docker y aquí
-    // el registro de imágenes está bloqueado. Se genera en la máquina local.
+    // Sin Docker no se puede generar aquí. CI lo genera y, si falta, lo sube
+    // como artefacto `database-types`: se descarga y se versiona.
     expect(typesExist).toBe(false);
   });
 });

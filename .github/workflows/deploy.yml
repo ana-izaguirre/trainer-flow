@@ -12,13 +12,23 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  # To redeploy without touching the code: Actions tab → Deploy → Run workflow.
+  # By hand: Actions tab → Deploy → Run workflow. Staging accepts ANY branch
+  # (that is its point: try a branch before merging it); production only
+  # accepts `main`, checked in "Check the configuration".
   workflow_dispatch:
+    inputs:
+      target:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        # A mistaken click should land on staging, never on production.
+        default: staging
 
-# Two deploys at once would leave the database half-migrated. This one does NOT
-# cancel a running deploy: it queues behind it.
+# Two deploys at once on the SAME project would leave its database
+# half-migrated, so they queue instead of cancelling. Staging and production
+# are different projects: one does not wait for the other.
 concurrency:
-  group: deploy
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.target || 'production' }}
   cancel-in-progress: false
 
 jobs:
@@ -35,8 +45,15 @@ jobs:
     # │    before deploying: Settings → Environments → production →         │
     # │    Required reviewers. Until it is configured it blocks nothing, so  │
     # │    declaring it here costs nothing and enables it whenever wanted.   │
+    # │    Staging gets its own environment, without that gate.             │
     # └─────────────────────────────────────────────────────────────────────┘
-    environment: production
+    #
+    # `inputs.target` is never empty on a dispatch (it is a choice with a
+    # default), so this `&& ||` cannot fall through to production by accident.
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'production' }}
+
+    env:
+      TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'production' }}
 
     # `workflow_dispatch` carries no `workflow_run`, so it is accepted when
     # absent. What never passes is a red CI.
@@ -96,17 +113,53 @@ jobs:
       # │ Reading both makes either placement work, and the check below turns │
       # │ "not set anywhere" into a message that names both places.           │
       # └─────────────────────────────────────────────────────────────────────┘
+      #
+      # ┌─ STAGING NEVER FALLS BACK TO PRODUCTION ───────────────────────────┐
+      # │ Staging reads its OWN names (STAGING_SUPABASE_PROJECT_REF,          │
+      # │ STAGING_SUPABASE_DB_PASSWORD). Environment-scoped secrets would     │
+      # │ silently fall back to the repository-level ones — which are         │
+      # │ production's — whenever one is missing. With separate names, a     │
+      # │ missing staging value is an error, never a deploy to production.    │
+      # │                                                                     │
+      # │ The choice happens in bash on purpose: the `a && b || c` idiom in   │
+      # │ an expression returns `c` when `b` is empty, which here would mean  │
+      # │ production's ref.                                                   │
+      # └─────────────────────────────────────────────────────────────────────┘
       - name: Check the configuration before touching anything
         id: config
         if: steps.changes.outputs.any == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_REF }}
+          PROD_REF: ${{ vars.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_REF }}
+          PROD_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          STAGING_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF || secrets.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
         run: |
           missing=0
 
+          case "$TARGET" in
+            production)
+              if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+                echo "::error::Production only deploys main, and this run is on $GITHUB_REF. To try a branch, run it again with target = staging."
+                exit 1
+              fi
+              PROJECT_REF="$PROD_REF"
+              DB_PASSWORD="$PROD_DB_PASSWORD"
+              prefix=""
+              ;;
+            staging)
+              PROJECT_REF="$STAGING_REF"
+              DB_PASSWORD="$STAGING_DB_PASSWORD"
+              prefix="STAGING_"
+              ;;
+            *)
+              echo "::error::Unknown target '$TARGET'."
+              exit 1
+              ;;
+          esac
+
           if [ -z "${PROJECT_REF}" ]; then
-            echo "::error::SUPABASE_PROJECT_REF is empty. Set it under Settings → Secrets and variables → Actions, in either the Variables tab (preferred, it is not sensitive) or Secrets. It is the id in your dashboard URL: /dashboard/project/<THIS>."
+            echo "::error::${prefix}SUPABASE_PROJECT_REF is empty. Set it under Settings → Secrets and variables → Actions, in either the Variables tab (preferred, it is not sensitive) or Secrets. It is the id in your dashboard URL: /dashboard/project/<THIS>."
             missing=1
           fi
 
@@ -115,12 +168,17 @@ jobs:
             missing=1
           fi
 
-          if [ -z "${SUPABASE_DB_PASSWORD:-}" ] && [ -z "${{ secrets.SUPABASE_DB_PASSWORD }}" ]; then
-            echo "::error::SUPABASE_DB_PASSWORD is empty. It is the database password, under Project Settings → Database."
+          if [ -z "${DB_PASSWORD}" ]; then
+            echo "::error::${prefix}SUPABASE_DB_PASSWORD is empty. It is the database password, under Project Settings → Database."
             missing=1
           fi
 
           [ "$missing" = "1" ] && exit 1
+
+          if [ "$TARGET" = "staging" ] && [ "$PROJECT_REF" = "$PROD_REF" ]; then
+            echo "::error::STAGING_SUPABASE_PROJECT_REF is the same as production's. Staging must be a separate Supabase project."
+            exit 1
+          fi
 
           # An expired token makes `supabase link` fail with a 401 that explains
           # nothing. Failing here says what to do instead.
@@ -135,24 +193,32 @@ jobs:
 
           echo "ref=${PROJECT_REF}" >> "$GITHUB_OUTPUT"
 
+          # The password of the CHOSEN project, for `link` and `db push`. It
+          # comes from a secret, so the runner keeps masking it in the logs.
+          echo "SUPABASE_DB_PASSWORD=${DB_PASSWORD}" >> "$GITHUB_ENV"
+
       # The order is NOT interchangeable: an Edge Function does not create
       # tables, it only reads and writes the ones that exist. The other way
       # round, the first webhook fails with "relation does not exist".
+      #
+      # SUPABASE_DB_PASSWORD is NOT set here on purpose: it comes from
+      # $GITHUB_ENV, already resolved for the target. A step-level `env`
+      # would override it with production's.
       - name: Link the project
         if: steps.changes.outputs.any == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase link --project-ref "${{ steps.config.outputs.ref }}"
 
       # Migrations are immutable and additive only (SPEC-000 rule 8), so
       # applying new ones is safe. One that dropped data should not come
       # through here without a human looking at it.
+      # Like `link`, it takes SUPABASE_DB_PASSWORD from $GITHUB_ENV, and the
+      # project from the link above: both already resolved for the target.
       - name: Migrations
         if: steps.changes.outputs.any == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase db push
 
       - name: Edge Functions
@@ -169,9 +235,11 @@ jobs:
       # │                                                                    │
       # │ It runs AFTER the functions: if it fails, the code is already      │
       # │ deployed and fine — what is missing is the manual step it names.   │
+      # │                                                                    │
+      # │ Production only: staging does not need to send real check-ins.     │
       # └────────────────────────────────────────────────────────────────────┘
       - name: pg_cron jobs are scheduled
-        if: steps.changes.outputs.any == 'true'
+        if: steps.changes.outputs.any == 'true' && env.TARGET == 'production'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -213,10 +281,12 @@ jobs:
           fi
 
           {
-            echo "### Deployed"
+            echo "### Deployed to ${TARGET}"
             echo
             echo "| | |"
             echo "|---|---|"
+            echo "| Target | **${TARGET}** |"
+            echo "| Branch | \`${GITHUB_REF_NAME}\` |"
             echo "| Commit | \`${GITHUB_SHA::7}\` |"
             echo "| Reason | ${{ steps.changes.outputs.reason }} |"
             echo "| Migrations | $(ls supabase/migrations/*.sql | wc -l) |"

@@ -1,0 +1,56 @@
+name: Mutation testing
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Coverage says a line RAN. Mutation testing says whether the tests would
+# notice it being wrong: Stryker plants small bugs (`===` → `!==`, a condition
+# → `true`) and checks that some test fails. A bug no test catches "survives".
+#
+# Nightly, not on every PR: it runs the unit tests hundreds of times. It only
+# mutates the three modules vitest.config.ts already holds to 100% coverage.
+#
+# Policy (scripts/mutation-policy.mjs): authorization.ts and state-machine.ts
+# must stay at 100%; validate-draft.ts is reported, not enforced (yet).
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  schedule:
+    # 03:00 UTC every day: after the day's merges, before anyone looks.
+    - cron: '0 3 * * *'
+  # Actions tab → Mutation testing → Run workflow, to try a branch.
+  workflow_dispatch:
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: Stryker on the critical modules
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run Stryker
+        run: pnpm test:mutation
+
+      - name: Enforce the per-file policy
+        run: node scripts/mutation-policy.mjs
+
+      # `always()`: the report matters MOST when the policy fails — it shows
+      # each surviving mutant on its exact line.
+      - name: Upload the HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          if-no-files-found: ignore

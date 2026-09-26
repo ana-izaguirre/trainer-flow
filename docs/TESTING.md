@@ -135,6 +135,67 @@ v1 SENT → el cliente pide un cambio → el entrenador crea v2
 
 El assert sobre v1 es lo que prueba el punto §7.
 
+## Mutation testing — si los tests notarían un error
+
+La cobertura dice que una línea **corrió**. No dice si algún test notaría que
+esa línea está mal: la auditoría S-49 encontró errores reales con 100% de
+cobertura. Mutation testing responde eso.
+
+**Cómo funciona.** Stryker toma el código y le mete un error pequeño a
+propósito —un `===` que pasa a `!==`, una condición que pasa a `true`, un
+texto que pasa a `""`—. A cada versión rota se le llama *mutante*. Después
+corre los tests:
+
+| Resultado | Qué significa |
+|---|---|
+| Algún test falla | El mutante **murió**: los tests lo detectaron ✅ |
+| Todos pasan | El mutante **sobrevivió**: hay un error que ningún test ve ❌ |
+
+El *mutation score* es el porcentaje de mutantes que murieron.
+
+**Qué se muta.** Solo los tres módulos que `vitest.config.ts` ya exige al
+100% de cobertura: `authorization.ts`, `state-machine.ts` y
+`validate-draft.ts`.
+
+```bash
+pnpm test:mutation                 # ~1,5 min; reporte en reports/mutation/index.html
+node scripts/mutation-policy.mjs   # la política, sobre el último reporte
+```
+
+El reporte HTML muestra cada mutante sobreviviente en su línea exacta, con el
+cambio que Stryker hizo y los tests que corrieron sin notarlo.
+
+**En CI** corre cada noche (`.github/workflows/mutation.yml`) y a mano desde
+Actions. No en cada PR: ejecuta los tests cientos de veces.
+
+### La política
+
+| Módulo | Exigido | Hoy | Por qué |
+|---|---|---|---|
+| `authorization.ts` | **100%** | 100% (79/79) | Es la única capa que separa datos (ADR-010) |
+| `state-machine.ts` | **100%** | 100% (38/38) | Es lo que impide `DRAFT → SENT` |
+| `validate-draft.ts` | Se reporta | 83,9% (281/335) | Deuda conocida, abajo |
+
+Stryker solo admite umbrales globales; `scripts/mutation-policy.mjs` los
+exige por archivo.
+
+**Lo que encontró la primera corrida.** `authorization.ts` tenía 100% de
+cobertura y 5 mutantes sobrevivientes: se podían borrar las comprobaciones de
+rol o de `NULL` sin que fallara nada. Se cerraron con tres tests de
+denegación (`el rol cuenta, no solo el ID`), sin tocar el código.
+
+**La deuda de `validate-draft.ts`** (54 sobrevivientes):
+
+- **28 son textos de error.** Los tests comprueban que la validación falla,
+  pero no **qué** error reporta. Un código o mensaje cambiado pasa
+  desapercibido. Se cierran afirmando el código de error en los tests.
+- **~20 son guardas de `null` redundantes** (líneas 134, 170 y 259): cuando
+  se llega ahí, el error ya quedó registrado. Probablemente son mutantes
+  equivalentes, que ningún test puede matar. Se confirman leyéndolos uno a
+  uno en el reporte.
+
+Cuando se cierre esa deuda, `validate-draft.ts` pasa a la lista de exigidos.
+
 ## Reglas no negociables
 
 1. **Toda función de `_core` nace de un test rojo.**
