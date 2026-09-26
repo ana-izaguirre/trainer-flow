@@ -17,16 +17,16 @@
 | 7 | `/rutina` avisa del cambio pendiente antes de la rutina | ✅ CA-6 |
 | 8 | Ningún texto suelto se queda sin respuesta | ✅ `SIN_PREGUNTA_PENDIENTE`, CA-8 |
 | 12 | `/cambio` en `AYUDA_CLIENTE` | ✅ |
+| 11 | La ficha del entrenador muestra la solicitud abierta (motivo y días, sin el comentario) | ✅ migración 0028, `trainer_client_detail` |
+| 14 | `/pendientes` con las dos listas (`DRAFT` y `APPROVED` sin abrir) | ✅ migración 0028, `trainer_awaiting_link` |
 | 3 | `force_reply` en cada pregunta de texto libre | ⏸️ Pendiente — ver nota |
 | 9 | Acuse por botón del check-in (`answerCallback` con texto) | ⏸️ Pendiente — ver nota |
 | 10 | Cabecera «actualizada» en la v2 | ⏸️ Pendiente |
-| 11 | La ficha del entrenador muestra la solicitud abierta | ⏸️ Pendiente |
-| 13 | Aviso de enlace sin abrir 48h | ⏸️ Pendiente |
-| 14 | `/pendientes` con las dos listas | ⏸️ Pendiente |
+| 13 | Aviso de enlace sin abrir 48h | ⏸️ Pendiente — ver nota |
 
-**1537 unit tests (100% cobertura en `_core`) + 261 integration/E2E + 101 Deno.**
+**1554 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 101 Deno.**
 
-### Por qué las reglas 3, 9, 11, 13 y 14 quedaron fuera de este PR
+### Por qué las reglas 3, 9, 10 y 13 quedaron fuera de este PR
 
 - **Regla 9** (acuse por botón del check-in) choca con una garantía ya
   probada del webhook: el `callback_query` se responde **antes** de hacer
@@ -37,10 +37,15 @@
 - **Regla 3** (`force_reply`) necesita un tipo nuevo en `TelegramSender` y
   tocar cada `sendMessage` de cada test del repo (~15 archivos): mucho para
   lo que resuelve, cuando el texto del mensaje ya dice dónde escribir.
-- **Reglas 11, 13 y 14** tocan `client_detail()` y `trainer_pending_versions()`
-  —consultas grandes y ya cargadas—, más una columna de recordatorio nueva
-  en `workout_versions`. Se hacen mejor como su propio PR, no mezcladas con
-  el resto.
+- **Regla 10** (cabecera «actualizada») necesita `versionNumber` en
+  `VersionForDelivery`, que hoy no lo lleva: toca su función SQL, el puerto
+  y el adaptador solo para un cambio de cabecera. Se hace junto con la 13.
+- **Regla 13** (aviso de enlace sin abrir 48h) es la única que agrega un
+  **cron nuevo en producción** — y Ana ya tuvo que configurar pg_cron a
+  mano esta sesión. `trainer_awaiting_link` (regla 14, ya implementada) es
+  la misma consulta que necesitaría ese barrido: falta la columna de
+  recordatorio enviado y el paso de despliegue. Se hace en su propio PR,
+  avisando antes de que haga falta un `pg_cron.schedule` más.
 
 Quedan en el backlog de esta spec, no en uno nuevo: la spec sigue abierta
 hasta que se implementen.

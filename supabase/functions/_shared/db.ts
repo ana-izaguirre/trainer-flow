@@ -946,6 +946,14 @@ export function createQueryRepo(db: Db): QueryRepo {
                 feeling: (respuestas['feeling'] as string | null) ?? null,
                 discomfort: (respuestas['discomfort'] as string | null) ?? null,
               },
+        // SPEC-030 regla 11.
+        openChangeRequest:
+          fila.change_request_reason === null
+            ? null
+            : {
+                reason: fila.change_request_reason as ChangeReason,
+                daysAgo: Number(fila.change_request_days_ago),
+              },
       };
     },
 
@@ -955,6 +963,21 @@ export function createQueryRepo(db: Db): QueryRepo {
       });
 
       if (error !== null) throw new Error(`No se pudieron leer las pendientes: ${error.code}`);
+
+      return (data ?? []).map((fila) => ({
+        versionId: fila.version_id as string,
+        clientName: fila.client_name as string,
+        versionNumber: Number(fila.version_number),
+        daysWaiting: Number(fila.days_waiting),
+      }));
+    },
+
+    async awaitingLink(trainerId) {
+      const { data, error } = await db.rpc('trainer_awaiting_link', {
+        p_trainer_id: trainerId,
+      });
+
+      if (error !== null) throw new Error(`No se pudieron leer las que esperan enlace: ${error.code}`);
 
       return (data ?? []).map((fila) => ({
         versionId: fila.version_id as string,

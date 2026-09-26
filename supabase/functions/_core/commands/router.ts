@@ -248,10 +248,14 @@ function enviarFicha(detalle: ClientDetail, actor: Identity, deps: CommandDeps):
 }
 
 async function pendientes(actor: Identity, deps: CommandDeps): Promise<CommandOutcome> {
-  const versiones = await deps.repo.pendingVersions(actor.profileId);
+  // SPEC-030 regla 14: las dos listas, en paralelo.
+  const [versiones, esperandoEnlace] = await Promise.all([
+    deps.repo.pendingVersions(actor.profileId),
+    deps.repo.awaitingLink(actor.profileId),
+  ]);
 
   // Una por mensaje: el `callback_data` de un botón lleva UN `versionId`.
-  const mensajes = formatPending(versiones);
+  const mensajes = formatPending(versiones, esperandoEnlace);
   for (const mensaje of mensajes) {
     await deps.sender.sendMessage(actor.telegramChatId, mensaje.text, mensaje.keyboard);
   }

@@ -918,9 +918,20 @@ export type Database = {
         Args: { p_client_id: string; p_request_id: string }
         Returns: boolean
       }
+      trainer_awaiting_link: {
+        Args: { p_trainer_id: string }
+        Returns: {
+          client_name: string
+          days_waiting: number
+          version_id: string
+          version_number: number
+        }[]
+      }
       trainer_client_detail: {
         Args: { p_client_id: string }
         Returns: {
+          change_request_days_ago: number
+          change_request_reason: Database["public"]["Enums"]["change_reason"]
           client_id: string
           days_per_week: number
           equipment: string

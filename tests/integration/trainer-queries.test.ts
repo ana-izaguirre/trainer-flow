@@ -265,6 +265,51 @@ describe('trainer_client_detail', () => {
     ]);
     expect(rows).toHaveLength(0);
   });
+
+  // SPEC-030 regla 11.
+  it('SPEC-030 · trae la solicitud de cambio abierta, sin el comentario', async () => {
+    const t = await createProfile(db, 'trainer');
+    const c = await nuevoCliente(t, 'Carlos');
+    const v = await conRutina(t, c);
+    await db.query(`SELECT * FROM request_change($1, $2, 'too_hard')`, [v, c]);
+    await db.query(`SELECT * FROM add_change_comment($1, $2, 'me molesta el hombro')`, [
+      (await db.query(`SELECT id FROM change_requests WHERE version_id=$1`, [v])).rows[0].id,
+      c,
+    ]);
+
+    const { rows, fields } = await db.query(`SELECT * FROM trainer_client_detail($1)`, [c]);
+
+    expect(rows[0].change_request_reason).toBe('too_hard');
+    expect(rows[0].change_request_days_ago).toBe(0);
+    expect(fields.map((f) => f.name)).not.toContain('comment');
+    expect(JSON.stringify(rows[0])).not.toContain('hombro');
+  });
+
+  it('sin solicitud abierta, los dos campos son null', async () => {
+    const t = await createProfile(db, 'trainer');
+    const c = await nuevoCliente(t, 'Carlos');
+    await conRutina(t, c);
+
+    const { rows } = await db.query(`SELECT * FROM trainer_client_detail($1)`, [c]);
+
+    expect(rows[0].change_request_reason).toBeNull();
+    expect(rows[0].change_request_days_ago).toBeNull();
+  });
+
+  it('una solicitud RESUELTA ya no sale como abierta', async () => {
+    const t = await createProfile(db, 'trainer');
+    const c = await nuevoCliente(t, 'Carlos');
+    const v = await conRutina(t, c);
+    await db.query(`SELECT * FROM request_change($1, $2, 'too_hard')`, [v, c]);
+    await db.query(
+      `UPDATE change_requests SET state = 'RESOLVED', resolved_at = now() WHERE version_id=$1`,
+      [v],
+    );
+
+    const { rows } = await db.query(`SELECT * FROM trainer_client_detail($1)`, [c]);
+
+    expect(rows[0].change_request_reason).toBeNull();
+  });
 });
 
 describe('trainer_pending_versions', () => {
@@ -313,6 +358,54 @@ describe('trainer_pending_versions', () => {
 
     expect(rows.map((r) => r.client_name)).toEqual(['Antigua', 'Reciente']);
     expect(rows[0].days_waiting).toBe(8);
+  });
+});
+
+// SPEC-030 regla 14 — la segunda lista de `/pendientes`.
+describe('trainer_awaiting_link', () => {
+  it('trae las APPROVED cuyo cliente nunca abrió su enlace', async () => {
+    const t = await createProfile(db, 'trainer');
+    const c = await nuevoCliente(t, 'Carlos', false);
+    const v = await conRutina(t, c, 'DRAFT');
+    await transition(db, v, 'DRAFT', 'APPROVED');
+
+    const { rows } = await db.query(`SELECT * FROM trainer_awaiting_link($1)`, [t]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].client_name).toBe('Carlos');
+    expect(rows[0].version_id).toBe(v);
+  });
+
+  it('un cliente ya vinculado no sale, aunque su versión esté APPROVED', async () => {
+    const t = await createProfile(db, 'trainer');
+    const c = await nuevoCliente(t, 'Ana', true);
+    const v = await conRutina(t, c, 'DRAFT');
+    await transition(db, v, 'DRAFT', 'APPROVED');
+
+    const { rows } = await db.query(`SELECT * FROM trainer_awaiting_link($1)`, [t]);
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it('un DRAFT o una SENT no cuentan, solo APPROVED', async () => {
+    const t = await createProfile(db, 'trainer');
+    await conRutina(t, await nuevoCliente(t, 'Borrador', false), 'DRAFT');
+    await conRutina(t, await nuevoCliente(t, 'Enviada', false), 'SENT');
+
+    const { rows } = await db.query(`SELECT * FROM trainer_awaiting_link($1)`, [t]);
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it('otro entrenador no ve las de este', async () => {
+    const a = await createProfile(db, 'trainer', 'A');
+    const b = await createProfile(db, 'trainer', 'B');
+    const v = await conRutina(a, await nuevoCliente(a, 'De A', false), 'DRAFT');
+    await transition(db, v, 'DRAFT', 'APPROVED');
+
+    const { rows } = await db.query(`SELECT * FROM trainer_awaiting_link($1)`, [b]);
+
+    expect(rows).toHaveLength(0);
   });
 });
 

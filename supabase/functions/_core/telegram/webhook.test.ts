@@ -135,6 +135,10 @@ function fakeCommands(
       pasos.push('pendingVersions');
       return Promise.resolve([]);
     },
+    awaitingLink: () => {
+      pasos.push('awaitingLink');
+      return Promise.resolve([]);
+    },
     staleCheckins: () => {
       pasos.push('staleCheckins');
       return Promise.resolve([]);
@@ -1843,6 +1847,7 @@ describe('SPEC-022 M4 · el botón cli: se enruta', () => {
     hasLimitations: false,
     sentDaysAgo: null,
     lastCheckin: null,
+    openChangeRequest: null,
   });
 
   it('CA-M4 · /cliente Ana con dos Anas → botones, y pulsar uno abre SU ficha', async () => {

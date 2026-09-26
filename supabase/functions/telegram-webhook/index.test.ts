@@ -95,6 +95,7 @@ function espia(identity: Identity | null = null): Espia {
     },
     clientDetail: () => Promise.resolve(null),
     pendingVersions: () => Promise.resolve([]),
+    awaitingLink: () => Promise.resolve([]),
     clientRoutine: () => Promise.resolve(null),
     staleCheckins: () => Promise.resolve([]),
   };

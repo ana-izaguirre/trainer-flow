@@ -40,6 +40,7 @@ function ficha(extra: Partial<ClientDetail> = {}): ClientDetail {
     hasLimitations: false,
     sentDaysAgo: 12,
     lastCheckin: null,
+    openChangeRequest: null,
     ...extra,
   };
 }
@@ -130,6 +131,33 @@ describe('la ficha', () => {
 
   it('avisa si no abrió su enlace', () => {
     expect(formatClientDetail(ficha({ linked: false }))).toContain('no ha abierto su enlace');
+  });
+
+  // SPEC-030 regla 11.
+  describe('la solicitud de cambio abierta', () => {
+    it('muestra el motivo y hace cuántos días, sin el comentario', () => {
+      const t = formatClientDetail(
+        ficha({ openChangeRequest: { reason: 'too_hard', daysAgo: 2 } }),
+      );
+      expect(t).toContain('Pidió un cambio hace 2 días');
+      expect(t).toContain('Muy difícil');
+    });
+
+    it('pedida hoy, dice «hoy»', () => {
+      const t = formatClientDetail(ficha({ openChangeRequest: { reason: 'other', daysAgo: 0 } }));
+      expect(t).toContain('Pidió un cambio hoy');
+    });
+
+    it('pedida ayer, en singular', () => {
+      const t = formatClientDetail(
+        ficha({ openChangeRequest: { reason: 'too_easy', daysAgo: 1 } }),
+      );
+      expect(t).toContain('hace 1 día:');
+    });
+
+    it('sin solicitud abierta, no aparece nada', () => {
+      expect(formatClientDetail(ficha())).not.toContain('Pidió un cambio');
+    });
   });
 
   it('el último check-in, con su molestia', () => {
@@ -343,6 +371,44 @@ describe('pendientes y check-ins', () => {
       { versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b', clientName: 'C', versionNumber: 1, daysWaiting: 1 },
     ]);
     expect(m[0]?.text).toContain('1 día');
+  });
+
+  // SPEC-030 regla 14 — la segunda lista: APPROVED esperando enlace.
+  describe('SPEC-030 · la segunda lista de /pendientes', () => {
+    const DRAFT = { versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b', clientName: 'Ana', versionNumber: 1, daysWaiting: 2 };
+    const ESPERANDO = { versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7c', clientName: 'Carlos', versionNumber: 2, daysWaiting: 3 };
+
+    it('con las dos listas, cada una lleva su título', () => {
+      const m = formatPending([DRAFT], [ESPERANDO]);
+
+      expect(m.map((x) => x.text).join('\n')).toContain('Esperando tu decisión');
+      expect(m.map((x) => x.text).join('\n')).toContain('Esperando que abran su enlace');
+      expect(m.some((x) => x.text.includes('Carlos') && x.text.includes('Aprobada'))).toBe(true);
+    });
+
+    it('esperando desde ayer, en singular', () => {
+      const m = formatPending([], [{ ...ESPERANDO, daysWaiting: 1 }]);
+      expect(m[0]?.text).toContain('Aprobada hace 1 día');
+    });
+
+    it('la segunda lista usa el botón de reenviar enlace', () => {
+      const m = formatPending([], [ESPERANDO]);
+      const conBoton = m.find((x) => x.keyboard !== undefined);
+      const k = conBoton?.keyboard as unknown as { inline_keyboard: { callback_data: string }[][] };
+      expect(k.inline_keyboard.flat()[0]?.callback_data).toContain('link');
+    });
+
+    it('con solo una lista, no hay título de sección', () => {
+      const m = formatPending([DRAFT]);
+      expect(m).toHaveLength(1);
+      expect(m[0]?.text).not.toContain('Esperando tu decisión');
+    });
+
+    it('con las dos vacías, dice que no hay nada pendiente', () => {
+      const m = formatPending([], []);
+      expect(m).toHaveLength(1);
+      expect(m[0]?.text).toContain('No hay nada pendiente');
+    });
   });
 
   it('sin pendientes, un solo mensaje sin botones', () => {
