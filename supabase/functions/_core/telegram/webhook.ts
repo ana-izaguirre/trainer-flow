@@ -200,10 +200,17 @@ export async function handleTelegramWebhook(
 
   const externalId = String(update.updateId);
 
+  // SPEC-030 regla 9 — la ÚNICA excepción a «se responde antes del trabajo»:
+  // su acuse lleva el texto de lo que se guardó, que solo se sabe después de
+  // procesarlo (más abajo, en el paso 6). Para cualquier otro botón, el
+  // orden de siempre no cambia ni un paso.
+  const esRespuestaDeCheckin =
+    update.kind === 'callback' && parseCheckinCallback(update.data) !== null;
+
   try {
     // Telegram deja el botón girando si se tarda, así que se responde antes
     // del trabajo (SPEC-004 regla 2).
-    if (update.kind === 'callback') {
+    if (update.kind === 'callback' && !esRespuestaDeCheckin) {
       await deps.sender.answerCallback(update.callbackQueryId);
     }
 
@@ -233,6 +240,10 @@ export async function handleTelegramWebhook(
     // ── 5. Identidad ─────────────────────────────────────────────────────
     const identity = await deps.repo.findIdentity(update.telegramUserId);
     if (identity === null) {
+      // El acuse del check-in quedó diferido arriba: sin esto, un botón de
+      // alguien sin identidad se queda girando — nunca llega al paso 6, que
+      // es donde normalmente se respondería con el texto del acuse.
+      if (esRespuestaDeCheckin) await deps.sender.answerCallback(update.callbackQueryId);
       await deps.sender.sendMessage(update.chatId, NEUTRAL_REPLY);
       await deps.repo.markProcessed(externalId);
       return { kind: 'unknown_user', telegramUserId: update.telegramUserId };
@@ -323,11 +334,18 @@ export async function handleTelegramWebhook(
           deps.creation,
         );
       } else if (respuesta !== null) {
-        checkin = await handleCheckinAnswer(
+        const resultado = await handleCheckinAnswer(
           respuesta.checkinId,
           { field: respuesta.field, value: respuesta.value },
           identity,
           deps.checkins,
+        );
+        checkin = resultado;
+        // Regla 9: aquí, y no arriba, porque recién ahora se sabe qué decir.
+        // Un botón SIEMPRE tiene `ack` (string, no opcional): `ButtonReplyOutcome`.
+        await deps.sender.answerCallback(
+          update.callbackQueryId,
+          resultado.kind === 'saved' ? resultado.ack : undefined,
         );
       } else if (
         payload !== null &&

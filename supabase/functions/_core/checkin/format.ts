@@ -12,7 +12,13 @@
  */
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import type { InlineKeyboard } from '../telegram/keyboard.ts';
-import { buildCheckinCallback, type CheckinAnswers, type Feeling } from './answers.ts';
+import {
+  buildCheckinCallback,
+  type CheckinAnswer,
+  type CheckinAnswers,
+  type CheckinField,
+  type Feeling,
+} from './answers.ts';
 
 export interface CheckinMessage {
   readonly text: string;
@@ -91,6 +97,38 @@ function buildCheckinKeyboard(checkinId: string): InlineKeyboard {
 
 /** Lo que se le confirma al cliente cuando ya contestó las tres. */
 export const GRACIAS = '✅ Anotado, gracias\\. Nos vemos la semana que viene\\.';
+
+/** Qué falta preguntar, en el orden en que se listan en `buildCheckinMessage`. */
+const PREGUNTA_FALTANTE: Readonly<Record<CheckinField, string>> = {
+  sessions: '¿cuántas sesiones?',
+  feeling: '¿cómo te sentiste?',
+  discomfort: '¿alguna molestia?',
+};
+
+const ORDEN_PREGUNTAS: readonly CheckinField[] = ['sessions', 'feeling', 'discomfort'];
+
+/**
+ * SPEC-030 regla 9 — el acuse de CADA botón, en el aviso emergente de
+ * `answerCallbackQuery`. Texto plano: Telegram no interpreta MarkdownV2 ahí,
+ * así que nada se escapa (a diferencia de todo lo demás en este archivo).
+ */
+export function formatCheckinAck(answer: CheckinAnswer, answers: CheckinAnswers): string {
+  const falta = ORDEN_PREGUNTAS.find((campo) => answers[campo] === null) ?? null;
+  const base = `Anotado: ${etiquetaRespuesta(answer)}`;
+
+  return falta === null ? base : `${base}. Falta: ${PREGUNTA_FALTANTE[falta]}`;
+}
+
+/** Solo la respuesta que se acaba de dar, no las tres. */
+function etiquetaRespuesta(answer: CheckinAnswer): string {
+  if (answer.field === 'feeling') return SENSACION[answer.value as Feeling];
+  // El botón de `discomfort` solo manda `'none'` (SPEC-006): el texto libre
+  // de una molestia llega como mensaje, nunca como este callback.
+  if (answer.field === 'discomfort') return 'sin molestias';
+
+  const n = Number.parseInt(answer.value, 10);
+  return `${n === 4 ? '4 o más' : n} ${n === 1 ? 'sesión' : 'sesiones'}`;
+}
 
 /**
  * El resumen para el entrenador.

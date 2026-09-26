@@ -93,6 +93,6 @@ export function asSender(client: TelegramClient): TelegramSender {
     sendMessage: async (chatId, text, keyboard) => {
       await client.sendMessage(chatId, text, keyboard);
     },
-    answerCallback: (callbackQueryId) => client.answerCallbackQuery(callbackQueryId),
+    answerCallback: (callbackQueryId, text) => client.answerCallbackQuery(callbackQueryId, text),
   };
 }

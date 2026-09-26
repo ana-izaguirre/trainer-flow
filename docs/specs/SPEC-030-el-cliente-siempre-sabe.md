@@ -20,20 +20,35 @@
 | 11 | La ficha del entrenador muestra la solicitud abierta (motivo y días, sin el comentario) | ✅ migración 0028, `trainer_client_detail` |
 | 14 | `/pendientes` con las dos listas (`DRAFT` y `APPROVED` sin abrir) | ✅ migración 0028, `trainer_awaiting_link` |
 | 3 | `force_reply` en cada pregunta de texto libre | ⏸️ Pendiente — ver nota |
-| 9 | Acuse por botón del check-in (`answerCallback` con texto) | ⏸️ Pendiente — ver nota |
+| 9 | Acuse por botón del check-in (`answerCallback` con texto) | ✅ `formatCheckinAck`, `ButtonReplyOutcome`, CA-9 |
 | 10 | Cabecera «actualizada» en la v2 | ⏸️ Pendiente |
 | 13 | Aviso de enlace sin abrir 48h | ⏸️ Pendiente — ver nota |
 
-**1554 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 101 Deno.**
+**1590 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 101 Deno.**
 
-### Por qué las reglas 3, 9, 10 y 13 quedaron fuera de este PR
+### Regla 9 — cómo se resolvió el choque con «se responde antes del trabajo»
 
-- **Regla 9** (acuse por botón del check-in) choca con una garantía ya
-  probada del webhook: el `callback_query` se responde **antes** de hacer
-  ningún trabajo, para que Telegram no deje el botón girando (SPEC-004
-  regla 2). Meterle texto al acuse exige responder DESPUÉS de conocer el
-  resultado, solo para los callbacks de check-in — un cambio de orden que
-  merece su propio test de regresión, no un añadido de última hora.
+Se pensó pendiente porque chocaba con una garantía ya probada del webhook: el
+`callback_query` se responde **antes** de hacer ningún trabajo, para que
+Telegram no deje el botón girando (SPEC-004 regla 2). El acuse con texto solo
+se sabe DESPUÉS de guardar la respuesta.
+
+La solución: el check-in es la **única excepción**, detectada por su propio
+prefijo (`chk:`) antes de decidir si se responde ya o se difiere. Todo lo
+demás sigue exactamente el orden de siempre. Tres salidas cubiertas para que
+un botón nunca se quede girando: la respuesta feliz (acuse con texto, tras
+guardar), un check-in ajeno o cerrado (blanco, tras el rechazo) y una
+identidad que no resuelve (blanco, en el paso 5 — la única salida temprana
+entre el diferido y el enrutado).
+
+`handleCheckinAnswer` devuelve un tipo aparte (`ButtonReplyOutcome`) donde
+`ack` no es opcional: un botón siempre tiene algo que decir, así que no hay
+un `null` que nadie puede alcanzar escondido en el tipo compartido con
+`handleCheckinText` (que sí puede ser `null`: un mensaje de texto no tiene
+callback al que responder).
+
+### Por qué las reglas 3, 10 y 13 quedaron fuera de este PR
+
 - **Regla 3** (`force_reply`) necesita un tipo nuevo en `TelegramSender` y
   tocar cada `sendMessage` de cada test del repo (~15 archivos): mucho para
   lo que resuelve, cuando el texto del mensaje ya dice dónde escribir.
