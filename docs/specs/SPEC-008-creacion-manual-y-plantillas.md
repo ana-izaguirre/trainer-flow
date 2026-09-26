@@ -184,10 +184,11 @@ elegida. `tpl:strength-recovery-7d:<uuid>` ocupa 61 de los 64 bytes.
 > **Abierto — el equipamiento pesa menos que los días.** Con una plantilla
 > para cada número de días, a un cliente **sin equipo** de 2 días le sale
 > primero `full-body-2d` (gimnasio): los días suman 3 y el equipamiento 1.
-> Antes le salía primero la de casa. Nada se rompe —se listan todas—, pero la
-> primera opción no le sirve. Además no hay plantillas para bandas ni para
-> mancuernas en casa. Queda para una spec propia, que necesita saber qué
-> opciones de «Equipamiento disponible» tiene el formulario de Tally.
+> Nada se rompe —se listan todas—, pero la primera opción no le sirve.
+> Además no hay plantillas para bandas ni para mancuernas en casa.
+> **Propuesta en SPEC-028**, que encontró además un bug anterior: la
+> plantilla de casa compara contra «Ninguno», que no es una opción del
+> formulario, así que nunca encajaba.
 
 ### Las tres fuentes convergen
 
