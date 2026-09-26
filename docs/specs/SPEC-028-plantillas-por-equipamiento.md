@@ -2,10 +2,22 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **BORRADOR — pendiente de aprobación** |
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
 | **Depende de** | SPEC-008, SPEC-016 |
 | **Sesiones** | Por asignar |
 | **Origen** | Revisión del orden de plantillas (septiembre 2026), con las opciones reales del formulario |
+
+## Resultado
+
+| Pieza | Estado |
+|---|---|
+| `equipmentTier` y `canDo` en `_core/equipment.ts`, con los 9 textos reales fijados | ✅ 29 tests |
+| `templatesFor` con el orden nuevo (regla 1) | ✅ CA-1 a CA-8 |
+| `home-dumbbells-3d` y `home-bands-3d` | ✅ CA-9, y validan ajustadas de 1 a 7 días |
+| Los tests que usaban «Ninguno» y «Gimnasio» usan los textos del formulario | ✅ |
+
+El orden es estricto porque cada criterio suma más que todos los de abajo
+juntos (8, 4, 2, 1).
 
 ## 1. Objetivo
 
