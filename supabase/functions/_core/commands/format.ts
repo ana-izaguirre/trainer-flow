@@ -297,18 +297,36 @@ export const PIDE_NOMBRE_CLIENTE = 'Escribe el nombre: `/cliente Carlos`\\.';
  * │ botones no se buscan: aparecen.                                        │
  * └────────────────────────────────────────────────────────────────────────┘
  */
-export const AYUDA_CLIENTE = [
-  '🤖 *Lo que puedes hacer*',
-  '',
+/** Las líneas de comandos, compartidas por `AYUDA_CLIENTE` y `SIN_PREGUNTA_PENDIENTE`. */
+const COMANDOS_CLIENTE = [
   '/rutina — ver tu rutina actual',
+  // SPEC-030: pedirlo también por comando, no solo desde el botón.
+  '/cambio — pedir un cambio',
   // SPEC-027: sabe antes que nadie cuándo le cambió algo.
   '/actualizar — cambiar tus datos \\(días, tiempo, objetivo, lesiones…\\)',
   '/ayuda — esto',
+];
+
+export const AYUDA_CLIENTE = [
+  '🤖 *Lo que puedes hacer*',
+  '',
+  ...COMANDOS_CLIENTE,
   '',
   'Cada lunes te llega un check\\-in de tres preguntas\\.',
   'Y en tu rutina tienes botones para decir si te sirve o pedir un cambio\\.',
   '',
   'Cualquier otra cosa, háblalo con tu entrenador\\.',
+].join('\n');
+
+/**
+ * SPEC-030 regla 8 — ningún mensaje suelto del cliente se queda sin
+ * respuesta. Sale cuando el texto no era ni la molestia del check\-in ni el
+ * detalle de una solicitud de cambio.
+ */
+export const SIN_PREGUNTA_PENDIENTE = [
+  'No tengo ninguna pregunta pendiente contigo 🙂',
+  '',
+  ...COMANDOS_CLIENTE,
 ].join('\n');
 
 /** Vinculado, pero su entrenador todavía no le ha mandado nada. */

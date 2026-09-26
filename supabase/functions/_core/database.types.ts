@@ -156,6 +156,7 @@ export type Database = {
       }
       change_requests: {
         Row: {
+          asked_at: string
           client_id: string
           comment: string | null
           created_at: string
@@ -167,6 +168,7 @@ export type Database = {
           version_id: string
         }
         Insert: {
+          asked_at?: string
           client_id: string
           comment?: string | null
           created_at?: string
@@ -178,6 +180,7 @@ export type Database = {
           version_id: string
         }
         Update: {
+          asked_at?: string
           client_id?: string
           comment?: string | null
           created_at?: string
@@ -553,7 +556,10 @@ export type Database = {
     Functions: {
       add_change_comment: {
         Args: { p_client_id: string; p_comment: string; p_request_id: string }
-        Returns: boolean
+        Returns: {
+          saved: boolean
+          truncated: boolean
+        }[]
       }
       apply_version_transition: {
         Args: {
@@ -828,8 +834,11 @@ export type Database = {
         Returns: {
           asked_at: string
           client_id: string
+          created_at: string
           has_comment: boolean
+          reason: Database["public"]["Enums"]["change_reason"]
           request_id: string
+          version_id: string
         }[]
       }
       open_checkin_for_profile: {
@@ -865,7 +874,10 @@ export type Database = {
           p_reason: Database["public"]["Enums"]["change_reason"]
           p_version_id: string
         }
-        Returns: string
+        Returns: {
+          created: boolean
+          id: string
+        }[]
       }
       resolve_change_requests: {
         Args: { p_version_id: string }
@@ -901,6 +913,10 @@ export type Database = {
           trainer_chat_id: number
           version_id: string
         }[]
+      }
+      touch_change_request_ask: {
+        Args: { p_client_id: string; p_request_id: string }
+        Returns: boolean
       }
       trainer_client_detail: {
         Args: { p_client_id: string }

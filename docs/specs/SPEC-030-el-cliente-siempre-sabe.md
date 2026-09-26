@@ -2,9 +2,48 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | APROBADA |
+| **Estado** | **PARCIALMENTE IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
 | **Depende de** | SPEC-006, SPEC-010, SPEC-023 |
 | **Sesiones** | S-43 |
+
+## Resultado
+
+| Regla | Pieza | Estado |
+|---|---|---|
+| 1, 2 | Una abierta no se pisa; solo avisa quien crea la fila (`created`) | ✅ migración 0027, `flows.ts`, CA-1, CA-2 |
+| 4 | El comentario se AÑADE, hasta 500 car., con aviso si se trunca | ✅ `add_change_comment`, CA-4 |
+| 5 | `asked_at` decide contra el check-in, y se actualiza al re-preguntar | ✅ |
+| 6 | `/cambio` — los tres casos | ✅ `webhook.ts`, CA-7 |
+| 7 | `/rutina` avisa del cambio pendiente antes de la rutina | ✅ CA-6 |
+| 8 | Ningún texto suelto se queda sin respuesta | ✅ `SIN_PREGUNTA_PENDIENTE`, CA-8 |
+| 12 | `/cambio` en `AYUDA_CLIENTE` | ✅ |
+| 3 | `force_reply` en cada pregunta de texto libre | ⏸️ Pendiente — ver nota |
+| 9 | Acuse por botón del check-in (`answerCallback` con texto) | ⏸️ Pendiente — ver nota |
+| 10 | Cabecera «actualizada» en la v2 | ⏸️ Pendiente |
+| 11 | La ficha del entrenador muestra la solicitud abierta | ⏸️ Pendiente |
+| 13 | Aviso de enlace sin abrir 48h | ⏸️ Pendiente |
+| 14 | `/pendientes` con las dos listas | ⏸️ Pendiente |
+
+**1537 unit tests (100% cobertura en `_core`) + 261 integration/E2E + 101 Deno.**
+
+### Por qué las reglas 3, 9, 11, 13 y 14 quedaron fuera de este PR
+
+- **Regla 9** (acuse por botón del check-in) choca con una garantía ya
+  probada del webhook: el `callback_query` se responde **antes** de hacer
+  ningún trabajo, para que Telegram no deje el botón girando (SPEC-004
+  regla 2). Meterle texto al acuse exige responder DESPUÉS de conocer el
+  resultado, solo para los callbacks de check-in — un cambio de orden que
+  merece su propio test de regresión, no un añadido de última hora.
+- **Regla 3** (`force_reply`) necesita un tipo nuevo en `TelegramSender` y
+  tocar cada `sendMessage` de cada test del repo (~15 archivos): mucho para
+  lo que resuelve, cuando el texto del mensaje ya dice dónde escribir.
+- **Reglas 11, 13 y 14** tocan `client_detail()` y `trainer_pending_versions()`
+  —consultas grandes y ya cargadas—, más una columna de recordatorio nueva
+  en `workout_versions`. Se hacen mejor como su propio PR, no mezcladas con
+  el resto.
+
+Quedan en el backlog de esta spec, no en uno nuevo: la spec sigue abierta
+hasta que se implementen.
 
 ## 1. Objetivo
 

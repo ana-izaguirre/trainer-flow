@@ -1,10 +1,13 @@
 /**
- * SPEC-010 — El cliente pide un cambio.
+ * SPEC-010, SPEC-030 — El cliente pide un cambio.
  *
  * ┌─ LO QUE MÁS IMPORTA AQUÍ ──────────────────────────────────────────────┐
  * │ Que pedir un cambio no toque la rutina enviada. Ni su contenido, ni su │
  * │ estado, ni su fecha: el cliente conserva en su chat exactamente lo que │
  * │ recibió (regla 4).                                                     │
+ * │                                                                        │
+ * │ Y que pulsar dos veces, o escribir dos mensajes, no lo deje en         │
+ * │ silencio ni avise al entrenador de más (SPEC-030).                     │
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { describe, expect, it } from 'vitest';
@@ -12,6 +15,7 @@ import type { Identity } from '../domain/identity.ts';
 import { CHANGE_REASONS } from '../domain/change-request.ts';
 import type {
   ChangeRequestRepo,
+  OpenRequest,
   VersionForRequest,
 } from '../ports/change-request-ports.ts';
 import {
@@ -24,6 +28,7 @@ import {
 } from './flows.ts';
 
 const VERSION_ID = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+const AHORA = new Date('2026-09-26T12:00:00Z');
 
 const CLIENTE: Identity = {
   profileId: 'p-cliente',
@@ -52,6 +57,19 @@ function version(extra: Partial<VersionForRequest> = {}): VersionForRequest {
   };
 }
 
+function abierta(extra: Partial<OpenRequest> = {}): OpenRequest {
+  return {
+    requestId: 'req-1',
+    clientId: 'c1',
+    versionId: VERSION_ID,
+    reason: 'too_hard',
+    hasComment: false,
+    askedAt: new Date('2026-09-24T12:00:00Z'),
+    createdAt: new Date('2026-09-24T12:00:00Z'),
+    ...extra,
+  };
+}
+
 interface Espia {
   readonly deps: ChangeRequestDeps;
   readonly pasos: string[];
@@ -63,6 +81,8 @@ function espia(
     version?: VersionForRequest | null;
     comentarioFalla?: boolean;
     solicitud?: null;
+    abierta?: OpenRequest | null;
+    created?: boolean;
   } = {},
 ): Espia {
   const pasos: string[] = [];
@@ -75,12 +95,23 @@ function espia(
     },
     request: (_v, _c, reason) => {
       pasos.push(`request:${reason}`);
-      return Promise.resolve('req-1');
+      return Promise.resolve({ id: 'req-1', created: opciones.created ?? true });
     },
-    openForClient: () => Promise.resolve(null),
+    openForClient: () => {
+      pasos.push('openForClient');
+      return Promise.resolve(opciones.abierta ?? null);
+    },
+    touchAsk: () => {
+      pasos.push('touchAsk');
+      return Promise.resolve(true);
+    },
     addComment: () => {
       pasos.push('addComment');
-      return Promise.resolve(!(opciones.comentarioFalla ?? false));
+      return Promise.resolve(
+        opciones.comentarioFalla ?? false
+          ? { saved: false, truncated: false }
+          : { saved: true, truncated: false },
+      );
     },
     findRequest: () =>
       opciones.solicitud === null
@@ -118,6 +149,7 @@ function espia(
         },
         answerCallback: () => Promise.resolve(),
       },
+      now: () => AHORA,
     },
     pasos,
     mensajes,
@@ -229,6 +261,75 @@ describe('✏️ pedir un cambio', () => {
 
     expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('detalle');
   });
+
+  // -------------------------------------------------------------------------
+  // SPEC-030 regla 1 y 2 — una abierta no se pisa, y no se avisa dos veces.
+
+  describe('SPEC-030 · ya hay una solicitud abierta', () => {
+    it('CA-1 · askReason enseña el estado, no el menú de motivos', async () => {
+      const { deps, mensajes, pasos } = espia({ abierta: abierta() });
+
+      const outcome = await askReason(VERSION_ID, CLIENTE, deps);
+
+      expect(outcome).toEqual({ kind: 'already_requested', requestId: 'req-1' });
+      expect(mensajes[0]?.keyboard).toBeUndefined();
+      expect(mensajes[0]?.text).toContain('Ya le pediste un cambio');
+      expect(mensajes[0]?.text).toContain('Muy difícil');
+      expect(pasos).toContain('touchAsk');
+    });
+
+    it('CA-1, CA-2 · elegir un motivo NO crea otra fila ni avisa dos veces', async () => {
+      const { deps, mensajes, pasos } = espia({ created: false, abierta: abierta() });
+
+      const outcome = await requestChange('too_easy', VERSION_ID, CLIENTE, deps);
+
+      expect(outcome).toEqual({ kind: 'already_requested', requestId: 'req-1' });
+      // Un único mensaje: el estado. Nada al entrenador.
+      expect(mensajes).toHaveLength(1);
+      expect(mensajes[0]?.chatId).toBe(500);
+      expect(mensajes.some((m) => m.chatId === 10)).toBe(false);
+      expect(pasos).toContain('touchAsk');
+    });
+
+    it('caso defensivo: created=false pero openForClient ya no la encuentra', async () => {
+      // No debería pasar en la práctica —`created=false` implica que la
+      // base ya tenía una fila abierta—, pero el cliente nunca se queda
+      // sin respuesta (regla 8) aunque la carrera diera este resultado raro.
+      const { deps } = espia({ created: false, abierta: null });
+
+      const outcome = await requestChange('too_hard', VERSION_ID, CLIENTE, deps);
+
+      expect(outcome).toEqual({ kind: 'already_requested', requestId: 'req-1' });
+    });
+
+    it('el estado dice hace cuántos días se pidió', async () => {
+      const { deps, mensajes } = espia({
+        abierta: abierta({ createdAt: new Date('2026-09-23T12:00:00Z') }),
+      });
+
+      await askReason(VERSION_ID, CLIENTE, deps);
+
+      expect(mensajes[0]?.text).toContain('hace 3 días');
+    });
+
+    it('pedida ayer, dice «hace 1 día» en singular', async () => {
+      const { deps, mensajes } = espia({
+        abierta: abierta({ createdAt: new Date('2026-09-25T12:00:00Z') }),
+      });
+
+      await askReason(VERSION_ID, CLIENTE, deps);
+
+      expect(mensajes[0]?.text).toContain('hace 1 día:');
+    });
+
+    it('pedida hoy mismo, dice «hoy»', async () => {
+      const { deps, mensajes } = espia({ abierta: abierta({ createdAt: AHORA }) });
+
+      await askReason(VERSION_ID, CLIENTE, deps);
+
+      expect(mensajes[0]?.text).toContain('hoy');
+    });
+  });
 });
 
 describe('el comentario', () => {
@@ -237,9 +338,53 @@ describe('el comentario', () => {
 
     const outcome = await addComment('req-1', 'c1', 'No termino la semana 1', CLIENTE, deps);
 
-    expect(outcome).toMatchObject({ kind: 'commented' });
+    expect(outcome).toMatchObject({ kind: 'commented', truncated: false });
     expect(pasos).toContain('addComment');
     expect(mensajes.find((m) => m.chatId === 10)?.text).toContain('No termino');
+    // SPEC-030 regla 4: el acuse dice que se envió, no solo «apuntado».
+    expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('Enviado');
+  });
+
+  it('SPEC-030 · si se pasó de 500 caracteres, el acuse lo dice', async () => {
+    const repoTruncado: ChangeRequestRepo = {
+      findVersion: () => Promise.resolve(version()),
+      request: () => Promise.resolve({ id: 'req-1', created: true }),
+      openForClient: () => Promise.resolve(null),
+      touchAsk: () => Promise.resolve(true),
+      addComment: () => Promise.resolve({ saved: true, truncated: true }),
+      findRequest: () =>
+        Promise.resolve({
+          requestId: 'req-1',
+          versionId: VERSION_ID,
+          planId: 'plan-1',
+          versionNumber: 1,
+          state: 'OPEN',
+          reason: 'other',
+          comment: 'x'.repeat(500),
+          clientName: 'Carlos Pérez',
+          trainerId: 'p-trainer',
+          sentDaysAgo: 1,
+        }),
+      createRevision: () => Promise.resolve('v2'),
+      recordAccepted: () => Promise.resolve(),
+    };
+    const mensajes: { chatId: number; text: string }[] = [];
+    const deps: ChangeRequestDeps = {
+      repo: repoTruncado,
+      sender: {
+        sendMessage: (chatId, text) => {
+          mensajes.push({ chatId, text });
+          return Promise.resolve();
+        },
+        answerCallback: () => Promise.resolve(),
+      },
+      now: () => AHORA,
+    };
+
+    const outcome = await addComment('req-1', 'c1', 'x'.repeat(50), CLIENTE, deps);
+
+    expect(outcome).toMatchObject({ kind: 'commented', truncated: true });
+    expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('límite');
   });
 
   it('si la solicitud desaparece entre guardar y leer, no revienta', async () => {

@@ -1,5 +1,6 @@
 /**
- * SPEC-010 — El cliente pide un cambio, el entrenador responde con una v2.
+ * SPEC-010, SPEC-030 — El cliente pide un cambio, el entrenador responde con
+ * una v2, y ninguno de los dos se queda sin saber en qué va.
  *
  * ┌─ LA RUTINA ENVIADA NO SE TOCA ─────────────────────────────────────────┐
  * │ Una solicitud es una fila aparte. Ni el contenido de la v1, ni su      │
@@ -12,6 +13,13 @@
  * │ creara la solicitud, un cliente quejica llenaría el plan de versiones  │
  * │ vacías que nadie pidió.                                                │
  * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─ UNA ABIERTA NO SE PISA (SPEC-030 regla 1) ────────────────────────────┐
+ * │ Pulsar «Pedir un cambio» o un motivo con una solicitud ya abierta no   │
+ * │ crea nada ni avisa dos veces: enseña el estado de la que ya había.     │
+ * │ Quién decide si se creó es el propio `INSERT` de la base —el `created` │
+ * │ de `request()`—, no una comprobación previa que una carrera pasaría.   │
+ * └────────────────────────────────────────────────────────────────────────┘
  */
 import { canRequestChange } from '../authorization.ts';
 import type { Identity } from '../domain/identity.ts';
@@ -21,7 +29,7 @@ import {
   REASON_LABELS,
   type ChangeReason,
 } from '../domain/change-request.ts';
-import type { ChangeRequestRepo } from '../ports/change-request-ports.ts';
+import type { ChangeRequestRepo, OpenRequest } from '../ports/change-request-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import { buildKeyboard, type InlineKeyboard } from '../telegram/keyboard.ts';
@@ -29,6 +37,8 @@ import { buildKeyboard, type InlineKeyboard } from '../telegram/keyboard.ts';
 export interface ChangeRequestDeps {
   readonly repo: ChangeRequestRepo;
   readonly sender: TelegramSender;
+  /** Igual que en `generate-version.ts`: `_core` no llama a `Date.now()`. */
+  readonly now: () => Date;
 }
 
 export type ChangeOutcome =
@@ -36,8 +46,10 @@ export type ChangeOutcome =
   | { readonly kind: 'denied' }
   | { readonly kind: 'asked_reason'; readonly versionId: string }
   | { readonly kind: 'requested'; readonly requestId: string }
+  /** SPEC-030 regla 1: ya había una abierta. No se avisó de nuevo. */
+  | { readonly kind: 'already_requested'; readonly requestId: string }
   | { readonly kind: 'accepted'; readonly versionId: string }
-  | { readonly kind: 'commented'; readonly requestId: string }
+  | { readonly kind: 'commented'; readonly requestId: string; readonly truncated: boolean }
   | { readonly kind: 'revision_started'; readonly versionId: string };
 
 /**
@@ -65,7 +77,11 @@ export async function acceptVersion(
   return { kind: 'accepted', versionId };
 }
 
-/** ✏️ — se le preguntan los siete motivos. Todavía no se guarda nada. */
+/**
+ * ✏️ — se le preguntan los siete motivos. Todavía no se guarda nada, salvo
+ * que ya tenga una abierta: entonces se enseña su estado (regla 1) en vez de
+ * volver a preguntar.
+ */
 export async function askReason(
   versionId: string,
   actor: Identity,
@@ -80,6 +96,9 @@ export async function askReason(
     return { kind: 'denied' };
   }
 
+  const abierta = await deps.repo.openForClient(actor.profileId);
+  if (abierta !== null) return estadoAbierto(abierta, actor, deps);
+
   await deps.sender.sendMessage(
     actor.telegramChatId,
     '¿Qué quieres ajustar?\n\nDespués puedes escribirme el detalle\\.',
@@ -89,7 +108,11 @@ export async function askReason(
   return { kind: 'asked_reason', versionId };
 }
 
-/** El motivo elegido. Se guarda y el entrenador se entera en el momento. */
+/**
+ * El motivo elegido. Se guarda y el entrenador se entera en el momento —
+ * salvo que ya hubiera una solicitud abierta (regla 1): entonces se enseña
+ * su estado, y NO se avisa dos veces (regla 2).
+ */
 export async function requestChange(
   reason: ChangeReason,
   versionId: string,
@@ -103,12 +126,23 @@ export async function requestChange(
     return { kind: 'denied' };
   }
 
-  const requestId = await deps.repo.request(versionId, version.client.clientId, reason);
+  const resultado = await deps.repo.request(versionId, version.client.clientId, reason);
+
+  // Regla 2: quien decide si se avisa es el propio INSERT, no una
+  // comprobación de antes que una pulsación simultánea pasaría igual.
+  if (!resultado.created) {
+    const abierta = await deps.repo.openForClient(actor.profileId);
+    if (abierta !== null) return estadoAbierto(abierta, actor, deps);
+    // No debería pasar —`created=false` implica que había una—, pero el
+    // cliente nunca se queda sin respuesta (regla 8).
+    return { kind: 'already_requested', requestId: resultado.id };
+  }
 
   await deps.sender.sendMessage(
     actor.telegramChatId,
-    'Anotado\\. Se lo paso a tu entrenador\\.\n\n' +
-      'Si quieres, escríbeme el detalle en un mensaje\\.',
+    `✅ Listo\\. Le pasé a tu entrenador que quieres un cambio: ${escapeMarkdownV2(REASON_LABELS[reason])}\\.\n\n` +
+      'Cuando prepare tu nueva versión, te llega aquí mismo\\. Mientras, sigue con tu rutina actual\\.\n\n' +
+      '¿Quieres darle más detalle\\? Escríbelo en tu próximo mensaje\\.',
   );
 
   // El entrenador se entera ya, con el botón para empezar la v2.
@@ -118,10 +152,13 @@ export async function requestChange(
     buildKeyboard(['revise'], versionId),
   );
 
-  return { kind: 'requested', requestId };
+  return { kind: 'requested', requestId: resultado.id };
 }
 
-/** El detalle que escribe después. Se le reenvía al entrenador tal cual. */
+/**
+ * El detalle que escribe después. Se le AÑADE al comentario que ya hubiera
+ * —no lo reemplaza— y se le reenvía al entrenador tal cual (regla 4).
+ */
 export async function addComment(
   requestId: string,
   clientId: string,
@@ -129,14 +166,18 @@ export async function addComment(
   actor: Identity,
   deps: ChangeRequestDeps,
 ): Promise<ChangeOutcome> {
-  if (!(await deps.repo.addComment(requestId, clientId, comment))) {
-    return { kind: 'denied' };
-  }
+  const guardado = await deps.repo.addComment(requestId, clientId, comment);
+  if (!guardado.saved) return { kind: 'denied' };
 
   const solicitud = await deps.repo.findRequest(requestId);
   if (solicitud === null) return { kind: 'denied' };
 
-  await deps.sender.sendMessage(actor.telegramChatId, 'Apuntado también\\.');
+  await deps.sender.sendMessage(
+    actor.telegramChatId,
+    guardado.truncated
+      ? '📨 Enviado a tu entrenador\\. Guardé hasta el límite: el resto no entró\\.'
+      : '📨 Enviado a tu entrenador\\. Te aviso aquí cuando tenga tu nueva rutina\\.',
+  );
 
   const version = await deps.repo.findVersion(solicitud.versionId);
   if (version !== null) {
@@ -152,7 +193,7 @@ export async function addComment(
     );
   }
 
-  return { kind: 'commented', requestId };
+  return { kind: 'commented', requestId, truncated: guardado.truncated };
 }
 
 /**
@@ -186,6 +227,34 @@ export async function startRevision(
   );
 
   return { kind: 'revision_started', versionId: nueva };
+}
+
+/**
+ * SPEC-030 regla 1 y 6 — el estado de una solicitud que ya estaba abierta.
+ * No crea nada ni avisa al entrenador: solo le dice al cliente dónde está y
+ * lo invita, otra vez, a escribir el detalle si quiere.
+ */
+async function estadoAbierto(
+  abierta: OpenRequest,
+  actor: Identity,
+  deps: ChangeRequestDeps,
+): Promise<ChangeOutcome> {
+  await deps.repo.touchAsk(abierta.requestId, abierta.clientId);
+
+  await deps.sender.sendMessage(
+    actor.telegramChatId,
+    `🕐 Ya le pediste un cambio a tu entrenador ${haceCuanto(abierta.createdAt, deps.now())}: ` +
+      `${escapeMarkdownV2(REASON_LABELS[abierta.reason])}\\.\n\n` +
+      'Está preparando tu nueva versión\\. Si quieres añadir algo, escríbelo en tu próximo mensaje\\.',
+  );
+
+  return { kind: 'already_requested', requestId: abierta.requestId };
+}
+
+function haceCuanto(desde: Date, ahora: Date): string {
+  const dias = Math.max(0, Math.floor((ahora.getTime() - desde.getTime()) / 86_400_000));
+  if (dias === 0) return 'hoy';
+  return `hace ${dias} ${dias === 1 ? 'día' : 'días'}`;
 }
 
 /** Dos por fila salvo el último: siete botones en una columna no se leen. */

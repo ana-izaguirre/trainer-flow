@@ -1224,17 +1224,17 @@ export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRe
     },
 
     async request(versionId, clientId, reason) {
-      const { data, error } = await db.rpc('request_change', {
-        p_version_id: versionId,
-        p_client_id: clientId,
-        p_reason: reason,
-      });
+      // SPEC-030: ahora devuelve `(id, created)`, no solo el id — `created`
+      // es lo que decide si se avisa al entrenador (regla 2).
+      const { data, error } = await db
+        .rpc('request_change', { p_version_id: versionId, p_client_id: clientId, p_reason: reason })
+        .maybeSingle();
 
       if (error !== null || data === null) {
         throw new Error(`No se pudo registrar la solicitud: ${error?.code ?? 'sin datos'}`);
       }
 
-      return data as string;
+      return { id: data.id as string, created: data.created === true };
     },
 
     async openForClient(profileId) {
@@ -1250,23 +1250,35 @@ export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRe
       return {
         requestId: fila.request_id as string,
         clientId: fila.client_id as string,
+        versionId: fila.version_id as string,
+        reason: fila.reason as ChangeReason,
         hasComment: fila.has_comment === true,
         askedAt: new Date(fila.asked_at as string),
+        createdAt: new Date(fila.created_at as string),
       };
     },
 
-    async addComment(requestId, clientId, comment) {
-      const { data, error } = await db.rpc('add_change_comment', {
+    async touchAsk(requestId, clientId) {
+      const { data, error } = await db.rpc('touch_change_request_ask', {
         p_request_id: requestId,
         p_client_id: clientId,
-        p_comment: comment,
       });
+
+      if (error !== null) throw new Error(`No se pudo actualizar la solicitud: ${error.code}`);
+      return data === true;
+    },
+
+    async addComment(requestId, clientId, comment) {
+      const { data, error } = await db
+        .rpc('add_change_comment', { p_request_id: requestId, p_client_id: clientId, p_comment: comment })
+        .maybeSingle();
 
       // El mensaje de error NUNCA lleva el comentario: es texto libre del
       // cliente y puede contener información de salud (SPEC-010 §7).
       if (error !== null) throw new Error(`No se pudo guardar el comentario: ${error.code}`);
+      if (data === null) return { saved: false, truncated: false };
 
-      return data === true;
+      return { saved: data.saved === true, truncated: data.truncated === true };
     },
 
     async findRequest(requestId) {
