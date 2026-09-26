@@ -28,6 +28,7 @@ import type { GenerationTrigger } from '../ports/generation-trigger.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import type { CallbackAction } from './callback-data.ts';
 import { escapeMarkdownV2 } from './format.ts';
+import { buildKeyboard } from './keyboard.ts';
 
 export interface ActionRequest {
   readonly action: CallbackAction;
@@ -174,9 +175,15 @@ export async function handleAction(
     return { kind: 'approved', versionId: request.versionId };
   }
 
+  // SPEC-022 M3. «Puedes empezar otra» no decía cómo. El botón es la misma
+  // acción que la ficha ofrece sobre una versión `REJECTED` (`startRevision`,
+  // que comprueba de nuevo que el entrenador sea el dueño). Sin estados ni
+  // transiciones nuevas: la v2 nace en `NEW`.
   await deps.sender.sendMessage(
     actor.telegramChatId,
-    `❌ Rutina rechazada\\. Puedes empezar otra para ${escapeMarkdownV2(version.clientName)}\\.`,
+    `❌ Rutina rechazada\\. Pulsa ✏️ Crear v2 para empezar otra\n` +
+      `para ${escapeMarkdownV2(version.clientName)}\\.`,
+    buildKeyboard(['revise'], request.versionId),
   );
   return { kind: 'rejected', versionId: request.versionId };
 }

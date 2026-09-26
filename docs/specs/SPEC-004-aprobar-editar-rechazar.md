@@ -101,8 +101,8 @@ DRAFT ──┬── EDIT ────► DRAFT  (in-place, no cambia estado)
 
 **Prohibido por diseño:** cualquier camino a `SENT` que no pase por `APPROVED`.
 
-> **Propuesta pendiente (SPEC-022 §12.ter, M3).** El mensaje de rechazo
-> decía «Puedes empezar otra» sin decir cómo. Pasa a llevar el botón
+> **SPEC-022 §12.ter, M3 (implementado).** El mensaje de rechazo
+> decía «Puedes empezar otra» sin decir cómo. Ahora lleva el botón
 > **✏️ Crear v2** (`revise` → `startRevision`), el mismo que la ficha ofrece
 > sobre una versión `REJECTED`. Sin estados ni transiciones nuevas.
 

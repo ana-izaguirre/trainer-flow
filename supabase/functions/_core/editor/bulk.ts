@@ -118,7 +118,9 @@ export function parseWorkoutText(text: string): BulkResult {
   if (dias.length === 0) {
     return {
       ok: false,
-      error: 'No encontré ningún día. Empieza por uno. Ejemplo: Día 1: Empuje',
+      // SPEC-022 M1. «No encontré ningún día» se leía como si pidiera una
+      // rutina de un día: lo que falta es escribirlos DEBAJO del comando.
+      error: 'Escribe los días en el MISMO mensaje, debajo de /crear_rutina. Ejemplo: Día 1: Empuje',
     };
   }
 

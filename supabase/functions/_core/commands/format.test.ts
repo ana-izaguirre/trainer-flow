@@ -2,6 +2,7 @@
  * SPEC-007 §3 — Los mensajes de los comandos.
  */
 import { describe, expect, it } from 'vitest';
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { ClientDetail, ClientSummary } from '../ports/query-ports.ts';
 import {
   AYUDA,
@@ -249,10 +250,54 @@ describe('los botones de la ficha — SPEC-007 regla 7', () => {
 });
 
 describe('búsqueda sin resultado claro', () => {
-  it('varias coincidencias se listan', () => {
-    const t = formatAmbiguous([{ fullName: 'Marta' }, { fullName: 'Marcos' }]);
-    expect(t).toContain('Marta');
-    expect(t).toContain('Marcos');
+  const ID_MARTA = '11111111-1111-4111-8111-111111111111';
+  const ID_ANA = '22222222-2222-4222-8222-222222222222';
+
+  /** El texto y el `callback_data` de cada botón, en orden. */
+  const botones = (m: { keyboard?: { inline_keyboard: readonly (readonly { text: string; callback_data: string }[])[] } | null }) =>
+    (m.keyboard?.inline_keyboard ?? []).flat().map((b) => [b.text, b.callback_data]);
+
+  // SPEC-022 M4. Antes era una lista de texto: había que volver a escribir
+  // el comando con el apellido.
+  it('CA-M4 · cada coincidencia es un botón que abre su ficha', () => {
+    const [mensaje, ...resto] = formatAmbiguous([
+      { clientId: ID_MARTA, fullName: 'Marta' },
+      { clientId: ID_ANA, fullName: 'Ana-María López' },
+    ]);
+
+    expect(resto).toEqual([]);
+    expect(mensaje!.text).toContain('Hay varios que encajan');
+    expect(botones(mensaje!)).toEqual([
+      ['Marta', `cli:${ID_MARTA}`],
+      // El texto de un botón NO es MarkdownV2: va tal cual, sin escapar.
+      ['Ana-María López', `cli:${ID_ANA}`],
+    ]);
+  });
+
+  it('un botón por fila: dos nombres largos no se aprietan en una', () => {
+    const [mensaje] = formatAmbiguous([
+      { clientId: ID_MARTA, fullName: 'Marta' },
+      { clientId: ID_ANA, fullName: 'Ana' },
+    ]);
+    expect(mensaje!.keyboard!.inline_keyboard.every((fila) => fila.length === 1)).toBe(true);
+  });
+
+  it('CA-M6 · el texto pasa MarkdownV2', () => {
+    for (const m of formatAmbiguous([{ clientId: ID_ANA, fullName: 'Ana-María' }])) {
+      expect(tieneCaracterSinEscapar(m.text)).toBe(false);
+    }
+  });
+
+  it('con 25 coincidencias salen dos mensajes con los 25 (regla 4)', () => {
+    const muchas = Array.from({ length: 25 }, (_, i) => ({
+      clientId: `${String(i).padStart(8, '0')}-1111-4111-8111-111111111111`,
+      fullName: `Ana ${i}`,
+    }));
+
+    const mensajes = formatAmbiguous(muchas);
+
+    expect(mensajes).toHaveLength(2);
+    expect(mensajes.flatMap(botones)).toHaveLength(25);
   });
 
   it('con sugerencias, se ofrecen', () => {

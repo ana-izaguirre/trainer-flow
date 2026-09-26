@@ -16,7 +16,7 @@ import type {
   QueryRepo,
   StaleCheckin,
 } from '../ports/query-ports.ts';
-import { handleCommand, type CommandDeps } from './router.ts';
+import { handleCommand, showClient, type CommandDeps } from './router.ts';
 
 const ENTRENADOR: Identity = {
   profileId: 'p-trainer',
@@ -242,15 +242,17 @@ describe('/cliente <nombre>', () => {
   });
 
   it('CA-3 · varias coincidencias se listan SIN pedir el detalle', async () => {
-    const { deps, pasos, mensajes } = espia({
+    const { deps, pasos, mensajes, teclados } = espia({
       clientes: [resumen('Marta Ruiz'), resumen('Marcos Díaz')],
     });
 
     await handleCommand('cliente', 'Mar', ENTRENADOR, deps);
 
     expect(pasos.some((p) => p.startsWith('clientDetail'))).toBe(false);
-    expect(mensajes[0]).toContain('Marta');
-    expect(mensajes[0]).toContain('Marcos');
+    expect(mensajes[0]).toContain('Hay varios');
+    // SPEC-022 M4: cada una, un botón que abre su ficha.
+    expect(JSON.stringify(teclados[0])).toContain('cli:marta-ruiz');
+    expect(JSON.stringify(teclados[0])).toContain('cli:marcos-díaz');
   });
 
   it('sin coincidencias no pide detalle de nada', async () => {
@@ -479,5 +481,89 @@ describe('SPEC-023 · lo que SÍ puede hacer un cliente', () => {
 
     expect(outcome).toEqual({ kind: 'forbidden', command: 'loquesea' });
     expect(mensajes[0]).toContain('/rutina');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-022 M4 · el botón cli: abre la ficha', () => {
+  const ANA = resumen('Ana Izaguirre');
+
+  function detalleDe(summary: ClientSummary): ClientDetail {
+    return {
+      ...summary,
+      versionState: 'REJECTED',
+      versionId: 'v-ana-1',
+      goal: null,
+      level: null,
+      daysPerWeek: null,
+      sessionMinutes: null,
+      equipment: null,
+      hasLimitations: false,
+      sentDaysAgo: null,
+      lastCheckin: null,
+    };
+  }
+
+  it('CA-M4 · un cliente suyo: la misma ficha que /cliente, con sus botones', async () => {
+    const { deps, pasos, mensajes, teclados } = espia({ clientes: [ANA], detalle: detalleDe(ANA) });
+
+    const outcome = await showClient(ANA.clientId, ENTRENADOR, deps);
+
+    expect(outcome).toEqual({ kind: 'answered', command: 'cliente', messages: 1 });
+    expect(pasos).toContain('clients:p-trainer');
+    expect(pasos).toContain(`clientDetail:${ANA.clientId}`);
+    expect(mensajes[0]).toContain('Ana Izaguirre');
+    // REJECTED lleva «Crear v2» (SPEC-007 regla 7): la misma ficha, mismos botones.
+    expect(JSON.stringify(teclados[0])).toContain('act:revise:v-ana-1');
+  });
+
+  // CA-M5. La pertenencia se comprueba contra SU cartera, que viene filtrada
+  // por `trainer_id`. Un id que no está ahí no llega a pedir el detalle.
+  it('🔴 CA-M5 · el id de un cliente de OTRO entrenador no abre nada', async () => {
+    const { deps, pasos, teclados } = espia({ clientes: [ANA], detalle: detalleDe(resumen('Ajena')) });
+
+    const outcome = await showClient('ajena', ENTRENADOR, deps);
+
+    expect(outcome).toEqual({ kind: 'forbidden', command: 'cliente' });
+    expect(pasos.some((p) => p.startsWith('clientDetail'))).toBe(false);
+    expect(teclados[0]).toBeNull();
+  });
+
+  it('🔴 CA-M5 · uno ajeno y uno inexistente reciben EXACTAMENTE lo mismo', async () => {
+    const ajeno = espia({ clientes: [ANA] });
+    const inexistente = espia({ clientes: [] });
+
+    const a = await showClient('de-otro-entrenador', ENTRENADOR, ajeno.deps);
+    const b = await showClient('no-existe', ENTRENADOR, inexistente.deps);
+
+    expect(a).toEqual(b);
+    expect(ajeno.mensajes).toEqual(inexistente.mensajes);
+    expect(ajeno.teclados).toEqual(inexistente.teclados);
+  });
+
+  it('🔴 un CLIENTE que fabrica un cli: no consulta nada', async () => {
+    const { deps, pasos, mensajes } = espia({ clientes: [ANA], detalle: detalleDe(ANA) });
+
+    const outcome = await showClient(ANA.clientId, CLIENTE, deps);
+
+    expect(outcome).toEqual({ kind: 'forbidden', command: 'cliente' });
+    expect(pasos.filter((p) => !p.startsWith('sendMessage'))).toEqual([]);
+    // La misma respuesta que un id ajeno: no distingue quién pregunta.
+    const ajeno = espia({ clientes: [] });
+    await showClient('x', ENTRENADOR, ajeno.deps);
+    expect(mensajes).toEqual(ajeno.mensajes);
+  });
+
+  it('si la ficha desaparece entre las dos consultas, la misma respuesta', async () => {
+    const borrada = espia({ clientes: [ANA], detalle: null });
+    const ajeno = espia({ clientes: [] });
+
+    expect(await showClient(ANA.clientId, ENTRENADOR, borrada.deps)).toEqual({
+      kind: 'forbidden',
+      command: 'cliente',
+    });
+    await showClient('x', ENTRENADOR, ajeno.deps);
+    expect(borrada.mensajes).toEqual(ajeno.mensajes);
   });
 });

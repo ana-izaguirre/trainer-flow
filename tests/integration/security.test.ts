@@ -26,6 +26,8 @@ import {
   canViewVersion,
 } from '../../supabase/functions/_core/authorization.ts';
 import { startManual } from '../../supabase/functions/_core/creation/flows.ts';
+import { FICHA_NO_DISPONIBLE, showClient } from '../../supabase/functions/_core/commands/router.ts';
+import type { ClientSummary, QueryRepo } from '../../supabase/functions/_core/ports/query-ports.ts';
 import type { Identity } from '../../supabase/functions/_core/domain/identity.ts';
 import type { CreationRepo } from '../../supabase/functions/_core/ports/creation-ports.ts';
 import type { VersionRef } from '../../supabase/functions/_core/domain/version.ts';
@@ -168,6 +170,129 @@ describe('Caso 3 · entrenador A no accede a clientes de entrenador B', () => {
 
     // La única versión que existe es de la cartera de B.
     expect(rowCount).toBe(0);
+  });
+});
+
+/**
+ * SPEC-022 M4 (CA-M5). El botón `cli:<clientId>` es el primer sitio donde un
+ * id de cliente llega DE FUERA a una consulta de la cartera: en
+ * `/cliente <nombre>` sale de `trainer_clients`, que ya viene acotada.
+ *
+ * Se prueba contra las funciones SQL reales porque `trainer_client_detail`
+ * NO filtra por entrenador: lo que protege es que `showClient` compruebe la
+ * cartera antes de llamarla. Este test lo demuestra en los dos sentidos.
+ */
+describe('Caso 3 bis · el botón cli: no abre la ficha de otro entrenador', () => {
+  /** El `QueryRepo` justo para `showClient`, sobre las funciones reales. */
+  function repoReal(detalles: string[]): QueryRepo {
+    const sinUso = () => Promise.reject(new Error('no se usa aquí'));
+    return {
+      clients: async (trainerId) => {
+        const { rows } = await db.query(`SELECT * FROM trainer_clients($1)`, [trainerId]);
+        return rows.map(
+          (r): ClientSummary => ({
+            clientId: r['client_id'] as string,
+            fullName: r['full_name'] as string,
+            versionState: null,
+            versionNumber: null,
+            linked: false,
+            pendingCheckinDays: null,
+          }),
+        );
+      },
+      clientDetail: async (clientId) => {
+        detalles.push(clientId);
+        const { rows } = await db.query(`SELECT * FROM trainer_client_detail($1)`, [clientId]);
+        const r = rows[0];
+        if (r === undefined) return null;
+        return {
+          clientId,
+          fullName: r['full_name'] as string,
+          versionState: null,
+          versionNumber: null,
+          linked: false,
+          pendingCheckinDays: null,
+          versionId: null,
+          goal: null,
+          level: null,
+          daysPerWeek: null,
+          sessionMinutes: null,
+          equipment: null,
+          hasLimitations: false,
+          sentDaysAgo: null,
+          lastCheckin: null,
+        };
+      },
+      clientRoutine: sinUso,
+      pendingVersions: sinUso,
+      staleCheckins: sinUso,
+    };
+  }
+
+  function enviados() {
+    const mensajes: string[] = [];
+    return {
+      mensajes,
+      sender: {
+        sendMessage: (_chatId: number, text: string) => {
+          mensajes.push(text);
+          return Promise.resolve();
+        },
+        answerCallback: () => Promise.resolve(),
+      },
+    };
+  }
+
+  it('la función de detalle, sola, SÍ devolvería la ficha ajena', async () => {
+    // Por eso la comprobación de cartera no es opcional.
+    const { clientB } = await dosCarteras();
+
+    const { rowCount } = await db.query(`SELECT * FROM trainer_client_detail($1)`, [clientB]);
+
+    expect(rowCount).toBe(1);
+  });
+
+  it('CA-M5 · entrenador A pulsa cli:<cliente de B> → nada, y ni se consulta', async () => {
+    const { trainerA, clientB } = await dosCarteras();
+    const detalles: string[] = [];
+    const { mensajes, sender } = enviados();
+
+    const outcome = await showClient(clientB, identidad(trainerA, 'trainer'), {
+      repo: repoReal(detalles),
+      sender,
+    });
+
+    expect(outcome).toEqual({ kind: 'forbidden', command: 'cliente' });
+    expect(detalles).toEqual([]);
+    expect(mensajes).toEqual([FICHA_NO_DISPONIBLE]);
+    expect(mensajes.join()).not.toContain('Cliente B');
+  });
+
+  it('CA-M5 · un id que no existe recibe exactamente lo mismo', async () => {
+    const { trainerA } = await dosCarteras();
+    const { mensajes, sender } = enviados();
+
+    const outcome = await showClient(
+      '99999999-9999-4999-8999-999999999999',
+      identidad(trainerA, 'trainer'),
+      { repo: repoReal([]), sender },
+    );
+
+    expect(outcome).toEqual({ kind: 'forbidden', command: 'cliente' });
+    expect(mensajes).toEqual([FICHA_NO_DISPONIBLE]);
+  });
+
+  it('y su propio cliente sí se abre', async () => {
+    const { trainerA, clientA } = await dosCarteras();
+    const { mensajes, sender } = enviados();
+
+    const outcome = await showClient(clientA, identidad(trainerA, 'trainer'), {
+      repo: repoReal([]),
+      sender,
+    });
+
+    expect(outcome).toMatchObject({ kind: 'answered' });
+    expect(mensajes[0]).toContain('Cliente A');
   });
 });
 

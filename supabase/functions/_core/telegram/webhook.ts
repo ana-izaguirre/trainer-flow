@@ -56,6 +56,7 @@ import {
 } from '../creation/editor-session.ts';
 import {
   handleCommand,
+  showClient,
   type CommandDeps,
   type CommandOutcome,
 } from '../commands/router.ts';
@@ -69,6 +70,7 @@ import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts'
 import { showIntake, type IntakeOutcome, type IntakeDeps } from '../assessment/intake.ts';
 import { resendLink, type ResendLinkOutcome, type ResendLinkDeps } from './resend-link.ts';
 import { parseCallbackData } from './callback-data.ts';
+import { parseClientCallback } from './client-callback.ts';
 import {
   deliverVersion,
   linkClient,
@@ -251,18 +253,28 @@ export async function handleTelegramWebhook(
     }
 
     if (update.kind === 'callback') {
-      // Los dos prefijos viajan por el mismo canal, así que se prueban en
-      // orden. `chk:` no puede confundirse con `act:`: son literales.
+      // Los prefijos viajan por el mismo canal, así que se prueban en orden.
+      // `chk:`, `tpl:`, `chg:`, `cli:` y `act:` no pueden confundirse: son
+      // literales distintos.
       const respuesta = parseCheckinCallback(update.data);
       const plantilla = respuesta === null ? parseTemplateCallback(update.data) : null;
       const motivo =
         respuesta === null && plantilla === null ? parseChangeCallback(update.data) : null;
-      const payload =
+      const ficha =
         respuesta === null && plantilla === null && motivo === null
+          ? parseClientCallback(update.data)
+          : null;
+      const payload =
+        respuesta === null && plantilla === null && motivo === null && ficha === null
           ? parseCallbackData(update.data)
           : null;
 
-      if (motivo !== null) {
+      if (ficha !== null) {
+        // SPEC-022 M4: uno de los botones de «Hay varios que encajan». Es
+        // una lectura, como `/cliente`, y `showClient` comprueba que el id
+        // esté en SU cartera: el `callback_data` se puede fabricar.
+        command = await showClient(ficha.clientId, identity, deps.commands);
+      } else if (motivo !== null) {
         // El cliente eligió por qué quiere el cambio.
         change = await requestChange(motivo.reason, motivo.versionId, identity, deps.changes);
       } else if (plantilla !== null) {

@@ -74,8 +74,8 @@ Lista de comandos.
 1. **Las consultas de la cartera son exclusivas del entrenador.** Un cliente que los
    escriba recibe un mensaje genérico.
 2. `/cliente` busca por coincidencia parcial, sin distinguir mayúsculas.
-   Varias coincidencias: se listan para elegir. *(Propuesta pendiente,
-   SPEC-022 §12.ter M4: cada una como botón que abre su ficha.)* **Sin nombre (`/cliente` a
+   Varias coincidencias: cada una es un botón (`cli:<clientId>`) que abre
+   su ficha (SPEC-022 §12.ter M4). **Sin nombre (`/cliente` a
    secas): se pide que lo escriba.** No es lo mismo que «no hay nadie con ese
    nombre» — decirlo así deja al entrenador escribiendo el comando otra vez
    sin saber qué le falta (visto en uso real: Carlos lo probó dos veces).
@@ -112,7 +112,8 @@ autorización.
 | Situación | Efecto |
 |---|---|
 | Cliente no encontrado | Sugerencias de nombres parecidos |
-| Varias coincidencias | Lista para elegir |
+| Varias coincidencias | Un botón por cliente, que abre su ficha |
+| `cli:` de un cliente ajeno o inexistente | La misma respuesta neutra, sin ficha |
 | Sin clientes | Mensaje de bienvenida con instrucciones |
 | Comando desconocido | Se muestra `/ayuda` |
 | Cliente usa un comando | Mensaje genérico, sin filtrar datos |

@@ -369,6 +369,10 @@ al estado de la versión vigente (`_core/commands/format.ts`,
 | `SENT` | **Crear v2**, Ver evaluación |
 | `REJECTED` | **Crear v2**, Ver evaluación |
 
+**Y en el propio mensaje de rechazo** (SPEC-022 M3): desde septiembre de
+2026 lleva el botón **Crear v2**, la misma acción que la ficha. Antes decía
+*«Puedes empezar otra»* sin decir cómo, y había que ir a buscar la ficha.
+
 **Por qué `APPROVED` no ofrece «crear v2».** `startRevision` no comprueba el
 estado de la versión: mueve `current_version_id` a la v2 sin condición
 (SPEC-010). Desde `SENT` o `REJECTED` eso es exactamente lo que ya hace hoy,

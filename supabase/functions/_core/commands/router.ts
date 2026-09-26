@@ -15,7 +15,7 @@
 import type { Identity } from '../domain/identity.ts';
 import { formatForClient } from '../telegram/client-format.ts';
 import { buildKeyboard, CLIENT_ACTIONS } from '../telegram/keyboard.ts';
-import type { QueryRepo } from '../ports/query-ports.ts';
+import type { ClientDetail, QueryRepo } from '../ports/query-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import {
   AYUDA,
@@ -159,8 +159,12 @@ async function ficha(args: string, actor: Identity, deps: CommandDeps): Promise<
   const encontrado = matchClientName(clientes, args);
 
   if (encontrado.kind === 'many') {
-    await deps.sender.sendMessage(actor.telegramChatId, formatAmbiguous(encontrado.clients));
-    return { kind: 'answered', command: 'cliente', messages: 1 };
+    // SPEC-022 M4: cada nombre, un botón `cli:` que abre su ficha.
+    const paginas = formatAmbiguous(encontrado.clients);
+    for (const pagina of paginas) {
+      await deps.sender.sendMessage(actor.telegramChatId, pagina.text, pagina.keyboard);
+    }
+    return { kind: 'answered', command: 'cliente', messages: paginas.length };
   }
 
   if (encontrado.kind === 'none') {
@@ -176,18 +180,68 @@ async function ficha(args: string, actor: Identity, deps: CommandDeps): Promise<
   if (detalle === null) {
     await deps.sender.sendMessage(actor.telegramChatId, formatNotFound([]));
   } else {
-    // Regla 7 (SPEC-007): la ficha lleva botones según el estado de su
-    // rutina vigente. Antes de esto, `/cliente <nombre>` nunca tenía
-    // ninguno: si la tarjeta original se perdía en el chat, no quedaba
-    // ningún camino de vuelta (ver docs/STATE-MACHINE.md).
-    await deps.sender.sendMessage(
-      actor.telegramChatId,
-      formatClientDetail(detalle),
-      keyboardForDetail(detalle),
-    );
+    await enviarFicha(detalle, actor, deps);
   }
 
   return { kind: 'answered', command: 'cliente', messages: 1 };
+}
+
+/**
+ * La respuesta a un `cli:` que no abre nada.
+ *
+ * **Una sola** para un id ajeno, uno inexistente, una ficha borrada entre
+ * medias y un cliente que fabrica el botón (SPEC-013 regla 2): probar ids no
+ * revela cuáles existen ni de quién son.
+ */
+export const FICHA_NO_DISPONIBLE = 'No encontré esa ficha\\. Búscala con /cliente y el nombre\\.';
+
+/**
+ * SPEC-022 M4 — El botón `cli:<clientId>` de una búsqueda con varios.
+ *
+ * ┌─ AQUÍ EL ID SÍ LLEGA DE FUERA ─────────────────────────────────────────┐
+ * │ En `/cliente <nombre>` el id sale de `clients()`, así que es de los    │
+ * │ suyos por construcción. Aquí viene en el `callback_data`, que         │
+ * │ cualquiera puede fabricar. Por eso se comprueba contra SU cartera —la  │
+ * │ misma consulta, filtrada por `trainer_id`— ANTES de pedir el detalle,  │
+ * │ que no filtra por entrenador.                                          │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * Solo lectura: la ficha que abre es la misma de `/cliente <nombre>`, y sus
+ * botones llevan a acciones con su propia autorización.
+ */
+export async function showClient(
+  clientId: string,
+  actor: Identity,
+  deps: CommandDeps,
+): Promise<CommandOutcome> {
+  // Regla 1 (SPEC-007), antes de consultar: un cliente no mira fichas.
+  const esSuyo =
+    actor.role === 'trainer' &&
+    (await deps.repo.clients(actor.profileId)).some((c) => c.clientId === clientId);
+
+  const detalle = esSuyo ? await deps.repo.clientDetail(clientId) : null;
+
+  if (detalle === null) {
+    await deps.sender.sendMessage(actor.telegramChatId, FICHA_NO_DISPONIBLE);
+    return { kind: 'forbidden', command: 'cliente' };
+  }
+
+  await enviarFicha(detalle, actor, deps);
+  return { kind: 'answered', command: 'cliente', messages: 1 };
+}
+
+/**
+ * Regla 7 (SPEC-007): la ficha lleva botones según el estado de su rutina
+ * vigente. Antes de esto, `/cliente <nombre>` nunca tenía ninguno: si la
+ * tarjeta original se perdía en el chat, no quedaba ningún camino de vuelta
+ * (ver docs/STATE-MACHINE.md).
+ */
+function enviarFicha(detalle: ClientDetail, actor: Identity, deps: CommandDeps): Promise<void> {
+  return deps.sender.sendMessage(
+    actor.telegramChatId,
+    formatClientDetail(detalle),
+    keyboardForDetail(detalle),
+  );
 }
 
 async function pendientes(actor: Identity, deps: CommandDeps): Promise<CommandOutcome> {

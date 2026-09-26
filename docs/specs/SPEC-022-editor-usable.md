@@ -248,7 +248,7 @@ registrados, y sin registrar no aparecen en el menú del `/`.
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PROPUESTA — pendiente de aprobación** |
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
 | **Origen** | Uso real (septiembre 2026), tres mensajes seguidos sin salida |
 
 **Lo que pasó.** Ana pulsó ✍️ A mano, y el bot le explicó `/crear_rutina`
@@ -285,7 +285,13 @@ Jalón al pecho 3x12 90
 
 El ejemplo va en bloque de código (MarkdownV2 ```` ``` ````): en Telegram se
 copia entero con un toque, y el `/crear_rutina` de dentro no se vuelve un
-enlace que al pulsarse repita el error.
+enlace que al pulsarse repita el error. El de la primera línea va como código
+en línea por la misma razón.
+
+Se responde así cuando `/crear_rutina` llega **sin nada debajo** (o solo con
+espacios), que es el único caso en que no hay ningún día: cualquier renglón
+escrito es o una cabecera o un ejercicio, y un ejercicio sin día ya tiene su
+propio error, que nombra el renglón.
 
 ### M2 — Sin borrador abierto
 
@@ -335,9 +341,18 @@ apellido. Cada nombre de la lista pasa a ser un **botón que abre su ficha**:
 - **Solo lectura.** Abre la misma ficha que `/cliente <nombre>`, con sus
   botones (SPEC-007 regla 7).
 - **Misma autorización que el resto.** Se comprueba que el cliente sea del
-  entrenador que pulsa (`canViewClient`). Un id ajeno y uno inexistente
+  entrenador que pulsa. Un id ajeno y uno inexistente
   responden igual (SPEC-013 regla 2), así que probar ids no revela cuáles
   existen.
+  *Al implementar:* la comprobación no pasa por `canViewClient`, sino por la
+  cartera del entrenador (`trainer_clients`, acotada por `trainer_id`), la
+  misma consulta de la que sale el id en `/cliente <nombre>`. `ClientDetail`
+  no trae `trainer_id`, y añadirlo pedía una migración para decir lo mismo.
+  Importa porque `trainer_client_detail` **no filtra por entrenador**: la
+  cartera se comprueba ANTES de llamarla, y un cliente que fabrica el botón
+  no llega a consultar nada. La respuesta neutra es una sola, también para
+  una ficha borrada entre medias: *«No encontré esa ficha. Búscala con
+  /cliente y el nombre.»*
 - La lista sigue partida en páginas de 20 (SPEC-007 regla 4).
 
 ### Criterios de aceptación
@@ -359,11 +374,24 @@ apellido. Cada nombre de la lista pasa a ser un **botón que abre su ficha**:
 - **CA-M6** — Los cuatro mensajes pasan el detector de MarkdownV2 sin
   escapar (`tests/helpers/markdown.ts`), con un nombre de cliente con guion.
 
-**Tests** — `bulk.test.ts` (M1), `editor-session.test.ts` (M2),
-`actions.test.ts` (M3), `router.test.ts` y `callback-data.test.ts` (M4), más
+**Tests** — `bulk.test.ts` y `editor-session.test.ts` (M1, M2),
+`actions.test.ts` (M3), `format.test.ts`, `router.test.ts` y
+`client-callback.test.ts` (M4), más
 casos en `webhook.test.ts` que pulsan los botones de M3 y M4 de punta a
 punta. CA-M5 va también a `tests/integration/security.test.ts`: es un caso
 de autorización.
+
+**Resultado.** Los seis criterios en verde. El detector de MarkdownV2
+(`tests/helpers/markdown.ts`) aprendió a saltar código en línea y bloques de
+código, donde Telegram no pide escapar nada más que ` y \\. Uno sin cerrar
+sigue contando como error. Se comprobó quitando la comprobación de cartera de
+`showClient`: fallan un test de integración y dos unitarios.
+
+> **Visto al implementar, fuera de alcance.** Pulsar dos veces «✏️ Crear v2»
+> crea dos versiones nuevas (v2 y v3). Ya pasaba con el mismo botón en la
+> ficha; M3 lo pone en un mensaje más. La v3 queda en `NEW` y es la vigente,
+> así que no se pierde nada, pero ensucia el historial. Propuesta aparte si
+> molesta en uso real.
 
 ## 13. Lo que queda abierto
 

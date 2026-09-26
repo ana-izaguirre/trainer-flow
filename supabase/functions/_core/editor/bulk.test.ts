@@ -164,9 +164,11 @@ describe('cuando algo no se entiende, dice qué renglón', () => {
     expect(error(`Día 1: A\n${muchos}`)).toContain('máximo');
   });
 
-  it('un mensaje sin ningún día', () => {
-    expect(error('')).toContain('ningún día');
-    expect(error('   \n  \n ')).toContain('ningún día');
+  it('un mensaje sin ningún día dice que van en el MISMO mensaje (SPEC-022 M1)', () => {
+    // «No encontré ningún día. Empieza por uno» se leía como si pidiera una
+    // rutina de un día. Lo que falta de verdad es escribirlos debajo.
+    expect(error('')).toContain('MISMO mensaje');
+    expect(error('   \n  \n ')).toContain('MISMO mensaje');
   });
 });
 
