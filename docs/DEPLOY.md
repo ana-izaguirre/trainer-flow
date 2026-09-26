@@ -127,20 +127,33 @@ bot en todo lo que sigue.
 
 - [ ] **6b. El menú de comandos de Telegram** (el botón `/` junto al mensaje).
       Nunca se puso por código —no hay ningún `setMyCommands` en el
-      proyecto—, así que es manual: en **@BotFather → tu bot → Edit Bot →
-      Edit Commands**, o con `/setcommands`, pega:
+      proyecto—, así que es manual, por cualquiera de las dos vías.
 
+      **Con el token, sin pasar por BotFather:**
+
+      ```bash
+      curl "https://api.telegram.org/bot<TOKEN>/setMyCommands" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "commands": [
+            {"command": "rutina", "description": "ver tu rutina actual"},
+            {"command": "cambio", "description": "pedir un cambio a tu rutina"},
+            {"command": "actualizar", "description": "cambiar tus datos (días, tiempo, objetivo, lesiones)"},
+            {"command": "clientes", "description": "listar tus clientes"},
+            {"command": "cliente", "description": "ver la ficha de un cliente"},
+            {"command": "pendientes", "description": "rutinas y enlaces esperando"},
+            {"command": "checkins", "description": "check-ins sin responder"},
+            {"command": "crear_rutina", "description": "dictar una rutina completa"},
+            {"command": "ayuda", "description": "qué puedes hacer"}
+          ]
+        }'
       ```
-      rutina - ver tu rutina actual
-      cambio - pedir un cambio a tu rutina
-      actualizar - cambiar tus datos (días, tiempo, objetivo, lesiones)
-      clientes - listar tus clientes
-      cliente - ver la ficha de un cliente
-      pendientes - rutinas y enlaces esperando
-      checkins - check-ins sin responder
-      crear_rutina - dictar una rutina completa
-      ayuda - qué puedes hacer
-      ```
+
+      Verifica sin cambiar nada: `curl "https://api.telegram.org/bot<TOKEN>/getMyCommands"`.
+
+      **O a mano**, en **@BotFather → tu bot → Edit Bot → Edit Commands**, o
+      con `/setcommands`, pegando la misma lista en su formato
+      (`comando - descripción`, una por línea).
 
       Los tres primeros son del cliente, el resto del entrenador. Telegram no
       distingue el menú por rol en un chat 1 a 1 —el mismo bot atiende a los
