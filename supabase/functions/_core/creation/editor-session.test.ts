@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CreationRepo, CurrentDraft } from '../ports/creation-ports.ts';
 import type { Workout } from '../domain/workout.ts';
+import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import { handleEditorCommand, isEditorCommand, type EditorDeps } from './editor-session.ts';
 
 const TRAINER = 'p-entrenador';
@@ -176,6 +177,18 @@ describe('lo que no se puede', () => {
     expect(mensajes[0]).toContain('borrador');
   });
 
+  // SPEC-022 M2. «Pulsa 📋 o ✍️ en el aviso de un cliente» mandaba a buscar
+  // un mensaje enterrado en el chat. `/cliente` lleva esos botones.
+  it('CA-M2 · sin borrador abierto nombra /cliente, el camino que existe', async () => {
+    const { deps, mensajes } = espia({ draft: null });
+
+    await handleEditorCommand('crear_rutina', 'Día 1: A\nPress 4x8', TRAINER, CHAT, deps);
+
+    expect(mensajes[0]).toContain('/cliente');
+    expect(mensajes[0]).toContain('/crear\\_rutina');
+    expect(tieneCaracterSinEscapar(mensajes[0]!)).toBe(false);
+  });
+
   it('un comando mal escrito explica la sintaxis', async () => {
     const { deps, pasos, mensajes } = espia();
 
@@ -286,6 +299,54 @@ Dominadas 4x6 120`;
     expect(outcome).toMatchObject({ kind: 'invalid' });
     expect(pasos).not.toContain('saveDraft');
     expect(mensajes.at(-1)).toContain('día');
+  });
+
+  // SPEC-022 M1. En el menú de Telegram, tocar /crear_rutina lo ENVÍA al
+  // instante, sin nada debajo. Pasó en uso real.
+  describe('CA-M1 · /crear_rutina sin nada debajo', () => {
+    it.each([
+      ['vacío', ''],
+      ['solo espacios y saltos', '  \n \n  '],
+    ])('%s: explica que van en el MISMO mensaje, y no guarda', async (_caso, args) => {
+      const { deps, pasos, mensajes } = espia();
+
+      const outcome = await handleEditorCommand('crear_rutina', args, TRAINER, CHAT, deps);
+
+      expect(outcome).toMatchObject({ kind: 'invalid' });
+      expect(pasos).not.toContain('saveDraft');
+      expect(mensajes.at(-1)).toContain('MISMO mensaje');
+    });
+
+    it('trae el ejemplo en un bloque de código, que se copia de un toque', async () => {
+      const { deps, mensajes } = espia();
+
+      await handleEditorCommand('crear_rutina', '', TRAINER, CHAT, deps);
+
+      const texto = mensajes.at(-1)!;
+      const bloque = /```\n([\s\S]*?)```/.exec(texto)?.[1];
+      expect(bloque).toBeDefined();
+      // El ejemplo, tal cual se escribe: dentro del bloque no se escapa nada.
+      expect(bloque).toContain('/crear_rutina\nDía 1: Cuerpo completo A\nSentadilla 3x10 120');
+      expect(bloque).toContain('Día 2: Cuerpo completo B');
+    });
+
+    it('el ejemplo, pegado tal cual, es una rutina válida', async () => {
+      const { deps, mensajes } = espia();
+      await handleEditorCommand('crear_rutina', '', TRAINER, CHAT, deps);
+      const bloque = /```\n([\s\S]*?)```/.exec(mensajes.at(-1)!)![1]!;
+      const [, ...cuerpo] = bloque.trim().split('\n');
+
+      const otra = espia();
+      const outcome = await handleEditorCommand('crear_rutina', cuerpo.join('\n'), TRAINER, CHAT, otra.deps);
+
+      expect(outcome).toMatchObject({ kind: 'edited' });
+    });
+
+    it('CA-M6 · Telegram no lo rechaza', async () => {
+      const { deps, mensajes } = espia();
+      await handleEditorCommand('crear_rutina', '', TRAINER, CHAT, deps);
+      expect(tieneCaracterSinEscapar(mensajes.at(-1)!)).toBe(false);
+    });
   });
 
   it('es un comando del editor, como los demás', () => {

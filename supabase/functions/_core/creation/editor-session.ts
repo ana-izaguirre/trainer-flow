@@ -46,6 +46,40 @@ export type EditorOutcome =
   /** Se aprobó mientras escribía: la edición no se aplica. */
   | { readonly kind: 'not_draft_anymore' };
 
+/**
+ * SPEC-022 M2. Antes mandaba a «el aviso de un cliente», que ya estaba
+ * enterrado en el chat. `/cliente <nombre>` lleva los mismos botones
+ * (SPEC-007 regla 7): se nombra un camino que existe.
+ */
+const SIN_BORRADOR = [
+  'No tienes ningún borrador abierto\\.',
+  'Escribe /cliente y el nombre \\(por ejemplo /cliente Ana\\), pulsa',
+  '📋 Plantilla o ✍️ A mano en su ficha, y después vuelve a /crear\\_rutina\\.',
+].join('\n');
+
+/**
+ * SPEC-022 M1. El ejemplo va en un bloque de código: en Telegram se copia
+ * entero con un toque, y el /crear_rutina de dentro no se vuelve un enlace
+ * que, al pulsarlo, repita el error. El de la primera línea va como código en
+ * línea por lo mismo. Dentro de un bloque MarkdownV2 no se escapa nada más
+ * que ` y \\, y el ejemplo no lleva ninguno.
+ */
+const COMO_DICTAR = [
+  'Escribe los días en el MISMO mensaje, debajo de `/crear_rutina`\\.',
+  'Copia este ejemplo, cámbialo y envíalo:',
+  '',
+  '```',
+  '/crear_rutina',
+  'Día 1: Cuerpo completo A',
+  'Sentadilla 3x10 120',
+  'Press banca 3x10 90',
+  '',
+  'Día 2: Cuerpo completo B',
+  'Peso muerto rumano 3x10 120',
+  'Jalón al pecho 3x12 90',
+  '```',
+].join('\n');
+
 /** Los comandos que este módulo atiende. El resto no son suyos. */
 // `/rutina` NO está aquí a propósito: es del CLIENTE, que es quien lo
 // escribe para ver la suya (SPEC-023). El del entrenador dicta una nueva.
@@ -66,11 +100,16 @@ export async function handleEditorCommand(
 
   const draft = await deps.repo.currentDraft(trainerId);
   if (draft === null) {
-    await deps.sender.sendMessage(
-      chatId,
-      'No tienes ningún borrador abierto\\. Pulsa 📋 o ✍️ en el aviso de un cliente\\.',
-    );
+    await deps.sender.sendMessage(chatId, SIN_BORRADOR);
     return { kind: 'no_draft' };
+  }
+
+  // SPEC-022 M1. En el menú de comandos de Telegram, tocar /crear_rutina lo
+  // ENVÍA al instante, sin nada debajo. Es el caso más común de «no hay
+  // días», así que se contesta con el ejemplo entero para copiar.
+  if (command === 'crear_rutina' && args.trim().length === 0) {
+    await deps.sender.sendMessage(chatId, COMO_DICTAR);
+    return { kind: 'invalid', error: 'crear_rutina sin días' };
   }
 
   const contexto = { clientName: draft.clientName, versionNumber: draft.versionNumber };

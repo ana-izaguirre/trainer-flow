@@ -65,6 +65,8 @@ interface Espia {
   readonly deps: ActionDeps;
   readonly pasos: string[];
   readonly mensajes: string[];
+  /** El `callback_data` de cada botón, por mensaje. */
+  readonly botones: string[][];
 }
 
 function espia(
@@ -76,6 +78,7 @@ function espia(
 ): Espia {
   const pasos: string[] = [];
   const mensajes: string[] = [];
+  const botones: string[][] = [];
 
   const repo: ActionRepo = {
     findVersion: () => {
@@ -103,7 +106,8 @@ function espia(
       generation,
       requestId: 'req-1',
       sender: {
-        sendMessage: (chatId, text) => {
+        sendMessage: (chatId, text, keyboard) => {
+          botones.push(keyboard?.inline_keyboard.flat().map((b) => b.callback_data) ?? []);
           // Si esto revienta, Telegram habría hecho lo mismo con el mensaje
           // real: rechazarlo entero y dejar al entrenador sin respuesta.
           if (tieneCaracterSinEscapar(text)) {
@@ -120,6 +124,7 @@ function espia(
     },
     pasos,
     mensajes,
+    botones,
   };
 }
 
@@ -218,6 +223,27 @@ describe('rechazar', () => {
 
     expect(outcome).toEqual({ kind: 'rejected', versionId: 'v1' });
     expect(pasos).toContain('transition:DRAFT->REJECTED');
+  });
+
+  // SPEC-022 M3. «Puedes empezar otra» no decía cómo, y volver a escribir
+  // /crear_rutina tampoco servía: la rechazada ya no es un borrador.
+  it('CA-M3 · el mensaje lleva ✏️ Crear v2 sobre la versión rechazada', async () => {
+    const { deps, mensajes, botones } = espia();
+
+    await handleAction(pulsar('reject'), TRAINER, deps);
+
+    expect(botones.at(-1)).toEqual(['act:revise:v1']);
+    expect(mensajes.at(-1)).toContain('Crear v2');
+    // El nombre con guion: el espía ya revienta si no va escapado (CA-M6).
+    expect(mensajes.at(-1)).toContain('Ana\\-María Ruiz');
+  });
+
+  it('aprobar NO lleva ese botón: la versión sigue su camino', async () => {
+    const { deps, botones } = espia();
+
+    await handleAction(pulsar('approve'), TRAINER, deps);
+
+    expect(botones.flat()).not.toContain('act:revise:v1');
   });
 });
 

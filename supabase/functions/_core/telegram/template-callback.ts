@@ -9,7 +9,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  *
  * Cabe en los 64 bytes de Telegram: el id más largo del catálogo es
- * `push-pull-legs-6d`, que deja el callback en 58. Hay un test que lo mide
+ * `strength-recovery-7d`, que deja el callback en 61. Hay un test que lo mide
  * contra el catálogo real, así que añadir una plantilla con un id larguísimo
  * pondría el test en rojo antes que el botón en producción.
  */

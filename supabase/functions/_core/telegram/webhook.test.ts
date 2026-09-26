@@ -95,8 +95,12 @@ function vacioActions(): ActionDeps {
 }
 
 /** Consultas falsas que registran qué se pidió. Por defecto, sin clientes. */
-function fakeCommands(opciones: { clientes?: { clientId: string; fullName: string }[] } = {}) {
+function fakeCommands(
+  opciones: { clientes?: { clientId: string; fullName: string }[]; detalle?: unknown } = {},
+) {
   const pasos: string[] = [];
+  /** El `callback_data` de cada botón que se mandó. */
+  const botones: string[] = [];
 
   const repo: QueryRepo = {
     clientRoutine: () => {
@@ -117,7 +121,9 @@ function fakeCommands(opciones: { clientes?: { clientId: string; fullName: strin
     },
     clientDetail: () => {
       pasos.push('clientDetail');
-      return Promise.resolve(null);
+      return Promise.resolve(
+        (opciones.detalle ?? null) as Awaited<ReturnType<QueryRepo['clientDetail']>>,
+      );
     },
     pendingVersions: () => {
       pasos.push('pendingVersions');
@@ -132,15 +138,16 @@ function fakeCommands(opciones: { clientes?: { clientId: string; fullName: strin
   const deps: CommandDeps = {
     repo,
     sender: {
-      sendMessage: (chatId) => {
+      sendMessage: (chatId, _text, keyboard) => {
         pasos.push(`sendMessage:${chatId}`);
+        botones.push(...(keyboard?.inline_keyboard.flat().map((b) => b.callback_data) ?? []));
         return Promise.resolve();
       },
       answerCallback: () => Promise.resolve(),
     },
   };
 
-  return { deps, pasos };
+  return { deps, pasos, botones };
 }
 
 /**
@@ -815,6 +822,8 @@ describe('los botones se enrutan', () => {
 
   function enrutador() {
     const pasos: string[] = [];
+    /** El `callback_data` de cada botón que se mandó. */
+    const botones: string[] = [];
 
     const actions: ActionDeps = {
       repo: {
@@ -850,7 +859,10 @@ describe('los botones se enrutan', () => {
         },
       },
       sender: {
-        sendMessage: () => Promise.resolve(),
+        sendMessage: (_chatId, _text, keyboard) => {
+          botones.push(...(keyboard?.inline_keyboard.flat().map((b) => b.callback_data) ?? []));
+          return Promise.resolve();
+        },
         answerCallback: (id) => {
           pasos.push(`answerCallback:${id}`);
           return Promise.resolve();
@@ -865,7 +877,7 @@ describe('los botones se enrutan', () => {
       requestId: 'req-1',
     };
 
-    return { pasos, actions };
+    return { pasos, actions, botones };
   }
 
   it('aprobar ENTREGA la rutina en el momento', async () => {
@@ -897,6 +909,31 @@ describe('los botones se enrutan', () => {
 
     await result;
     expect(delivery.pasos).toEqual([]);
+  });
+
+  // SPEC-022 M3, de punta a punta: el botón que trae el rechazo, pulsado,
+  // crea la v2. Antes el mensaje decía «Puedes empezar otra» y nada más.
+  it('CA-M3 · rechazar trae ✏️ Crear v2, y pulsarlo crea la versión nueva', async () => {
+    const { actions, botones } = enrutador();
+
+    await ejecutar(conBoton(`act:reject:${VERSION}`), { actions }).result;
+    expect(botones).toEqual([`act:revise:${VERSION}`]);
+
+    const changes = fakeChanges({
+      version: {
+        versionId: VERSION,
+        state: 'REJECTED' as const,
+        planId: 'plan-1',
+        clientName: 'Carlos',
+        versionNumber: 1,
+        trainerChatId: 10,
+        client: { clientId: 'c1', trainerId: ENTRENADOR.profileId, profileId: null },
+      },
+    });
+    const { result } = ejecutar({ ...conBoton(botones[0]!), update_id: 2 }, { changes });
+
+    expect(await result).toMatchObject({ change: { kind: 'revision_started' } });
+    expect(changes.pasos).toContain('createRevision');
   });
 
   it('un botón válido llega a su acción', async () => {
@@ -1547,5 +1584,84 @@ describe('reenviar el enlace de vinculación', () => {
     );
 
     expect(outcome).toMatchObject({ kind: 'handled', link: { kind: 'sent', clientId: 'c1' } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-022 M4 · el botón cli: se enruta', () => {
+  const ANA_1 = '11111111-1111-4111-8111-111111111111';
+  const ANA_2 = '22222222-2222-4222-8222-222222222222';
+  const DOS_ANAS = [
+    { clientId: ANA_1, fullName: 'Ana Izaguirre Matamoros' },
+    { clientId: ANA_2, fullName: 'Ana María López' },
+  ];
+
+  const boton = (data: string, updateId = 2) => ({
+    update_id: updateId,
+    callback_query: {
+      id: 'cb-1',
+      from: FROM,
+      message: { message_id: 9, chat: { id: 500 } },
+      data,
+    },
+  });
+
+  const fichaDe = (clientId: string) => ({
+    clientId,
+    fullName: 'Ana Izaguirre Matamoros',
+    versionState: 'REJECTED',
+    versionNumber: 1,
+    linked: true,
+    pendingCheckinDays: null,
+    versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+    goal: null,
+    level: null,
+    daysPerWeek: null,
+    sessionMinutes: null,
+    equipment: null,
+    hasLimitations: false,
+    sentDaysAgo: null,
+    lastCheckin: null,
+  });
+
+  it('CA-M4 · /cliente Ana con dos Anas → botones, y pulsar uno abre SU ficha', async () => {
+    const commands = fakeCommands({ clientes: DOS_ANAS, detalle: fichaDe(ANA_1) });
+
+    await ejecutar(comando('/cliente Ana', 1), { commands }).result;
+    expect(commands.botones).toEqual([`cli:${ANA_1}`, `cli:${ANA_2}`]);
+    expect(commands.pasos).not.toContain('clientDetail');
+
+    const { result } = ejecutar(boton(commands.botones[0]!), { commands });
+
+    expect(await result).toMatchObject({
+      updateKind: 'callback',
+      command: { kind: 'answered', command: 'cliente' },
+    });
+    expect(commands.pasos).toContain('clientDetail');
+    // La ficha trae los botones de su estado: REJECTED → «Crear v2».
+    expect(commands.botones).toContain('act:revise:3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b');
+  });
+
+  it('🔴 CA-M5 · un cli: fabricado con un id que no es suyo no abre nada', async () => {
+    const commands = fakeCommands({ clientes: DOS_ANAS, detalle: fichaDe(ANA_1) });
+
+    const { result } = ejecutar(boton('cli:99999999-9999-4999-8999-999999999999'), { commands });
+
+    expect(await result).toMatchObject({ command: { kind: 'forbidden' } });
+    expect(commands.pasos).not.toContain('clientDetail');
+  });
+
+  it('un `cli:` NO se confunde con los otros prefijos', async () => {
+    const commands = fakeCommands({ clientes: DOS_ANAS, detalle: fichaDe(ANA_1) });
+    const creation = fakeCreation();
+    const changes = fakeChanges();
+    const checkins = fakeCheckins();
+
+    await ejecutar(boton(`cli:${ANA_1}`), { commands, creation, changes, checkins }).result;
+
+    expect(creation.pasos).toEqual([]);
+    expect(changes.pasos).toEqual([]);
+    expect(checkins.pasos).toEqual([]);
   });
 });

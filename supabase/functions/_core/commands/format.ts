@@ -15,10 +15,18 @@ import type {
 } from '../ports/query-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import type { CallbackAction } from '../telegram/callback-data.ts';
+import { buildClientCallback } from '../telegram/client-callback.ts';
 import { buildKeyboard, DRAFT_ACTIONS, NEW_ACTIONS, type InlineKeyboard } from '../telegram/keyboard.ts';
 
 /** Regla 4. Veinte líneas caben en una pantalla sin hacer scroll eterno. */
 export const PAGE_SIZE = 20;
+
+/** Trozos de `PAGE_SIZE`. Una lista vacía da cero páginas. */
+function paginate<T>(items: readonly T[]): T[][] {
+  const paginas: T[][] = [];
+  for (let i = 0; i < items.length; i += PAGE_SIZE) paginas.push(items.slice(i, i + PAGE_SIZE));
+  return paginas;
+}
 
 export interface CommandMessage {
   readonly text: string;
@@ -186,13 +194,28 @@ export function keyboardForDetail(c: ClientDetail): InlineKeyboard | null {
   return buildKeyboard(porEstado, c.versionId, c.linked ? [] : ['link']);
 }
 
-/** Cuando lo escrito no identifica a nadie, o a varios. */
-export function formatAmbiguous(clients: readonly { fullName: string }[]): string {
-  return [
-    '🤔 Hay varios que encajan\\. ¿Cuál?',
-    '',
-    ...clients.slice(0, PAGE_SIZE).map((c) => `• ${escapeMarkdownV2(c.fullName)}`),
-  ].join('\n');
+/**
+ * Cuando lo escrito encaja con varios (SPEC-022 M4).
+ *
+ * Cada nombre es un botón que abre su ficha: antes era una lista de texto y
+ * había que volver a escribir el comando con el apellido. Un botón por fila,
+ * porque los nombres completos son largos. Se parte en páginas de 20 como
+ * cualquier otra lista (regla 4): una que se corta en silencio deja fuera
+ * justo a quien se buscaba.
+ *
+ * El texto de un botón NO es MarkdownV2: el nombre va tal cual.
+ */
+export function formatAmbiguous(
+  clients: readonly { clientId: string; fullName: string }[],
+): CommandMessage[] {
+  return paginate(clients).map((pagina) => ({
+    text: '🤔 Hay varios que encajan\\. ¿Cuál?',
+    keyboard: {
+      inline_keyboard: pagina.map((c) => [
+        { text: c.fullName, callback_data: buildClientCallback(c.clientId) },
+      ]),
+    },
+  }));
 }
 
 export function formatNotFound(suggestions: readonly { fullName: string }[]): string {
