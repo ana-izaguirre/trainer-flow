@@ -233,6 +233,12 @@ información de salud.
 - Se envían a la IA porque el producto lo requiere, y se le comunica al cliente
   en el formulario.
 - `link_token` es una credencial: CSPRNG, nunca logueada, nunca en errores.
+- **El token de actualización (SPEC-027) también.** Permite reescribir la
+  evaluación de un cliente, datos de salud incluidos. En la base solo se
+  guarda su `sha256` (`clients.update_token_hash`), vale una vez y vence a
+  los 7 días. Se quita del payload de Tally **antes** de guardarlo en
+  `webhook_events`, y el aviso de qué cambió nombra los campos de salud sin
+  su contenido.
 
 ### Logs
 

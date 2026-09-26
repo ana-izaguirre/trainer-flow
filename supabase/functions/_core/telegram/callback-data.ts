@@ -26,6 +26,8 @@ export const CALLBACK_ACTIONS = [
   'intake',
   /** SPEC-014 §3: reenviar el enlace de vinculación. Tampoco escribe nada. */
   'link',
+  /** SPEC-027: pedirle al cliente que actualice sus datos. Emite un token. */
+  'reassess',
 ] as const;
 
 export type CallbackAction = (typeof CALLBACK_ACTIONS)[number];

@@ -42,6 +42,7 @@ function espia(firmaValida = true): Espia {
     findTrainer: () => Promise.resolve({ profileId: 'perfil-1', chatId: 99 }),
     ingestAssessment: () =>
       Promise.resolve({ clientId: 'c1', planId: 'p1', versionId: 'v1' }),
+    ingestAssessmentUpdate: () => Promise.resolve(null),
   };
 
   const sender: TelegramSender = {

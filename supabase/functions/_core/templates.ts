@@ -92,6 +92,21 @@ const PIERNA_VOLUMEN: WorkoutDay = {
   ],
 };
 
+/**
+ * Recuperación activa: sin equipo, así que sirve para cualquier cliente.
+ * La usan la plantilla de 7 días y `adaptDays` al alargar (SPEC-028 §11).
+ */
+const RECUPERACION_ACTIVA: WorkoutDay = {
+  dayNumber: 3,
+  focus: 'Recuperación activa',
+  exercises: [
+    ex('Caminata', 1, '30-40 min', 0, 'A un ritmo que te permita conversar'),
+    ex('Movilidad de cadera', 2, '10 por lado', 30),
+    ex('Movilidad de hombros', 2, '10', 30),
+    ex('Estiramientos generales', 1, '10 min', 0),
+  ],
+};
+
 /** El mismo día con otro número: la posición cambia de una plantilla a otra. */
 function asDay(day: WorkoutDay, dayNumber: number): WorkoutDay {
   return { ...day, dayNumber };
@@ -445,16 +460,7 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
       days: [
         asDay(TORSO_FUERZA, 1),
         asDay(PIERNA_FUERZA, 2),
-        {
-          dayNumber: 3,
-          focus: 'Recuperación activa',
-          exercises: [
-            ex('Caminata', 1, '30-40 min', 0, 'A un ritmo que te permita conversar'),
-            ex('Movilidad de cadera', 2, '10 por lado', 30),
-            ex('Movilidad de hombros', 2, '10', 30),
-            ex('Estiramientos generales', 1, '10 min', 0),
-          ],
-        },
+        asDay(RECUPERACION_ACTIVA, 3),
         asDay(TORSO_VOLUMEN, 4),
         asDay(PIERNA_VOLUMEN, 5),
         {
@@ -630,10 +636,34 @@ const LIMITATIONS_NOTICE =
   'Ajusta o sustituye los ejercicios afectados antes de aprobar.';
 
 function daysAdaptedNotice(from: number, to: number): string {
+  const recuperacion = recoveryDaysAdded(from, to);
   return (
     `Revisar: esta plantilla es de ${from} días y el cliente pidió ${to}. ` +
-    'Se ajustaron los días; comprueba que el reparto tenga sentido antes de aprobar.'
+    'Se ajustaron los días; comprueba que el reparto tenga sentido antes de aprobar.' +
+    (recuperacion === 0
+      ? ''
+      : ` Se agregaron ${recuperacion} ${recuperacion === 1 ? 'día' : 'días'} de recuperación ` +
+        'activa en vez de repetir sesiones intensas.')
   );
+}
+
+/** El máximo de sesiones intensas que se alcanza REPITIENDO (SPEC-028 §11). */
+const MAX_INTENSAS_AL_ALARGAR = 4;
+
+/**
+ * Cuántas sesiones intensas quedan al llevar `from` días a `to` (R-R1).
+ *
+ * Al acortar, las primeras `to`. Al alargar hasta 4, se repite en ciclo. A
+ * partir de 5, se repite solo hasta 4 —dejando al menos dos días para
+ * recuperar— y nunca se quita ninguna de las que la plantilla ya traía.
+ */
+function intenseSessions(from: number, to: number): number {
+  if (to <= from || to <= MAX_INTENSAS_AL_ALARGAR) return to;
+  return Math.max(from, Math.min(MAX_INTENSAS_AL_ALARGAR, to - 2));
+}
+
+function recoveryDaysAdded(from: number, to: number): number {
+  return to - intenseSessions(from, to);
 }
 
 /**
@@ -657,10 +687,23 @@ export function adaptDays(days: readonly WorkoutDay[], target: number): readonly
   // esto depende que el borrador sea cargable: no se apoya en un invariante.
   if (days.length === 0) return [];
 
-  return Array.from({ length: target }, (_, index) => {
-    const day = days[index % days.length] as WorkoutDay;
-    return { ...day, dayNumber: index + 1 };
-  });
+  // SPEC-028 §11: al alargar, nunca se repite una sesión intensa para pasar
+  // de 4. Lo que falta es recuperación, intercalada como en la plantilla de
+  // 7 días: una después de cada dos intensas, y las que sobren al final.
+  const intensas = intenseSessions(days.length, target);
+  let recuperacion = target - intensas;
+  const plan: WorkoutDay[] = [];
+
+  for (let k = 0; k < intensas; k += 1) {
+    plan.push(days[k % days.length] as WorkoutDay);
+    if (k % 2 === 1 && recuperacion > 0 && k < intensas - 1) {
+      plan.push(RECUPERACION_ACTIVA);
+      recuperacion -= 1;
+    }
+  }
+  for (; recuperacion > 0; recuperacion -= 1) plan.push(RECUPERACION_ACTIVA);
+
+  return plan.map((day, index) => ({ ...day, dayNumber: index + 1 }));
 }
 
 /**

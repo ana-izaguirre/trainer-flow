@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
-import type { SignatureVerifier, TallyRepo } from '../ports/tally-ports.ts';
+import type { SignatureVerifier, TallyRepo, UpdatedAssessment } from '../ports/tally-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { handleTallyWebhook, outcomeToStatus } from './webhook.ts';
 
@@ -36,6 +36,8 @@ interface Espia {
   readonly guardado: unknown[];
   readonly avisos: string[];
   readonly ingestado: unknown[];
+  /** El `callback_data` de los botones de cada mensaje, en orden. */
+  readonly teclados: string[][];
 }
 
 function espia(
@@ -44,12 +46,15 @@ function espia(
     yaVisto?: boolean;
     revienta?: 'error' | 'otra-cosa';
     sinEntrenador?: boolean;
+    /** Lo que devuelve la ingesta con token. `null`: el token no valía. */
+    actualizacion?: UpdatedAssessment | null;
   } = {},
 ): Espia {
   const llamadas: string[] = [];
   const guardado: unknown[] = [];
   const avisos: string[] = [];
   const ingestado: unknown[] = [];
+  const teclados: string[][] = [];
 
   const verifier: SignatureVerifier = {
     matches: () => {
@@ -83,11 +88,17 @@ function espia(
       ingestado.push(input);
       return Promise.resolve({ clientId: 'c1', planId: 'p1', versionId: 'v1' });
     },
+    ingestAssessmentUpdate: (input) => {
+      llamadas.push('ingestAssessmentUpdate');
+      ingestado.push(input);
+      return Promise.resolve(opciones.actualizacion === undefined ? null : opciones.actualizacion);
+    },
   };
 
   const sender: TelegramSender = {
-    sendMessage: (chatId, text) => {
+    sendMessage: (chatId, text, keyboard) => {
       avisos.push(`${chatId}:${text}`);
+      teclados.push(keyboard?.inline_keyboard.flat().map((b) => b.callback_data) ?? []);
       return Promise.resolve();
     },
     answerCallback: () => Promise.resolve(),
@@ -106,6 +117,7 @@ function espia(
     guardado,
     avisos,
     ingestado,
+    teclados,
   };
 }
 
@@ -443,5 +455,200 @@ describe('una pregunta condicional no se reporta como ausente', () => {
     expect(outcome.camposAusentes).not.toContain('menopauseStage');
     // Los demás sí: son los que de verdad pueden estar mal escritos.
     expect(outcome.camposAusentes).toContain('chronicConditions');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-027 — una evaluación que llega con el enlace de actualización', () => {
+  const TOKEN = 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde';
+  const VERSION = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  /** El mismo cuerpo, con el campo oculto `update` y lo que se le pase. */
+  function conOculto(valor: unknown, cambios: Record<string, unknown> = {}): string {
+    const cuerpo = JSON.parse(CUERPO) as { data: { fields: { label: string; value: unknown }[] } };
+    for (const campo of cuerpo.data.fields) {
+      if (campo.label in cambios) campo.value = cambios[campo.label];
+    }
+    cuerpo.data.fields.push({ key: 'h', label: 'update', type: 'HIDDEN_FIELDS', value: valor } as never);
+    return JSON.stringify(cuerpo);
+  }
+
+  /** Lo que devuelve la base: el cliente, su plan y la evaluación ANTERIOR. */
+  function actualizada(extra: Partial<UpdatedAssessment> = {}): UpdatedAssessment {
+    return {
+      clientId: 'c-carlos',
+      clientName: 'Ana-María Ruiz',
+      clientChatId: 500,
+      assessmentId: 'a-nueva',
+      planId: 'p-carlos',
+      versionId: VERSION,
+      versionState: 'SENT',
+      previous: {
+        goal: 'Fuerza',
+        level: 'beginner',
+        daysPerWeek: 3,
+        sessionMinutes: 60,
+        equipment: 'Mancuernas',
+        hasLimitations: false,
+        limitationsDetail: null,
+        lifestyle: null,
+        notes: null,
+        gender: null,
+        age: null,
+        weightKg: null,
+        heightCm: null,
+        lastWeighed: null,
+        quitReasons: null,
+        menopauseStage: null,
+        chronicConditions: null,
+        birthDate: null,
+        medications: null,
+        equipmentDetail: null,
+      },
+      ...extra,
+    };
+  }
+
+  const alEntrenador = (avisos: string[]) => avisos.filter((a) => a.startsWith('99:'));
+
+  it('CA-2 · con token válido NO se crea un cliente: la evaluación es del suyo', async () => {
+    const { deps, llamadas, ingestado } = espia({ actualizacion: actualizada() });
+
+    const outcome = await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    expect(outcome).toMatchObject({ kind: 'updated', clientId: 'c-carlos', assessmentId: 'a-nueva' });
+    expect(llamadas).toContain('ingestAssessmentUpdate');
+    expect(llamadas).not.toContain('ingestAssessment');
+    expect(ingestado[0]).toMatchObject({ token: TOKEN, daysPerWeek: 4 });
+    expect(llamadas.at(-1)).toBe('markProcessed:evt-1');
+  });
+
+  it('🔴 CA-11 · el token no se guarda en el payload ni sale en el resultado', async () => {
+    const { deps, guardado } = espia({ actualizacion: actualizada() });
+
+    const outcome = await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    expect(JSON.stringify(guardado)).not.toContain(TOKEN);
+    expect(JSON.stringify(outcome)).not.toContain(TOKEN);
+  });
+
+  it('CA-4 · el entrenador ve qué cambió, con los botones de su estado', async () => {
+    const { deps, avisos, teclados } = espia({ actualizacion: actualizada() });
+
+    await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    const [aviso] = alEntrenador(avisos);
+    expect(aviso).toContain('Ana\\-María Ruiz');
+    expect(aviso).toContain('días \\(3 → 4\\)');
+    expect(tieneCaracterSinEscapar(aviso!.slice(3))).toBe(false);
+    // SENT: los de la ficha, «Crear v2» y «Ver evaluación».
+    expect(teclados[avisos.indexOf(aviso!)]).toEqual([`act:revise:${VERSION}`, `act:intake:${VERSION}`]);
+  });
+
+  it('al cliente le llega el acuse, sin datos', async () => {
+    const { deps, avisos } = espia({ actualizacion: actualizada() });
+
+    await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    const alCliente = avisos.filter((a) => a.startsWith('500:'));
+    expect(alCliente).toHaveLength(1);
+    expect(alCliente[0]).toContain('Recibido');
+    expect(tieneCaracterSinEscapar(alCliente[0]!.slice(4))).toBe(false);
+  });
+
+  it('si el cliente no tiene chat, no se le escribe, y la actualización vale igual', async () => {
+    const { deps, avisos } = espia({ actualizacion: actualizada({ clientChatId: null }) });
+
+    const outcome = await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    expect(outcome.kind).toBe('updated');
+    expect(avisos.every((a) => a.startsWith('99:'))).toBe(true);
+  });
+
+  it('🔴 CA-5 · una limitación nueva se nombra, pero su texto no viaja', async () => {
+    const { deps, avisos } = espia({ actualizacion: actualizada() });
+    const cuerpo = conOculto(TOKEN, {
+      'Lesiones, dolor o limitaciones': ['Rodilla'],
+    });
+
+    await handleTallyWebhook(entrada({ rawBody: cuerpo }), deps);
+
+    const [aviso] = alEntrenador(avisos);
+    expect(aviso).toContain('limitaciones');
+    expect(aviso).not.toContain('Rodilla');
+  });
+
+  it('CA-8 · con un borrador abierto, avisa que se hizo con los datos anteriores', async () => {
+    const { deps, avisos } = espia({ actualizacion: actualizada({ versionState: 'DRAFT' }) });
+
+    await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    expect(alEntrenador(avisos)[0]).toContain('borrador');
+  });
+
+  it('CA-10 · sin cambios: lo dice, y no ofrece crear una v2', async () => {
+    const igual = actualizada();
+    const { deps, avisos, teclados } = espia({
+      actualizacion: { ...igual, previous: { ...igual.previous!, daysPerWeek: 4, sessionMinutes: 45, goal: 'Fuerza' } },
+    });
+
+    await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    const [aviso] = alEntrenador(avisos);
+    expect(aviso).toContain('sin cambios');
+    expect(teclados[avisos.indexOf(aviso!)]).toEqual([`act:intake:${VERSION}`]);
+  });
+
+  it('sin versión vigente, el aviso va sin botones', async () => {
+    const { deps, avisos, teclados } = espia({
+      actualizacion: actualizada({ versionId: null, versionState: null }),
+    });
+
+    await handleTallyWebhook(entrada({ rawBody: conOculto(TOKEN) }), deps);
+
+    expect(teclados[avisos.indexOf(alEntrenador(avisos)[0]!)]).toEqual([]);
+  });
+
+  it.each([
+    ['vencido, usado o inventado (la base no lo reconoce)', TOKEN, 'ingestAssessmentUpdate'],
+    ['con forma de no ser un token', 'abc', null],
+  ])('CA-6 · %s: cliente nuevo, con el aviso de ⚠️', async (_caso, valor, llamada) => {
+    const { deps, llamadas, avisos } = espia({ actualizacion: null });
+
+    const outcome = await handleTallyWebhook(entrada({ rawBody: conOculto(valor) }), deps);
+
+    expect(outcome).toMatchObject({ kind: 'ingested', staleUpdateLink: true });
+    expect(llamadas).toContain('ingestAssessment');
+    if (llamada === null) expect(llamadas).not.toContain('ingestAssessmentUpdate');
+    const [aviso] = alEntrenador(avisos);
+    // La línea va PRIMERO: es lo que el entrenador tiene que ver antes de
+    // preparar la rutina de alguien que quizá ya tiene.
+    const primeraLinea = aviso!.slice(3).split('\n')[0]!;
+    expect(primeraLinea).toContain('ya no vale');
+    expect(tieneCaracterSinEscapar(primeraLinea)).toBe(false);
+  });
+
+  it('el campo vacío es un envío normal: ni se intenta, ni se avisa', async () => {
+    const { deps, llamadas, avisos } = espia();
+
+    const outcome = await handleTallyWebhook(entrada({ rawBody: conOculto('') }), deps);
+
+    expect(outcome.kind).toBe('ingested');
+    expect(outcome).not.toHaveProperty('staleUpdateLink');
+    expect(llamadas).not.toContain('ingestAssessmentUpdate');
+    expect(alEntrenador(avisos)[0]).not.toContain('ya no vale');
+  });
+
+  it('si las respuestas no validan, el token no se toca: sigue vivo', async () => {
+    const { deps, llamadas } = espia({ actualizacion: actualizada() });
+
+    const outcome = await handleTallyWebhook(
+      entrada({ rawBody: conOculto(TOKEN, { Nombre: '' }) }),
+      deps,
+    );
+
+    expect(outcome.kind).toBe('invalid');
+    expect(llamadas).not.toContain('ingestAssessmentUpdate');
   });
 });

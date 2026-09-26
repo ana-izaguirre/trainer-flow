@@ -68,6 +68,12 @@ import {
 } from '../checkin/reply.ts';
 import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
 import { showIntake, type IntakeOutcome, type IntakeDeps } from '../assessment/intake.ts';
+import {
+  requestClientUpdate,
+  requestOwnUpdate,
+  type UpdateRequestDeps,
+  type UpdateRequestOutcome,
+} from '../assessment/update-request.ts';
 import { resendLink, type ResendLinkOutcome, type ResendLinkDeps } from './resend-link.ts';
 import { parseCallbackData } from './callback-data.ts';
 import { parseClientCallback } from './client-callback.ts';
@@ -120,6 +126,8 @@ export type WebhookOutcome =
       readonly editor?: EditorOutcome;
       /** Qué pasó con una solicitud de cambio. */
       readonly change?: ChangeOutcome;
+      /** SPEC-027: qué pasó al pedir la actualización de datos. Sin el token. */
+      readonly update?: UpdateRequestOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -151,6 +159,8 @@ export interface WebhookDeps {
   readonly creation: CreationDeps & EditorDeps;
   /** Lo que el cliente puede pedir sobre su rutina (SPEC-010). */
   readonly changes: ChangeRequestDeps;
+  /** SPEC-027: `/actualizar` del cliente y 📝 de la ficha. */
+  readonly updates: UpdateRequestDeps;
 }
 
 /**
@@ -237,6 +247,7 @@ export async function handleTelegramWebhook(
     let change: ChangeOutcome | undefined;
     let intake: IntakeOutcome | undefined;
     let link: ResendLinkOutcome | undefined;
+    let updateRequest: UpdateRequestOutcome | undefined;
 
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
@@ -247,7 +258,11 @@ export async function handleTelegramWebhook(
         ? await editarSiEsEntrenador(update.command, update.args, identity, deps)
         : undefined;
 
-      if (editor === undefined) {
+      // SPEC-027: `/actualizar` es del CLIENTE y escribe (emite un token), así
+      // que no va por el router de consultas, que es de solo lectura.
+      if (update.command === 'actualizar' && identity.role === 'client') {
+        updateRequest = await requestOwnUpdate(identity, deps.updates);
+      } else if (editor === undefined) {
         command = await handleCommand(update.command, update.args, identity, deps.commands);
       }
     }
@@ -303,6 +318,9 @@ export async function handleTelegramWebhook(
         // SPEC-015. Va aparte de `handleAction` porque no es una transición:
         // es la única lectura del sistema, y no escribe nada.
         intake = await showIntake(payload.versionId, identity, deps.intake);
+      } else if (payload !== null && payload.action === 'reassess') {
+        // SPEC-027 regla 3. Emite un token: comprueba la pertenencia antes.
+        updateRequest = await requestClientUpdate(payload.versionId, identity, deps.updates);
       } else if (payload !== null && payload.action === 'link') {
         // SPEC-014 §3. Tampoco transiciona nada: reenvía un dato que ya
         // existía, igual que 'intake'.
@@ -389,6 +407,7 @@ export async function handleTelegramWebhook(
       ...(creation === undefined ? {} : { creation }),
       ...(editor === undefined ? {} : { editor }),
       ...(change === undefined ? {} : { change }),
+      ...(updateRequest === undefined ? {} : { update: updateRequest }),
     };
   } catch (error) {
     return {

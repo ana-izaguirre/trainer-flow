@@ -14,9 +14,13 @@ import type {
   StaleCheckin,
 } from '../ports/query-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
-import type { CallbackAction } from '../telegram/callback-data.ts';
 import { buildClientCallback } from '../telegram/client-callback.ts';
-import { buildKeyboard, DRAFT_ACTIONS, NEW_ACTIONS, type InlineKeyboard } from '../telegram/keyboard.ts';
+import {
+  actionsForState,
+  buildKeyboard,
+  DRAFT_ACTIONS,
+  type InlineKeyboard,
+} from '../telegram/keyboard.ts';
 
 /** Regla 4. Veinte líneas caben en una pantalla sin hacer scroll eterno. */
 export const PAGE_SIZE = 20;
@@ -173,25 +177,15 @@ export function formatClientDetail(c: ClientDetail): string {
 export function keyboardForDetail(c: ClientDetail): InlineKeyboard | null {
   if (c.versionId === null) return null;
 
-  const porEstado: readonly CallbackAction[] = (() => {
-    switch (c.versionState) {
-      case 'NEW':
-        return NEW_ACTIONS;
-      case 'GENERATING':
-        return ['intake'];
-      case 'DRAFT':
-        return ['approve', 'reject', 'intake'];
-      case 'APPROVED':
-        return ['reject', 'intake'];
-      case 'SENT':
-      case 'REJECTED':
-        return ['revise', 'intake'];
-      default:
-        return [];
-    }
-  })();
+  // La fila de abajo, ortogonal al estado: sin vincular, reenviar el enlace;
+  // vinculado, pedirle que actualice sus datos (SPEC-027 regla 3). Nunca las
+  // dos: sin vincular no hay a quién mandarle el formulario.
+  const porEstado = actionsForState(c.versionState);
+  if (porEstado.length === 0) return null;
 
-  return buildKeyboard(porEstado, c.versionId, c.linked ? [] : ['link']);
+  return buildKeyboard(porEstado, c.versionId, [
+    c.linked ? 'reassess' : 'link',
+  ]);
 }
 
 /**
@@ -307,6 +301,8 @@ export const AYUDA_CLIENTE = [
   '🤖 *Lo que puedes hacer*',
   '',
   '/rutina — ver tu rutina actual',
+  // SPEC-027: sabe antes que nadie cuándo le cambió algo.
+  '/actualizar — cambiar tus datos \\(días, tiempo, objetivo, lesiones…\\)',
   '/ayuda — esto',
   '',
   'Cada lunes te llega un check\\-in de tres preguntas\\.',

@@ -6,7 +6,15 @@
  */
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { Identity } from '../_core/domain/identity.ts';
-import type { AssessmentToIngest, IngestedIds, TallyRepo } from '../_core/ports/tally-ports.ts';
+import type {
+  AssessmentToIngest,
+  AssessmentUpdateToIngest,
+  IngestedIds,
+  TallyRepo,
+  UpdatedAssessment,
+} from '../_core/ports/tally-ports.ts';
+import type { ComparableAssessment } from '../_core/assessment/changes.ts';
+import type { UpdateTokenRepo } from '../_core/ports/update-ports.ts';
 import type {
   GenerationOutcome,
   GenerationRecord,
@@ -164,6 +172,7 @@ export function createTallyRepo(db: Db, requestId: string): TallyRepo {
     markProcessed: (externalId) => markWebhookProcessed(db, 'tally', externalId),
     findTrainer: () => findTrainer(db),
     ingestAssessment: (input) => ingestAssessment(db, input, requestId),
+    ingestAssessmentUpdate: (input) => ingestAssessmentUpdate(db, input),
   };
 }
 
@@ -243,6 +252,121 @@ async function ingestAssessment(
 
   const fila = data;
   return { clientId: fila.client_id, planId: fila.plan_id, versionId: fila.version_id };
+}
+
+/**
+ * SPEC-027: invoca `ingest_assessment_update`. Consume el token y guarda la
+ * evaluación para SU cliente, en una sola operación.
+ *
+ * Sin filas es la respuesta normal a un token que no vale: `null`, no error.
+ * El token no va en ningún mensaje de error.
+ */
+async function ingestAssessmentUpdate(
+  db: Db,
+  input: AssessmentUpdateToIngest,
+): Promise<UpdatedAssessment | null> {
+  const { data, error } = await db
+    .rpc('ingest_assessment_update', {
+      p_token: input.token,
+      p_raw_payload: toJson(input.rawPayload),
+      p_goal: input.goal,
+      p_level: input.level,
+      p_days_per_week: input.daysPerWeek,
+      p_session_minutes: input.sessionMinutes,
+      p_equipment: input.equipment,
+      p_has_limitations: input.hasLimitations,
+      p_limitations_detail: nullArg(input.limitationsDetail),
+      p_lifestyle: nullArg(input.lifestyle),
+      p_notes: nullArg(input.notes),
+      p_gender: nullArg(input.gender),
+      p_age: nullArg(input.age),
+      p_weight_kg: nullArg(input.weightKg),
+      p_height_cm: nullArg(input.heightCm),
+      p_last_weighed: nullArg(input.lastWeighed),
+      p_quit_reasons: nullArg(input.quitReasons),
+      p_menopause_stage: nullArg(input.menopauseStage),
+      p_chronic_conditions: nullArg(input.chronicConditions),
+      p_birth_date: nullArg(input.birthDate),
+      p_medications: nullArg(input.medications),
+      p_equipment_detail: nullArg(input.equipmentDetail),
+    })
+    .maybeSingle();
+
+  // Igual que `ingestAssessment`: el detalle de Postgres podría citar un
+  // valor de salud, así que solo viaja el código.
+  if (error !== null) throw new Error(`No se pudo guardar la actualización: ${error.code}`);
+  if (data === null) return null;
+
+  const fila = data;
+  return {
+    clientId: fila.client_id,
+    clientName: fila.client_name,
+    // Los tipos generados no marcan nulos en las funciones: aquí sí pueden
+    // serlo (cliente sin chat, plan sin versión).
+    clientChatId: (fila.client_chat_id as number | null) ?? null,
+    assessmentId: fila.assessment_id,
+    previous: leerEvaluacionAnterior(fila.previous as Json | null),
+    planId: (fila.plan_id as string | null) ?? null,
+    versionId: (fila.version_id as string | null) ?? null,
+    versionState: (fila.version_state as VersionState | null) ?? null,
+  };
+}
+
+/** La fila de `assessments` en JSON, a los nombres del dominio. */
+function leerEvaluacionAnterior(json: Json | null): ComparableAssessment | null {
+  if (json === null || typeof json !== 'object' || Array.isArray(json)) return null;
+  const a = json as Record<string, Json | undefined>;
+  const texto = (k: string) => (typeof a[k] === 'string' ? (a[k] as string) : null);
+  const numero = (k: string) => toNumberOrNull(a[k]);
+
+  return {
+    goal: texto('goal') ?? '',
+    level: (texto('level') ?? 'beginner') as Level,
+    daysPerWeek: numero('days_per_week') ?? 0,
+    sessionMinutes: numero('session_minutes') ?? 0,
+    equipment: texto('equipment') ?? '',
+    hasLimitations: a['has_limitations'] === true,
+    limitationsDetail: texto('limitations_detail'),
+    lifestyle: texto('lifestyle'),
+    notes: texto('notes'),
+    gender: texto('gender'),
+    age: numero('age'),
+    weightKg: numero('weight_kg'),
+    heightCm: numero('height_cm'),
+    lastWeighed: texto('last_weighed'),
+    quitReasons: texto('quit_reasons'),
+    menopauseStage: texto('menopause_stage'),
+    chronicConditions: texto('chronic_conditions'),
+    birthDate: texto('birth_date'),
+    medications: texto('medications'),
+    equipmentDetail: texto('equipment_detail'),
+  };
+}
+
+/**
+ * SPEC-027: emitir el token de actualización. El token viaja en claro hasta
+ * la base, que guarda su hash (`update_token_hash`, migración 0026).
+ */
+export function createUpdateTokenRepo(db: Db): UpdateTokenRepo {
+  return {
+    async issueForProfile(profileId, token) {
+      const { data, error } = await db.rpc('issue_update_token_for_profile', {
+        p_profile_id: profileId,
+        p_token: token,
+      });
+      if (error !== null) throw new Error(`No se pudo emitir el enlace: ${error.code}`);
+      return (data as string | null) ?? null;
+    },
+
+    async issueForClient(clientId, token) {
+      const { data, error } = await db.rpc('issue_update_token_for_client', {
+        p_client_id: clientId,
+        p_token: token,
+      });
+      if (error !== null) throw new Error(`No se pudo emitir el enlace: ${error.code}`);
+      return (data as number | null) ?? null;
+    },
+  };
 }
 
 // -----------------------------------------------------------------------------

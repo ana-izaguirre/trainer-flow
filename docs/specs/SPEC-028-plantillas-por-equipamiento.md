@@ -193,3 +193,63 @@ supabase/functions/_core/templates.ts         nivel por plantilla, orden, dos nu
 supabase/functions/_core/templates.test.ts
 docs/specs/SPEC-008-creacion-manual-y-plantillas.md   la regla 7 remite aquí
 ```
+
+## 11. Ampliación: recuperación activa al alargar una plantilla
+
+| Campo | Valor |
+|---|---|
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
+| **Origen** | Pregunta de Ana: ¿qué recibe un cliente sin equipo, con bandas o con mancuernas que entrena 5, 6 o 7 días? |
+
+**El problema.** Las plantillas de casa son de 3 días, y `adaptDays` las
+alarga repitiendo en ciclo. Con 7 días eso da A, B, C, A, B, C, A: siete
+sesiones intensas sin descanso. Es el mismo problema que llevó a la plantilla
+`strength-recovery-7d` de gimnasio, y pasa con cualquier plantilla que se
+alargue.
+
+**La regla.** Una sola, en `adaptDays`, en lugar de 18 plantillas nuevas:
+
+> **Al alargar una plantilla, nunca se repite una sesión intensa para pasar
+> de 4.** Los días que faltan son de recuperación activa.
+
+| Plantilla de 3 días, cliente de… | Queda |
+|---|---|
+| 1 | A |
+| 2 | A, B |
+| 4 | A, B, C, A |
+| 5 | A, B, **Rec**, C, **Rec** |
+| 6 | A, B, **Rec**, C, A, **Rec** |
+| 7 | A, B, **Rec**, C, A, **Rec**, **Rec** |
+
+- **R-R1.** Al alargar, las sesiones intensas son `max(días de la plantilla,
+  min(4, días − 2))`. Con una de 3 días: 3 a 5 días, 4 a 6 y 7. Una
+  plantilla que ya trae más de 4 (la de 5 o la de 6 días) conserva las
+  suyas: se añade recuperación, no se quita lo que su autor puso.
+- **R-R2.** La recuperación va **intercalada**: una después de cada dos
+  sesiones intensas, y las que sobren al final. Es el reparto de
+  `strength-recovery-7d`.
+- **R-R3.** **Al acortar no cambia nada**: se toman los primeros días, como
+  hoy.
+- **R-R4.** El día de recuperación **no necesita equipo** (caminata,
+  movilidad, estiramientos), así que sirve igual para gimnasio, peso libre,
+  bandas y sin equipo. Es el mismo que el día 3 de `strength-recovery-7d`.
+- **R-R5.** El aviso de días ajustados dice cuántos días de recuperación se
+  agregaron. Como siempre, el entrenador revisa y edita antes de aprobar.
+
+**Criterios de aceptación**
+
+- **CA-R1** — DADO una plantilla de 3 días y un cliente de 5, 6 o 7, CUANDO
+  se carga, ENTONCES los días quedan como en la tabla de arriba.
+- **CA-R2** — DADO cualquier plantilla alargada a cualquier número de días,
+  CUANDO se carga, ENTONCES nunca hay más sesiones intensas que
+  `max(días de la plantilla, 4)`.
+- **CA-R3** — DADO un cliente de 4 días o menos, CUANDO se carga, ENTONCES
+  el resultado es el de hoy.
+- **CA-R4** — DADO recuperación agregada, CUANDO se carga, ENTONCES el aviso
+  lo dice, y el borrador sigue pasando `validateDraft`.
+
+**Resultado.** En `adaptDays` (`_core/templates.ts`), con `intenseSessions`
+para R-R1. El día de recuperación es una constante, compartida con el día 3
+de `strength-recovery-7d`. CA-R1 a CA-R4 en `templates.test.ts`, además del
+test que ya recorría todas las plantillas de 1 a 7 días, con y sin
+limitaciones.
