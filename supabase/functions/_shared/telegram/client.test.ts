@@ -119,6 +119,37 @@ Deno.test('una respuesta sin message_id usable devuelve null', async () => {
   }
 });
 
+Deno.test('SPEC-030 regla 3 · force_reply se manda como reply_markup', async () => {
+  await conFetch(
+    () => ok({ message_id: 1 }),
+    async (cliente, llamadas) => {
+      await cliente.sendMessage(7, 'hola', null, true);
+      assertEquals(llamadas[0]!.body['reply_markup'], { force_reply: true });
+    },
+  );
+});
+
+Deno.test('force_reply se ignora si hay teclado: reply_markup admite un solo tipo', async () => {
+  await conFetch(
+    () => ok({ message_id: 1 }),
+    async (cliente, llamadas) => {
+      const teclado = { inline_keyboard: [[{ text: 'Sí', callback_data: 'x' }]] };
+      await cliente.sendMessage(7, 'hola', teclado, true);
+      assertEquals(llamadas[0]!.body['reply_markup'], teclado);
+    },
+  );
+});
+
+Deno.test('sin teclado ni force_reply, no manda reply_markup', async () => {
+  await conFetch(
+    () => ok({ message_id: 1 }),
+    async (cliente, llamadas) => {
+      await cliente.sendMessage(7, 'hola');
+      assertEquals('reply_markup' in llamadas[0]!.body, false);
+    },
+  );
+});
+
 Deno.test('answerCallbackQuery manda el texto solo si lo hay', async () => {
   await conFetch(
     () => ok(true),
@@ -140,6 +171,17 @@ Deno.test('asSender cumple el puerto sin exponer el message_id', async () => {
       assertEquals(await sender.sendMessage(7, 'hola'), undefined);
       await sender.answerCallback('cb-1');
       assertEquals(llamadas.length, 2);
+    },
+  );
+});
+
+Deno.test('asSender reenvía force_reply', async () => {
+  await conFetch(
+    () => ok({ message_id: 9 }),
+    async (cliente, llamadas) => {
+      const sender = asSender(cliente);
+      await sender.sendMessage(7, 'hola', null, true);
+      assertEquals(llamadas[0]!.body['reply_markup'], { force_reply: true });
     },
   );
 });

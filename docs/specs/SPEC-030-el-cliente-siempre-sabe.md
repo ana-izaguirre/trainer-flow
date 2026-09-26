@@ -19,12 +19,34 @@
 | 12 | `/cambio_rutina` en `AYUDA_CLIENTE` | ✅ |
 | 11 | La ficha del entrenador muestra la solicitud abierta (motivo y días, sin el comentario) | ✅ migración 0028, `trainer_client_detail` |
 | 14 | `/pendientes` con las dos listas (`DRAFT` y `APPROVED` sin abrir) | ✅ migración 0028, `trainer_awaiting_link` |
-| 3 | `force_reply` en cada pregunta de texto libre | ⏸️ Pendiente — ver nota |
+| 3 | `force_reply` en cada pregunta de texto libre | ✅ ver nota — 2 de 3 casos |
 | 9 | Acuse por botón del check-in (`answerCallback` con texto) | ✅ `formatCheckinAck`, `ButtonReplyOutcome`, CA-9 |
 | 10 | Cabecera «actualizada» en la v2 | ✅ migración 0029, `versionNumber`, CA-10 |
 | 13 | Aviso de enlace sin abrir 48h | ⏸️ Pendiente — ver nota |
 
-**1594 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 101 Deno.**
+**1598 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 105 Deno.**
+
+### Regla 3 — `force_reply`, y por qué el check-in se queda fuera
+
+Resultó más barato de lo que decía la nota original: `TelegramSender.sendMessage`
+ganó un cuarto parámetro **opcional** (`forceReply?: boolean`), así que los
+~15 archivos con un `sendMessage: (chatId, text, keyboard) => …` a mano
+siguen compilando sin tocarlos — TypeScript acepta una implementación con
+menos parámetros que la interfaz.
+
+Se aplica a los dos sitios que preguntan texto libre sin ningún teclado de
+por medio: el detalle del cambio tras elegir un motivo (incluido «✍️ Otro»,
+que hoy comparte el mismo mensaje) y el recordatorio de una solicitud ya
+abierta (`estadoAbierto`).
+
+**La molestia del check-in se queda sin `force_reply`, a propósito.** Ese
+mensaje YA lleva `inline_keyboard` (las tres filas de botones), y
+`reply_markup` de Telegram solo admite un tipo a la vez: ponerle
+`force_reply` significaría **quitarle los botones**, que es justo lo
+contrario de mejorar la pregunta. El texto ya dice qué hacer («Escríbela o
+pulsa el botón»); no hay una versión de este mensaje que gane con el cambio.
+
+### Regla 10 — de dónde salió `versionNumber`
 
 ### Regla 10 — de dónde salió `versionNumber`
 
@@ -62,17 +84,14 @@ un `null` que nadie puede alcanzar escondido en el tipo compartido con
 `handleCheckinText` (que sí puede ser `null`: un mensaje de texto no tiene
 callback al que responder).
 
-### Por qué las reglas 3 y 13 quedaron fuera de este PR
+### Por qué la regla 13 queda fuera de este PR
 
-- **Regla 3** (`force_reply`) necesita un tipo nuevo en `TelegramSender` y
-  tocar cada `sendMessage` de cada test del repo (~15 archivos): mucho para
-  lo que resuelve, cuando el texto del mensaje ya dice dónde escribir.
-- **Regla 13** (aviso de enlace sin abrir 48h) es la única que agrega un
-  **cron nuevo en producción** — y Ana ya tuvo que configurar pg_cron a
-  mano esta sesión. `trainer_awaiting_link` (regla 14, ya implementada) es
-  la misma consulta que necesitaría ese barrido: falta la columna de
-  recordatorio enviado y el paso de despliegue. Se hace en su propio PR,
-  avisando antes de que haga falta un `pg_cron.schedule` más.
+**Regla 13** (aviso de enlace sin abrir 48h) es la única que agrega un
+**cron nuevo en producción** — y Ana ya tuvo que configurar pg_cron a
+mano esta sesión. `trainer_awaiting_link` (regla 14, ya implementada) es
+la misma consulta que necesitaría ese barrido: falta la columna de
+recordatorio enviado y el paso de despliegue. Se hace en su propio PR,
+avisando antes de que haga falta un `pg_cron.schedule` más.
 
 Quedan en el backlog de esta spec, no en uno nuevo: la spec sigue abierta
 hasta que se implementen.

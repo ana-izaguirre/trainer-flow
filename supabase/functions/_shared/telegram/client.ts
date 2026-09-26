@@ -14,7 +14,12 @@ const API_BASE = 'https://api.telegram.org';
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 
 export interface TelegramClient {
-  sendMessage(chatId: number, text: string, keyboard?: InlineKeyboard | null): Promise<number | null>;
+  sendMessage(
+    chatId: number,
+    text: string,
+    keyboard?: InlineKeyboard | null,
+    forceReply?: boolean,
+  ): Promise<number | null>;
   /**
    * Telegram deja el botón girando si no se responde en unos segundos, así
    * que esto se llama ANTES de hacer el trabajo lento (SPEC-004 regla 2).
@@ -54,7 +59,16 @@ export function createTelegramClient(botToken: string, log: Logger): TelegramCli
   }
 
   return {
-    async sendMessage(chatId, text, keyboard) {
+    async sendMessage(chatId, text, keyboard, forceReply) {
+      // `reply_markup` admite UN tipo: un teclado inline gana si, por lo que
+      // sea, llegaran los dos — ningún llamador de este repo lo hace.
+      const replyMarkup =
+        keyboard !== undefined && keyboard !== null
+          ? keyboard
+          : forceReply === true
+            ? { force_reply: true }
+            : undefined;
+
       const payload = await call('sendMessage', {
         chat_id: chatId,
         text: text.slice(0, TELEGRAM_MAX_MESSAGE_LENGTH),
@@ -62,7 +76,7 @@ export function createTelegramClient(botToken: string, log: Logger): TelegramCli
         // format.ts`. Sin esto, Telegram los muestra con los backslash a la
         // vista.
         parse_mode: 'MarkdownV2',
-        ...(keyboard === undefined || keyboard === null ? {} : { reply_markup: keyboard }),
+        ...(replyMarkup === undefined ? {} : { reply_markup: replyMarkup }),
       });
 
       if (typeof payload !== 'object' || payload === null) return null;
@@ -90,8 +104,8 @@ export function createTelegramClient(botToken: string, log: Logger): TelegramCli
  */
 export function asSender(client: TelegramClient): TelegramSender {
   return {
-    sendMessage: async (chatId, text, keyboard) => {
-      await client.sendMessage(chatId, text, keyboard);
+    sendMessage: async (chatId, text, keyboard, forceReply) => {
+      await client.sendMessage(chatId, text, keyboard, forceReply);
     },
     answerCallback: (callbackQueryId, text) => client.answerCallbackQuery(callbackQueryId, text),
   };
