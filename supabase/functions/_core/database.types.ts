@@ -493,6 +493,7 @@ export type Database = {
           created_by: string
           edit_count: number
           id: string
+          link_reminder_sent_at: string | null
           plan_id: string
           sent_at: string | null
           source: Database["public"]["Enums"]["version_source"]
@@ -508,6 +509,7 @@ export type Database = {
           created_by: string
           edit_count?: number
           id?: string
+          link_reminder_sent_at?: string | null
           plan_id: string
           sent_at?: string | null
           source: Database["public"]["Enums"]["version_source"]
@@ -523,6 +525,7 @@ export type Database = {
           created_by?: string
           edit_count?: number
           id?: string
+          link_reminder_sent_at?: string | null
           plan_id?: string
           sent_at?: string | null
           source?: Database["public"]["Enums"]["version_source"]
@@ -830,6 +833,10 @@ export type Database = {
         Returns: undefined
       }
       mark_checkin_sent: { Args: { p_checkin_id: string }; Returns: undefined }
+      mark_link_reminded: {
+        Args: { p_version_id: string }
+        Returns: undefined
+      }
       open_change_request_for_client: {
         Args: { p_profile_id: string }
         Returns: {
@@ -1069,6 +1076,14 @@ export type Database = {
           trainer_id: string
           version_id: string
           version_number: number
+        }[]
+      }
+      versions_awaiting_link_reminder: {
+        Args: { p_min_hours: number }
+        Returns: {
+          client_name: string
+          trainer_chat_id: number
+          version_id: string
         }[]
       }
     }

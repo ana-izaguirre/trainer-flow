@@ -207,9 +207,9 @@ bot en todo lo que sigue.
       select jobname, schedule, active from cron.job where jobname = 'weekly-checkin';
       ```
 
-- [ ] **8b. Programar el barrido de generaciones atascadas** (SPEC-002 §11).
-      En el SQL Editor: pega `supabase/cron/sweep-generating.sql` y
-      ejecútalo, y después:
+- [ ] **8b. Programar el barrido de cada 5 minutos** (SPEC-002 §11 y
+      SPEC-030 regla 13). En el SQL Editor: pega
+      `supabase/cron/sweep-generating.sql` y ejecútalo, y después:
 
       ```sql
       select schedule_generation_sweep(
@@ -223,10 +223,11 @@ bot en todo lo que sigue.
       select jobname, schedule, active from cron.job where jobname = 'sweep-generating';
       ```
 
-      Sin este paso, una generación que muere a medias por un fallo de
-      plataforma se queda en `GENERATING` sin que nada la desatasque —el
-      resto del sistema funciona igual, esto es específicamente esa red de
-      seguridad.
+      **Un solo job, dos comprobaciones.** El nombre se quedó del primer uso
+      —generaciones de IA atascadas—, pero la misma llamada también revisa
+      los enlaces sin abrir a las 48 horas (SPEC-030 regla 13): no hace
+      falta programar nada aparte. Sin este paso, ninguna de las dos redes
+      de seguridad corre — el resto del sistema funciona igual.
 
       > **El deploy lo vigila.** Cada despliegue termina comprobando que
       > `weekly-checkin` y `sweep-generating` existan y estén activos. Si

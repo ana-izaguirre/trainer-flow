@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PARCIALMENTE IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
 | **Depende de** | SPEC-006, SPEC-010, SPEC-023 |
 | **Sesiones** | S-43 |
 
@@ -22,9 +22,30 @@
 | 3 | `force_reply` en cada pregunta de texto libre | ✅ ver nota — 2 de 3 casos |
 | 9 | Acuse por botón del check-in (`answerCallback` con texto) | ✅ `formatCheckinAck`, `ButtonReplyOutcome`, CA-9 |
 | 10 | Cabecera «actualizada» en la v2 | ✅ migración 0029, `versionNumber`, CA-10 |
-| 13 | Aviso de enlace sin abrir 48h | ⏸️ Pendiente — ver nota |
+| 13 | Aviso de enlace sin abrir 48h | ✅ migración 0030, `sweep-generating`, CA-13 |
 
-**1598 unit tests (100% cobertura en `_core`) + 268 integration/E2E + 105 Deno.**
+**Estado** pasa a **IMPLEMENTADA**: las 14 reglas están hechas.
+
+**1599 unit tests (100% cobertura en `_core`) + 275 integration/E2E + 107 Deno.**
+
+### Regla 13 — sin cron nuevo: el mismo barrido de cada 5 minutos
+
+La regla lo pedía explícito: *"lo revisa el mismo sweep que ya corre cada 5
+minutos"* — el de SPEC-002 §11 (`sweep-generating`). **No hace falta ningún
+`pg_cron.schedule` nuevo**: el job que ya está programado en producción pasa
+a correr las dos comprobaciones en la misma llamada, así que el deploy de
+este PR es autosuficiente en ese punto.
+
+Migración 0030: `link_reminder_sent_at` en `workout_versions` (mismo patrón
+que `checkins.reminder_sent_at`, migración 0010 — un solo aviso, con
+`coalesce` para que una segunda llamada no pise la fecha de la primera),
+más `versions_awaiting_link_reminder(p_min_hours)` y `mark_link_reminded`.
+`sweepUnopenedLinks` (`_core/delivery/sweep-unopened-links.ts`) sigue el
+mismo patrón "enviar, y SOLO ENTONCES marcar" de `checkin/send.ts`: un envío
+que falla no marca nada, y el barrido siguiente lo reintenta solo.
+
+El umbral es configurable (`LINK_REMINDER_HOURS`, default 48) igual que
+`GENERATION_STALE_MINUTES` — variable de entorno, no secreto.
 
 ### Regla 3 — `force_reply`, y por qué el check-in se queda fuera
 
@@ -45,8 +66,6 @@ mensaje YA lleva `inline_keyboard` (las tres filas de botones), y
 `force_reply` significaría **quitarle los botones**, que es justo lo
 contrario de mejorar la pregunta. El texto ya dice qué hacer («Escríbela o
 pulsa el botón»); no hay una versión de este mensaje que gane con el cambio.
-
-### Regla 10 — de dónde salió `versionNumber`
 
 ### Regla 10 — de dónde salió `versionNumber`
 
@@ -83,18 +102,6 @@ entre el diferido y el enrutado).
 un `null` que nadie puede alcanzar escondido en el tipo compartido con
 `handleCheckinText` (que sí puede ser `null`: un mensaje de texto no tiene
 callback al que responder).
-
-### Por qué la regla 13 queda fuera de este PR
-
-**Regla 13** (aviso de enlace sin abrir 48h) es la única que agrega un
-**cron nuevo en producción** — y Ana ya tuvo que configurar pg_cron a
-mano esta sesión. `trainer_awaiting_link` (regla 14, ya implementada) es
-la misma consulta que necesitaría ese barrido: falta la columna de
-recordatorio enviado y el paso de despliegue. Se hace en su propio PR,
-avisando antes de que haga falta un `pg_cron.schedule` más.
-
-Quedan en el backlog de esta spec, no en uno nuevo: la spec sigue abierta
-hasta que se implementen.
 
 ## 1. Objetivo
 
@@ -360,12 +367,18 @@ supabase/functions/_core/checkin/format.ts             textos del acuse
 supabase/functions/_core/ports/telegram-ports.ts       force_reply; answerCallback(id, text?)
 supabase/functions/_core/ports/change-request-ports.ts
 supabase/functions/_core/telegram/webhook.ts           /cambio_rutina, texto sin destino
-supabase/functions/_core/ai/sweep-stale-generations.ts  aviso de enlace sin abrir 48h (o función nueva del mismo barrido)
+supabase/migrations/0029_version_number_en_entrega.sql  version_number en las tres funciones de entrega
+supabase/migrations/0030_link_reminder.sql              link_reminder_sent_at; versions_awaiting_link_reminder; mark_link_reminded
+supabase/functions/_core/delivery/sweep-unopened-links.ts  regla 13, nuevo
+supabase/functions/_core/ports/link-reminder-ports.ts   nuevo
+supabase/functions/_core/creation/quick-create.ts       SPEC-031, no de esta spec pero en el mismo PR
 supabase/functions/_core/telegram/client-format.ts     cabecera de v2, aviso de /rutina
+supabase/functions/_core/ports/delivery-ports.ts        versionNumber en VersionForDelivery
 supabase/functions/_core/commands/router.ts            /rutina con aviso; /pendientes con las dos listas
 supabase/functions/_core/commands/format.ts            ficha, AYUDA_CLIENTE, formatPending con dos secciones
 supabase/functions/_core/ports/query-ports.ts           AwaitingLink; pendingVersions o awaitingLink(trainerId)
 supabase/functions/_shared/telegram/client.ts          reply_markup force_reply; texto del callback
-supabase/functions/_shared/db.ts
-docs/specs/SPEC-010 (reglas 6 y 11), docs/DEPLOY.md (comandos de BotFather)
+supabase/functions/_shared/db.ts                       createLinkReminderRepo, versionNumber en readDelivery
+supabase/functions/sweep-generating/index.ts           corre los dos barridos (regla 13, sin cron nuevo)
+docs/specs/SPEC-010 (reglas 6 y 11), docs/DEPLOY.md (comandos de BotFather, paso 8b)
 ```
