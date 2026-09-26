@@ -33,6 +33,7 @@ import type {
 import type { GenerationRepo } from '../ports/generation-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { buildDraftReady, buildGenerationFailed } from '../telegram/notify.ts';
+import { sendLongMessage } from '../telegram/format.ts';
 import type { InlineKeyboard } from '../telegram/keyboard.ts';
 import { checkRateLimit, type RateLimitConfig } from './rate-limit.ts';
 
@@ -203,5 +204,7 @@ async function enviar(
   chatId: number,
   aviso: { readonly text: string; readonly keyboard: InlineKeyboard | null },
 ): Promise<void> {
-  await deps.sender.sendMessage(chatId, aviso.text, aviso.keyboard);
+  // SPEC-029 §6: el aviso de «borrador listo» lleva la rutina entera, que
+  // puede no caber en un mensaje. Un aviso corto pasa intacto por aquí.
+  await sendLongMessage(deps.sender, chatId, aviso.text, aviso.keyboard);
 }

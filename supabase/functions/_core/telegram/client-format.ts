@@ -1,5 +1,5 @@
 /**
- * SPEC-005 regla 5 — La rutina, como la ve el cliente.
+ * SPEC-005 regla 5, SPEC-029 — La rutina, como la ve el cliente.
  *
  * ┌─ LOS `warnings` NO LLEGAN AL CLIENTE ──────────────────────────────────┐
  * │ Describen su limitación —«se evitó press militar por la molestia de    │
@@ -12,9 +12,14 @@
  * │ Las notas del ejercicio SÍ van: «baja controlado» es entrenamiento, no │
  * │ diagnóstico. Quitarlas daría una rutina peor sin proteger nada.        │
  * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * El bloque de cada ejercicio y de cada día es el mismo que ve el
+ * entrenador (`formatExerciseBlock`, `formatDayHeader`): los dos numeran
+ * igual, así que «el 3 del día 2 me molesta» significa lo mismo para los
+ * dos (SPEC-029 §4).
  */
 import type { Workout } from '../domain/workout.ts';
-import { escapeMarkdownV2 } from './format.ts';
+import { cleanFreeText, escapeMarkdownV2, formatDayHeader, formatExerciseBlock } from './format.ts';
 
 /** Lo que viene de la evaluación de Tally. Los tres o ninguno. */
 export interface PlanSummary {
@@ -35,41 +40,34 @@ export interface ClientContext {
   readonly plan: PlanSummary | null;
 }
 
+/**
+ * Devuelve un único texto, con los bloques separados por una línea en
+ * blanco: `packBlocks`/`sendLongMessage` (SPEC-029 §6) son quienes lo parten
+ * en varios mensajes si no cabe.
+ */
 export function formatForClient(workout: Workout, context: ClientContext): string {
-  const lines: string[] = [
-    `👋 Hola ${escapeMarkdownV2(context.clientName)}, tu rutina está lista\\.`,
-  ];
+  const bloques: string[] = [`👋 Hola ${escapeMarkdownV2(context.clientName)}, tu rutina está lista\\.`];
 
   // Sin evaluación no hay objetivo que mostrar. Se omite la línea: inventarla
   // sería mentir, y no enviarla dejaría al cliente sin rutina (regla 13).
   if (context.plan !== null) {
-    lines.push(
-      '',
+    bloques.push(
       `🎯 ${escapeMarkdownV2(context.plan.goal)} · ${context.plan.daysPerWeek} días · ` +
         `${context.plan.sessionMinutes} min`,
     );
   }
 
-  lines.push('', escapeMarkdownV2(workout.summary));
+  bloques.push(escapeMarkdownV2(cleanFreeText(workout.summary)));
 
   for (const day of workout.days) {
-    lines.push('');
-    lines.push(`━━━ *Día ${day.dayNumber} — ${escapeMarkdownV2(day.focus)}* ━━━`);
-
-    for (const exercise of day.exercises) {
-      lines.push(
-        `• ${escapeMarkdownV2(exercise.name)} — ` +
-          `${exercise.sets}x${escapeMarkdownV2(exercise.reps)} · descanso ${exercise.restSeconds}s`,
-      );
-
-      if (exercise.notes !== null) {
-        lines.push(`   _${escapeMarkdownV2(exercise.notes)}_`);
-      }
-    }
+    bloques.push(formatDayHeader(day));
+    day.exercises.forEach((exercise, index) => {
+      bloques.push(formatExerciseBlock(exercise, index + 1));
+    });
   }
 
   // Aquí NO va un bloque de warnings. Ver el recuadro de arriba.
-  lines.push('', '💬 Cualquier duda, habla con tu entrenador\\.');
+  bloques.push('💬 Cualquier duda, habla con tu entrenador\\.');
 
-  return lines.join('\n');
+  return bloques.filter((bloque) => bloque.length > 0).join('\n\n');
 }

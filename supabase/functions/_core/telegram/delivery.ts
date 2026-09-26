@@ -23,7 +23,7 @@ import type {
 } from '../ports/delivery-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { formatForClient } from './client-format.ts';
-import { escapeMarkdownV2 } from './format.ts';
+import { escapeMarkdownV2, sendLongMessage } from './format.ts';
 import { buildKeyboard, CLIENT_ACTIONS } from './keyboard.ts';
 
 export interface DeliveryDeps {
@@ -181,14 +181,17 @@ async function enviar(
 
   // ── 1. Mandar PRIMERO ──────────────────────────────────────────────────
   try {
-    await deps.sender.sendMessage(
+    // SPEC-029 §6: una rutina de varios días puede no caber en un mensaje.
+    // `sendLongMessage` la parte por bloque, sin cortar ningún ejercicio, y
+    // pone el teclado SOLO en el último: sin estos dos botones, «pedir un
+    // cambio» sería una función que el cliente nunca ve (SPEC-010 regla 10).
+    await sendLongMessage(
+      deps.sender,
       version.clientChatId,
       formatForClient(version.content, {
         clientName: version.clientName,
         plan: version.plan,
       }),
-      // SPEC-010 regla 10: sin estos dos botones, «pedir un cambio» sería una
-      // función que el cliente nunca ve.
       buildKeyboard(CLIENT_ACTIONS, version.versionId),
     );
   } catch {

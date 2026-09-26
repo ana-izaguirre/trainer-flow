@@ -29,7 +29,7 @@ import {
 } from '../editor/commands.ts';
 import type { CreationRepo } from '../ports/creation-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
-import { escapeMarkdownV2, formatWorkout } from '../telegram/format.ts';
+import { escapeMarkdownV2, formatWorkout, sendLongMessage } from '../telegram/format.ts';
 
 export interface EditorDeps {
   readonly repo: CreationRepo;
@@ -115,7 +115,7 @@ export async function handleEditorCommand(
   const contexto = { clientName: draft.clientName, versionNumber: draft.versionNumber };
 
   if (command === 'ver') {
-    await deps.sender.sendMessage(chatId, formatWorkout(draft.content, contexto));
+    await sendLongMessage(deps.sender, chatId, formatWorkout(draft.content, contexto));
     return { kind: 'shown', versionId: draft.versionId };
   }
 
@@ -152,7 +152,7 @@ export async function handleEditorCommand(
   // │ sigue diciendo de QUIÉN es: el hueco del contexto implícito no se     │
   // │ reabre.                                                               │
   // └───────────────────────────────────────────────────────────────────────┘
-  await deps.sender.sendMessage(chatId, formatWorkout(aplicado.workout, contexto));
+  await sendLongMessage(deps.sender, chatId, formatWorkout(aplicado.workout, contexto));
 
   return { kind: 'edited', versionId: draft.versionId };
 }

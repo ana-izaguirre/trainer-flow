@@ -24,7 +24,7 @@ import type { CreationRepo, VersionForCreation } from '../ports/creation-ports.t
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { applyTemplate, findTemplate, templatesFor } from '../templates.ts';
 import { buildDraftReady } from '../telegram/notify.ts';
-import { escapeMarkdownV2 } from '../telegram/format.ts';
+import { escapeMarkdownV2, sendLongMessage } from '../telegram/format.ts';
 import { buildTemplateCallback } from '../telegram/template-callback.ts';
 import type { InlineKeyboard } from '../telegram/keyboard.ts';
 
@@ -218,7 +218,8 @@ async function escribir(
     { clientName: version.clientName, versionNumber: version.versionNumber },
     version.versionId,
   );
-  await deps.sender.sendMessage(chatId, aviso.text, aviso.keyboard);
+  // SPEC-029 §6: la rutina entera puede no caber en un mensaje.
+  await sendLongMessage(deps.sender, chatId, aviso.text, aviso.keyboard);
 
   return { kind: 'filled', versionId: version.versionId, source };
 }

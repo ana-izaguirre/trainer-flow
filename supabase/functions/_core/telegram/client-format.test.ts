@@ -1,5 +1,5 @@
 /**
- * SPEC-005 regla 5 — Lo que el cliente recibe, y lo que NO.
+ * SPEC-005 regla 5, SPEC-029 — Lo que el cliente recibe, y lo que NO.
  *
  * ┌─ EL TEST QUE IMPORTA DE ESTE ARCHIVO ──────────────────────────────────┐
  * │ `warnings` NO llega al cliente. Esos avisos describen su limitación y  │
@@ -41,7 +41,6 @@ const CONTEXTO = { clientName: 'Carlos', plan: PLAN };
 
 describe('lo que NO llega al cliente', () => {
   it('los `warnings` se omiten', () => {
-    // Describen su limitación. El cliente ya sabe lo que tiene.
     const texto = formatForClient(RUTINA, CONTEXTO);
 
     expect(texto).not.toContain('hombro');
@@ -50,7 +49,6 @@ describe('lo que NO llega al cliente', () => {
   });
 
   it('ni siquiera queda el símbolo de aviso', () => {
-    // Un ⚠️ solo ya invita a preguntar «¿aviso de qué?».
     expect(formatForClient(RUTINA, CONTEXTO)).not.toContain('⚠️');
   });
 
@@ -79,12 +77,12 @@ describe('lo que sí llega', () => {
     expect(texto).toContain('60');
   });
 
-  it('trae todos los días con sus ejercicios', () => {
+  it('trae todos los días con sus ejercicios, numerados', () => {
     const texto = formatForClient(RUTINA, CONTEXTO);
 
-    expect(texto).toContain('Press banca');
-    expect(texto).toContain('Fondos');
-    expect(texto).toContain('Remo');
+    expect(texto).toContain('1\\. Press banca');
+    expect(texto).toContain('2\\. Fondos');
+    expect(texto).toContain('1\\. Remo');
     expect(texto).toContain('Empuje');
     expect(texto).toContain('Tirón');
   });
@@ -92,13 +90,13 @@ describe('lo que sí llega', () => {
   it('las notas del ejercicio sí: son la adaptación, no el diagnóstico', () => {
     // «Baja controlado» es entrenamiento. Quitarlo dejaría al cliente con una
     // rutina peor sin protegerlo de nada.
-    expect(formatForClient(RUTINA, CONTEXTO)).toContain('Baja controlado');
+    const texto = formatForClient(RUTINA, CONTEXTO);
+    expect(texto).toContain('💡 Baja controlado');
   });
 
-  it('series, repeticiones y descanso', () => {
+  it('series, repeticiones y descanso, ya en palabras', () => {
     const texto = formatForClient(RUTINA, CONTEXTO);
-    expect(texto).toMatch(/4x8/);
-    expect(texto).toContain('120');
+    expect(texto).toContain('4 × 8 · descanso 2 min');
   });
 
   it('le dice a quién preguntar', () => {
@@ -115,6 +113,12 @@ describe('el formato no se rompe', () => {
 
     expect(texto).toContain('\\(');
     expect(texto).toContain('\\-');
+  });
+
+  it('limpia el Markdown que mete la IA en el resumen', () => {
+    const texto = formatForClient({ ...RUTINA, summary: '**hipertrofia** clásica' }, CONTEXTO);
+    expect(texto).not.toContain('**');
+    expect(texto).toContain('hipertrofia');
   });
 
   it('una rutina sin ejercicios en un día no deja el día colgado', () => {
