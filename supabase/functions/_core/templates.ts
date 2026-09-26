@@ -37,6 +37,72 @@ function ex(name: string, sets: number, reps: string, restSeconds: number, notes
 }
 
 // ---------------------------------------------------------------------------
+// Días compartidos
+// ---------------------------------------------------------------------------
+//
+// La de 7 días reutiliza las cuatro sesiones de fuerza de la de 5 (SPEC-008,
+// ampliación). Son constantes y no copias: si el entrenador corrige una, la
+// corrige en las dos.
+
+const TORSO_FUERZA: WorkoutDay = {
+  dayNumber: 1,
+  focus: 'Torso — fuerza',
+  exercises: [
+    ex('Press de banca', 4, '6-8', 150),
+    ex('Remo con barra', 4, '6-8', 150),
+    ex('Press militar', 3, '8-10', 120),
+    ex('Jalón al pecho', 3, '10-12', 90),
+  ],
+};
+
+const PIERNA_FUERZA: WorkoutDay = {
+  dayNumber: 2,
+  focus: 'Pierna — fuerza',
+  exercises: [
+    ex('Sentadilla con barra', 4, '6-8', 180),
+    ex('Peso muerto rumano', 3, '8-10', 150),
+    ex('Prensa de piernas', 3, '10-12', 120),
+    ex('Elevación de talones', 4, '12-15', 60),
+  ],
+};
+
+const TORSO_VOLUMEN: WorkoutDay = {
+  dayNumber: 4,
+  focus: 'Torso — volumen',
+  exercises: [
+    ex('Press inclinado con mancuernas', 4, '10-12', 90),
+    ex('Remo en polea baja', 4, '10-12', 90),
+    ex('Aperturas en polea', 3, '12-15', 60),
+    ex('Elevaciones laterales', 3, '12-15', 60),
+    ex('Curl de bíceps', 3, '12-15', 60),
+  ],
+};
+
+const PIERNA_VOLUMEN: WorkoutDay = {
+  dayNumber: 5,
+  focus: 'Pierna — volumen',
+  exercises: [
+    ex('Peso muerto convencional', 3, '5-6', 180),
+    ex('Zancadas con mancuernas', 3, '10-12', 90),
+    ex('Curl femoral', 3, '12-15', 60),
+    ex('Extensión de cuádriceps', 3, '12-15', 60),
+  ],
+};
+
+/** El mismo día con otro número: la posición cambia de una plantilla a otra. */
+function asDay(day: WorkoutDay, dayNumber: number): WorkoutDay {
+  return { ...day, dayNumber };
+}
+
+/**
+ * Va en `warnings`, que es del entrenador: el mensaje al cliente no lo
+ * muestra (SPEC-005 regla 5).
+ */
+const SEVEN_DAYS_NOTICE =
+  'Siete días: los de recuperación activa son suaves a propósito. Si el cliente ' +
+  'los convierte en entrenamiento intenso, pierde el descanso que necesita para progresar.';
+
+// ---------------------------------------------------------------------------
 // El catálogo
 // ---------------------------------------------------------------------------
 
@@ -262,6 +328,153 @@ export const TEMPLATES: readonly WorkoutTemplate[] = [
       ],
     },
   },
+
+  // ── SPEC-008, ampliación: una por cada número de días que faltaba ──────
+  // El formulario acepta de 1 a 7 días. `adaptDays` ajusta cualquiera, pero
+  // el ajuste solo es bueno cerca del original.
+
+  {
+    id: 'full-body-1d',
+    name: 'Cuerpo completo — 1 día',
+    description: 'Una sesión que toca todos los grupos grandes. Con tan poca frecuencia, lo que cuenta es no saltarla.',
+    daysPerWeek: 1,
+    level: 'beginner',
+    equipment: 'Gimnasio',
+    workout: {
+      summary: 'Una sesión de cuerpo completo por semana.',
+      warnings: [],
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'Cuerpo completo',
+          exercises: [
+            ex('Sentadilla con barra', 3, '8-10', 120, 'Baja hasta donde controles la postura'),
+            ex('Press de banca', 3, '8-10', 90),
+            ex('Remo con barra', 3, '10-12', 90),
+            ex('Peso muerto rumano', 3, '8-10', 120),
+            ex('Press militar con mancuernas', 2, '10-12', 90),
+            ex('Plancha frontal', 3, '30 s', 60),
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    id: 'full-body-2d',
+    name: 'Cuerpo completo — 2 días',
+    description: 'Cuerpo completo dos veces por semana. Para quien empieza con poco tiempo.',
+    daysPerWeek: 2,
+    level: 'beginner',
+    equipment: 'Gimnasio',
+    workout: {
+      summary: 'Cuerpo completo dos veces por semana, con al menos un día de descanso entre sesiones.',
+      warnings: [],
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'Cuerpo completo A',
+          exercises: [
+            ex('Sentadilla con barra', 3, '8-10', 120),
+            ex('Press de banca', 3, '8-10', 90),
+            ex('Remo con barra', 3, '10-12', 90),
+            ex('Elevaciones laterales', 2, '12-15', 60),
+            ex('Plancha frontal', 3, '30 s', 60),
+          ],
+        },
+        {
+          dayNumber: 2,
+          focus: 'Cuerpo completo B',
+          exercises: [
+            ex('Peso muerto rumano', 3, '8-10', 120),
+            ex('Press militar con mancuernas', 3, '10-12', 90),
+            ex('Jalón al pecho', 3, '10-12', 90),
+            ex('Zancadas con mancuernas', 2, '10 por pierna', 90),
+            ex('Curl de bíceps', 2, '12-15', 60),
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    id: 'upper-lower-full-5d',
+    name: 'Torso / Pierna / Cuerpo completo — 5 días',
+    description: 'Torso y pierna dos veces cada uno, con una sesión de cuerpo completo más ligera en medio.',
+    daysPerWeek: 5,
+    level: 'intermediate',
+    equipment: 'Gimnasio',
+    workout: {
+      summary: 'Torso y pierna dos veces por semana, con un día ligero de cuerpo completo en medio.',
+      warnings: [],
+      days: [
+        asDay(TORSO_FUERZA, 1),
+        asDay(PIERNA_FUERZA, 2),
+        {
+          dayNumber: 3,
+          focus: 'Cuerpo completo — ligero',
+          exercises: [
+            ex('Sentadilla goblet', 3, '12-15', 90),
+            ex('Flexiones', 3, '10-15', 60),
+            ex('Remo con mancuerna', 3, '12 por brazo', 60),
+            ex('Face pull', 3, '15-20', 60, 'Cuida la postura del hombro'),
+            ex('Plancha lateral', 3, '30 s por lado', 45),
+          ],
+        },
+        asDay(TORSO_VOLUMEN, 4),
+        asDay(PIERNA_VOLUMEN, 5),
+      ],
+    },
+  },
+
+  {
+    id: 'strength-recovery-7d',
+    name: 'Fuerza + recuperación activa — 7 días',
+    description: 'Cuatro sesiones de fuerza y tres de recuperación activa. El descanso es parte del plan.',
+    daysPerWeek: 7,
+    level: 'intermediate',
+    equipment: 'Gimnasio',
+    workout: {
+      summary:
+        'Cuatro sesiones de fuerza y tres de recuperación activa. Siete días de entrenamiento ' +
+        'intenso no dejan progresar: el descanso es parte del plan.',
+      warnings: [SEVEN_DAYS_NOTICE],
+      days: [
+        asDay(TORSO_FUERZA, 1),
+        asDay(PIERNA_FUERZA, 2),
+        {
+          dayNumber: 3,
+          focus: 'Recuperación activa',
+          exercises: [
+            ex('Caminata', 1, '30-40 min', 0, 'A un ritmo que te permita conversar'),
+            ex('Movilidad de cadera', 2, '10 por lado', 30),
+            ex('Movilidad de hombros', 2, '10', 30),
+            ex('Estiramientos generales', 1, '10 min', 0),
+          ],
+        },
+        asDay(TORSO_VOLUMEN, 4),
+        asDay(PIERNA_VOLUMEN, 5),
+        {
+          dayNumber: 6,
+          focus: 'Recuperación activa',
+          exercises: [
+            ex('Bicicleta o elíptica suave', 1, '20-30 min', 0),
+            ex('Puente de glúteo', 3, '15', 45),
+            ex('Plancha frontal', 3, '30 s', 45),
+            ex('Movilidad torácica', 2, '10', 30),
+          ],
+        },
+        {
+          dayNumber: 7,
+          focus: 'Recuperación activa',
+          exercises: [
+            ex('Caminata', 1, '30-40 min', 0),
+            ex('Estiramientos generales', 1, '15 min', 0),
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -335,10 +548,13 @@ function daysAdaptedNotice(from: number, to: number): string {
  * │ como se usa una plantilla de verdad: «cuerpo completo 3×» a dos días   │
  * │ son dos de esos tres.                                                  │
  * │                                                                         │
- * │ Sin esto, la regla 7 mentía. Las cuatro plantillas son de 3, 4, 3 y 6  │
- * │ días y `validateDraft` los exige exactos: un cliente de 2 días veía    │
- * │ las cuatro opciones y NINGUNA cargaba.                                 │
+ * │ Sin esto, la regla 7 mentía. Las cuatro plantillas originales eran de │
+ * │ 3, 4, 3 y 6 días y `validateDraft` los exige exactos: un cliente de 2  │
+ * │ días veía las cuatro opciones y NINGUNA cargaba.                       │
  * └─────────────────────────────────────────────────────────────────────────┘
+ *
+ * Hoy hay una plantilla para cada número de días (SPEC-008, ampliación), así
+ * que esto solo actúa cuando el entrenador elige una de otro número.
  */
 export function adaptDays(days: readonly WorkoutDay[], target: number): readonly WorkoutDay[] {
   // `%` sobre una lista vacía da NaN. Ninguna plantilla llega así, pero de
@@ -369,12 +585,13 @@ export function applyTemplate(
       ? original
       : adaptDays(original, constraints.daysPerWeek);
 
-  const warnings = [...template.workout.warnings];
-  // El aviso de días va PRIMERO: es el que explica por qué la rutina no se
-  // parece a la plantilla que el entrenador eligió.
-  if (days.length !== original.length) {
-    warnings.push(daysAdaptedNotice(original.length, days.length));
-  }
+  // El aviso de días va PRIMERO, incluso antes de los de la propia
+  // plantilla: es el que explica por qué la rutina no se parece a la que el
+  // entrenador eligió.
+  const warnings = [
+    ...(days.length === original.length ? [] : [daysAdaptedNotice(original.length, days.length)]),
+    ...template.workout.warnings,
+  ];
   if (constraints?.hasLimitations === true) warnings.push(LIMITATIONS_NOTICE);
 
   const workout: Workout = { ...template.workout, days, warnings };

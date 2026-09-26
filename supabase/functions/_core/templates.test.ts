@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { LEVELS } from './domain/assessment.ts';
 import { validateDraft } from './domain/validate-draft.ts';
 import { WORKOUT_LIMITS } from './domain/workout.ts';
+import { formatForClient } from './telegram/client-format.ts';
 import { TEMPLATES, adaptDays, applyTemplate, findTemplate, templatesFor } from './templates.ts';
 
 describe('el catálogo', () => {
@@ -321,5 +322,99 @@ describe('los días se ajustan a los que el cliente pidió', () => {
     }
 
     expect(fallos).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-008 ampliación — una plantilla para cada número de días', () => {
+  // ┌─ EL HUECO QUE ESTO CIERRA ────────────────────────────────────────────┐
+  // │ El formulario acepta de 1 a 7 días y solo había plantillas de 3, 4 y  │
+  // │ 6. Una clienta de 2 días no vio ninguna de 2 (uso real, sept. 2026).  │
+  // │ `adaptDays` la hacía cargable, pero el ajuste solo es bueno cerca del │
+  // │ original: a 7 días repetía A, B, C sin descanso.                      │
+  // └────────────────────────────────────────────────────────────────────────┘
+
+  // R-A1
+  it.each([1, 2, 3, 4, 5, 6, 7])('existe al menos una plantilla de exactamente %i días', (dias) => {
+    expect(TEMPLATES.some((t) => t.daysPerWeek === dias)).toBe(true);
+  });
+
+  // CA-A1
+  it.each([1, 2, 3, 4, 5, 6, 7])('CA-A1: a un cliente de %i días, la primera tiene sus días', (dias) => {
+    expect(templatesFor({ daysPerWeek: dias })[0]?.daysPerWeek).toBe(dias);
+  });
+
+  it('CA-A1 también con nivel y equipamiento de gimnasio: los días pesan más', () => {
+    // Un principiante de 7 días: la de 7 es intermedia, y aun así va arriba.
+    // Tres puntos por los días frente a dos por el nivel (regla 7).
+    for (let dias = 1; dias <= 7; dias += 1) {
+      const primera = templatesFor({ daysPerWeek: dias, level: 'beginner', equipment: 'Gimnasio' })[0];
+      expect(primera?.daysPerWeek, `${dias} días`).toBe(dias);
+    }
+  });
+
+  // R-A3: se listan todas, no se filtra.
+  it('se siguen listando todas', () => {
+    expect(templatesFor({ daysPerWeek: 2 })).toHaveLength(TEMPLATES.length);
+  });
+
+  // CA-A2
+  it.each(TEMPLATES.map((t) => [t.id, t] as const))(
+    'CA-A2: %s carga con sus propios días sin aviso de ajuste',
+    (_id, template) => {
+      const constraints = { daysPerWeek: template.daysPerWeek, hasLimitations: false };
+      const result = validateDraft(applyTemplate(template, constraints), constraints);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.workout.warnings.some((w) => /se ajustaron los d[ií]as/i.test(w))).toBe(false);
+    },
+  );
+
+  describe('CA-A3 — la de 7 días avisa al entrenador, no al cliente', () => {
+    const sieteDias = TEMPLATES.find((t) => t.daysPerWeek === 7)!;
+    const constraints = { daysPerWeek: 7, hasLimitations: false };
+
+    it('tiene días de recuperación activa, no siete de fuerza', () => {
+      const recuperacion = sieteDias.workout.days.filter((d) => /recuperaci[oó]n/i.test(d.focus));
+      expect(recuperacion).toHaveLength(3);
+    });
+
+    it('el borrador lleva el aviso de recuperación', () => {
+      const result = validateDraft(applyTemplate(sieteDias, constraints), constraints);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.workout.warnings.some((w) => /recuperaci[oó]n activa/i.test(w))).toBe(true);
+    });
+
+    it('el mensaje al cliente no lo incluye', () => {
+      const result = validateDraft(applyTemplate(sieteDias, constraints), constraints);
+      if (!result.ok) throw new Error('la plantilla de 7 días no valida');
+
+      const texto = formatForClient(result.workout, { clientName: 'Ana', plan: null });
+      expect(texto).not.toMatch(/descanso que necesita/i);
+      expect(texto).not.toContain('⚠️');
+    });
+
+    it('con limitaciones, conserva los dos avisos', () => {
+      const conLimitaciones = { daysPerWeek: 7, hasLimitations: true };
+      const result = validateDraft(applyTemplate(sieteDias, conLimitaciones), conLimitaciones);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.workout.warnings).toHaveLength(2);
+    });
+
+    it('si se ajusta a otros días, el aviso de días va PRIMERO', () => {
+      // Es el que explica por qué la rutina no se parece a la que se eligió.
+      const cinco = { daysPerWeek: 5, hasLimitations: false };
+      const result = validateDraft(applyTemplate(sieteDias, cinco), cinco);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.workout.warnings[0]).toMatch(/se ajustaron los d[ií]as/i);
+    });
   });
 });

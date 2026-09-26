@@ -79,7 +79,7 @@ export function templatesFor(criteria: TemplateCriteria): readonly WorkoutTempla
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **PROPUESTA — pendiente de aprobación** |
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
 | **Origen** | Uso real (septiembre 2026): una clienta de 2 días no vio ninguna plantilla de 2 días |
 
 **El hueco.** El formulario acepta de 1 a 7 días (`assessments_days_per_week_range`)
@@ -175,6 +175,20 @@ y `formatForClient`.
 **Fuera de alcance** — que el entrenador cree o edite plantillas desde
 Telegram: eso es SPEC-017 (aprobada, pendiente).
 
+**Resultado.** Las cuatro, en `_core/templates.ts`. Las cuatro sesiones de
+fuerza que comparten la de 5 y la de 7 días son constantes, no copias. El aviso de
+días ajustados pasa a ir antes que los avisos propios de la plantilla (hasta
+ahora ninguna tenía): es el que explica por qué la rutina no se parece a la
+elegida. `tpl:strength-recovery-7d:<uuid>` ocupa 61 de los 64 bytes.
+
+> **Abierto — el equipamiento pesa menos que los días.** Con una plantilla
+> para cada número de días, a un cliente **sin equipo** de 2 días le sale
+> primero `full-body-2d` (gimnasio): los días suman 3 y el equipamiento 1.
+> Antes le salía primero la de casa. Nada se rompe —se listan todas—, pero la
+> primera opción no le sirve. Además no hay plantillas para bandas ni para
+> mancuernas en casa. Queda para una spec propia, que necesita saber qué
+> opciones de «Equipamiento disponible» tiene el formulario de Tally.
+
 ### Las tres fuentes convergen
 
 ```
@@ -203,8 +217,8 @@ Prefijo propio porque no es una acción sobre la versión, sino la elección de
 **cuál** cargar; y los tres prefijos (`act:`, `chk:`, `tpl:`) viajan por el
 mismo canal.
 
-Caben en los 64 bytes de Telegram: el id más largo es `push-pull-legs-6d`,
-que deja `tpl:push-pull-legs-6d:<uuid>` en 58.
+Caben en los 64 bytes de Telegram: el id más largo es `strength-recovery-7d`,
+que deja `tpl:strength-recovery-7d:<uuid>` en 61.
 
 **Nunca se carga una plantilla automáticamente** (regla 8), ni siquiera cuando
 solo hay una que encaje: el entrenador elige siempre.
