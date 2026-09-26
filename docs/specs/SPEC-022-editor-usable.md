@@ -316,6 +316,30 @@ para Ana Izaguirre Matamoros.
 ya existe y ya está autorizada (`startRevision` comprueba que el entrenador
 sea el dueño). La v2 nace en `NEW` con los tres botones de siempre.
 
+### M4 — Varios clientes con el mismo nombre (SPEC-007)
+
+Hoy `/cliente Ana` con dos Anas responde *«🤔 Hay varios que encajan.
+¿Cuál?»* y una lista de texto: hay que volver a escribir el comando con el
+apellido. Cada nombre de la lista pasa a ser un **botón que abre su ficha**:
+
+```
+🤔 Hay varios que encajan. ¿Cuál?
+
+[Ana Izaguirre Matamoros]
+[Ana María López]
+```
+
+- Callback nuevo `cli:<clientId>`, con prefijo propio como `tpl:` y `chg:`:
+  no es una acción sobre una versión, sino elegir a quién mirar. Ocupa 40
+  de los 64 bytes.
+- **Solo lectura.** Abre la misma ficha que `/cliente <nombre>`, con sus
+  botones (SPEC-007 regla 7).
+- **Misma autorización que el resto.** Se comprueba que el cliente sea del
+  entrenador que pulsa (`canViewClient`). Un id ajeno y uno inexistente
+  responden igual (SPEC-013 regla 2), así que probar ids no revela cuáles
+  existen.
+- La lista sigue partida en páginas de 20 (SPEC-007 regla 4).
+
 ### Criterios de aceptación
 
 - **CA-M1** — DADO un borrador abierto, CUANDO llega `/crear_rutina` sin
@@ -326,12 +350,20 @@ sea el dueño). La v2 nace en `NEW` con los tres botones de siempre.
 - **CA-M3** — DADO una versión rechazada, CUANDO se confirma el rechazo,
   ENTONCES el mensaje lleva el botón `revise` con el `versionId` rechazado,
   y pulsarlo crea la v2 en `NEW`.
-- **CA-M4** — Los tres mensajes pasan el detector de MarkdownV2 sin escapar
-  (`tests/helpers/markdown.ts`), con un nombre de cliente con guion.
+- **CA-M4** — DADO dos clientes que contienen «Ana», CUANDO el entrenador
+  escribe `/cliente Ana`, ENTONCES cada una sale como botón `cli:<clientId>`,
+  y pulsarlo abre su ficha con los botones de su estado.
+- **CA-M5** — DADO un `cli:` con el id de un cliente de OTRO entrenador, o
+  uno que no existe, CUANDO se pulsa, ENTONCES los dos reciben la misma
+  respuesta neutra y ninguna ficha.
+- **CA-M6** — Los cuatro mensajes pasan el detector de MarkdownV2 sin
+  escapar (`tests/helpers/markdown.ts`), con un nombre de cliente con guion.
 
 **Tests** — `bulk.test.ts` (M1), `editor-session.test.ts` (M2),
-`actions.test.ts` (M3), más un caso en `webhook.test.ts` que pulsa el botón
-de M3 y llega a `startRevision`.
+`actions.test.ts` (M3), `router.test.ts` y `callback-data.test.ts` (M4), más
+casos en `webhook.test.ts` que pulsan los botones de M3 y M4 de punta a
+punta. CA-M5 va también a `tests/integration/security.test.ts`: es un caso
+de autorización.
 
 ## 13. Lo que queda abierto
 
