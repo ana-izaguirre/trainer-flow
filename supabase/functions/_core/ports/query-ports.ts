@@ -14,6 +14,7 @@
  * el entrenador solo ve a los suyos (SPEC-007 §7).
  */
 import type { Level } from '../domain/assessment.ts';
+import type { ChangeReason } from '../domain/change-request.ts';
 import type { VersionState } from '../domain/version.ts';
 import type { VersionForDelivery } from './delivery-ports.ts';
 
@@ -56,6 +57,11 @@ export interface ClientDetail extends ClientSummary {
     readonly feeling: string | null;
     readonly discomfort: string | null;
   } | null;
+  /**
+   * SPEC-030 regla 11: la solicitud de cambio abierta, si hay una. Solo
+   * motivo y días: el comentario puede llevar datos de salud y no va aquí.
+   */
+  readonly openChangeRequest: { readonly reason: ChangeReason; readonly daysAgo: number } | null;
 }
 
 /** Una versión esperando decisión, para `/pendientes`. */
@@ -78,6 +84,11 @@ export interface QueryRepo {
   clients(trainerId: string): Promise<readonly ClientSummary[]>;
   clientDetail(clientId: string): Promise<ClientDetail | null>;
   pendingVersions(trainerId: string): Promise<readonly PendingVersion[]>;
+  /**
+   * SPEC-030 regla 14: `APPROVED` esperando que el cliente abra su enlace.
+   * Misma forma que `pendingVersions` — es la segunda lista de `/pendientes`.
+   */
+  awaitingLink(trainerId: string): Promise<readonly PendingVersion[]>;
   /** Los `PENDING` de más de `minDays` días. */
   staleCheckins(trainerId: string, minDays: number): Promise<readonly StaleCheckin[]>;
   /**

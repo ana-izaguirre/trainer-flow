@@ -56,6 +56,7 @@ function espia(
     clientes?: readonly ClientSummary[];
     detalle?: ClientDetail | null;
     pendientes?: readonly PendingVersion[];
+    esperandoEnlace?: readonly PendingVersion[];
     checkins?: readonly StaleCheckin[];
     rutinaDelCliente?: VersionForDelivery | null;
   } = {},
@@ -80,6 +81,10 @@ function espia(
     pendingVersions: () => {
       pasos.push('pendingVersions');
       return Promise.resolve(opciones.pendientes ?? []);
+    },
+    awaitingLink: () => {
+      pasos.push('awaitingLink');
+      return Promise.resolve(opciones.esperandoEnlace ?? []);
     },
     staleCheckins: (_t, minDays) => {
       pasos.push(`staleCheckins:${minDays}`);
@@ -189,6 +194,7 @@ describe('/cliente <nombre>', () => {
         hasLimitations: true,
         sentDaysAgo: 12,
         lastCheckin: null,
+        openChangeRequest: null,
       },
     });
 
@@ -212,6 +218,7 @@ describe('/cliente <nombre>', () => {
         hasLimitations: false,
         sentDaysAgo: null,
         lastCheckin: null,
+        openChangeRequest: null,
       },
     });
 
@@ -233,6 +240,7 @@ describe('/cliente <nombre>', () => {
         hasLimitations: false,
         sentDaysAgo: null,
         lastCheckin: null,
+        openChangeRequest: null,
       },
     });
 
@@ -318,7 +326,21 @@ describe('/pendientes', () => {
 
     await handleCommand('pendientes', '', ENTRENADOR, deps);
 
-    expect(mensajes[0]).toContain('Nada pendiente');
+    expect(mensajes[0]).toContain('No hay nada pendiente');
+  });
+
+  // SPEC-030 regla 14.
+  it('SPEC-030 · trae también las que esperan que el cliente abra su enlace', async () => {
+    const { deps, pasos } = espia({
+      pendientes: [{ versionId: 'v1', clientName: 'Carlos', versionNumber: 1, daysWaiting: 2 }],
+      esperandoEnlace: [{ versionId: 'v2', clientName: 'Marta', versionNumber: 1, daysWaiting: 5 }],
+    });
+
+    const outcome = await handleCommand('pendientes', '', ENTRENADOR, deps);
+
+    expect(pasos).toContain('awaitingLink');
+    // Un título por sección + una versión de cada una.
+    expect(outcome).toMatchObject({ kind: 'answered', messages: 4 });
   });
 });
 
@@ -510,6 +532,7 @@ describe('SPEC-022 M4 · el botón cli: abre la ficha', () => {
       hasLimitations: false,
       sentDaysAgo: null,
       lastCheckin: null,
+      openChangeRequest: null,
     };
   }
 

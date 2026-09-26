@@ -222,10 +222,12 @@ describe('Caso 3 bis · el botón cli: no abre la ficha de otro entrenador', () 
           hasLimitations: false,
           sentDaysAgo: null,
           lastCheckin: null,
+          openChangeRequest: null,
         };
       },
       clientRoutine: sinUso,
       pendingVersions: sinUso,
+      awaitingLink: sinUso,
       staleCheckins: sinUso,
     };
   }

@@ -13,6 +13,7 @@ import type {
   PendingVersion,
   StaleCheckin,
 } from '../ports/query-ports.ts';
+import { REASON_LABELS } from '../domain/change-request.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import { buildClientCallback } from '../telegram/client-callback.ts';
 import {
@@ -129,6 +130,14 @@ export function formatClientDetail(c: ClientDetail): string {
 
   if (!c.linked) lineas.push('🔗 Aún no ha abierto su enlace');
 
+  // SPEC-030 regla 11: solo motivo y fecha. El comentario puede llevar datos
+  // de salud, y la ficha se lee de un vistazo — está completo en el aviso.
+  if (c.openChangeRequest !== null) {
+    const { reason, daysAgo } = c.openChangeRequest;
+    const cuando = daysAgo === 0 ? 'hoy' : `hace ${daysAgo} ${daysAgo === 1 ? 'día' : 'días'}`;
+    lineas.push(`🔔 Pidió un cambio ${cuando}: ${REASON_LABELS[reason]}`);
+  }
+
   if (c.lastCheckin !== null) {
     const k = c.lastCheckin;
     const sesiones = k.sessions === null ? 'sin contestar' : String(k.sessions);
@@ -229,17 +238,51 @@ export function formatNotFound(suggestions: readonly { fullName: string }[]): st
  * UN `versionId`: una lista con diez rutinas no podría tener diez botones de
  * aprobar que se distingan al pulsarlos.
  */
-export function formatPending(versions: readonly PendingVersion[]): CommandMessage[] {
-  if (versions.length === 0) {
-    return [{ text: '✅ Nada pendiente de revisar\\.' }];
+/**
+ * SPEC-030 regla 14 — dos listas, no una: las `DRAFT` esperando que el
+ * entrenador decida (como siempre) y las `APPROVED` esperando que el
+ * cliente abra su enlace, con su propio botón. Antes esas segundas solo se
+ * veían entrando a la ficha de cada cliente uno por uno.
+ *
+ * Los títulos de sección solo salen cuando hay DOS listas que distinguir:
+ * con una sola, el título sobra.
+ */
+export function formatPending(
+  versions: readonly PendingVersion[],
+  awaitingLink: readonly PendingVersion[] = [],
+): CommandMessage[] {
+  if (versions.length === 0 && awaitingLink.length === 0) {
+    return [{ text: '👍 No hay nada pendiente\\.' }];
   }
 
-  return versions.map((v) => ({
-    text:
-      `⏳ *${escapeMarkdownV2(v.clientName)}* — rutina v${v.versionNumber}\n` +
-      `Esperando desde hace ${v.daysWaiting} ${v.daysWaiting === 1 ? 'día' : 'días'}`,
-    keyboard: buildKeyboard(DRAFT_ACTIONS, v.versionId),
-  }));
+  const dosListas = versions.length > 0 && awaitingLink.length > 0;
+  const mensajes: CommandMessage[] = [];
+
+  if (versions.length > 0) {
+    if (dosListas) mensajes.push({ text: '📋 *Esperando tu decisión*' });
+    for (const v of versions) {
+      mensajes.push({
+        text:
+          `⏳ *${escapeMarkdownV2(v.clientName)}* — rutina v${v.versionNumber}\n` +
+          `Esperando desde hace ${v.daysWaiting} ${v.daysWaiting === 1 ? 'día' : 'días'}`,
+        keyboard: buildKeyboard(DRAFT_ACTIONS, v.versionId),
+      });
+    }
+  }
+
+  if (awaitingLink.length > 0) {
+    if (dosListas) mensajes.push({ text: '🔗 *Esperando que abran su enlace*' });
+    for (const v of awaitingLink) {
+      mensajes.push({
+        text:
+          `🔗 *${escapeMarkdownV2(v.clientName)}* — rutina v${v.versionNumber}\n` +
+          `Aprobada hace ${v.daysWaiting} ${v.daysWaiting === 1 ? 'día' : 'días'}`,
+        keyboard: buildKeyboard(['link'], v.versionId),
+      });
+    }
+  }
+
+  return mensajes;
 }
 
 /** `/checkins` — los que llevan días sin respuesta. */
