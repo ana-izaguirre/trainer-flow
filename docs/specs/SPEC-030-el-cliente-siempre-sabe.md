@@ -13,10 +13,10 @@
 | 1, 2 | Una abierta no se pisa; solo avisa quien crea la fila (`created`) | ✅ migración 0027, `flows.ts`, CA-1, CA-2 |
 | 4 | El comentario se AÑADE, hasta 500 car., con aviso si se trunca | ✅ `add_change_comment`, CA-4 |
 | 5 | `asked_at` decide contra el check-in, y se actualiza al re-preguntar | ✅ |
-| 6 | `/cambio` — los tres casos | ✅ `webhook.ts`, CA-7 |
+| 6 | `/cambio_rutina` — los tres casos | ✅ `webhook.ts`, CA-7 |
 | 7 | `/rutina` avisa del cambio pendiente antes de la rutina | ✅ CA-6 |
 | 8 | Ningún texto suelto se queda sin respuesta | ✅ `SIN_PREGUNTA_PENDIENTE`, CA-8 |
-| 12 | `/cambio` en `AYUDA_CLIENTE` | ✅ |
+| 12 | `/cambio_rutina` en `AYUDA_CLIENTE` | ✅ |
 | 11 | La ficha del entrenador muestra la solicitud abierta (motivo y días, sin el comentario) | ✅ migración 0028, `trainer_client_detail` |
 | 14 | `/pendientes` con las dos listas (`DRAFT` y `APPROVED` sin abrir) | ✅ migración 0028, `trainer_awaiting_link` |
 | 3 | `force_reply` en cada pregunta de texto libre | ⏸️ Pendiente — ver nota |
@@ -83,7 +83,7 @@ existía y **nadie lo mostraba**. Ahora lo ven los dos: el cliente en
 
 ## 3. Alcance
 
-**Incluye:** respuestas y estado visible en el flujo de cambio, `/cambio` en
+**Incluye:** respuestas y estado visible en el flujo de cambio, `/cambio_rutina` en
 el menú, aviso en `/rutina`, acuse en cada botón del check-in, respuesta por
 defecto al texto libre, línea de la solicitud en la ficha del entrenador.
 
@@ -125,7 +125,7 @@ de que el cliente escriba.
 📨 Enviado a tu entrenador. Te aviso aquí cuando tenga tu nueva rutina.
 ```
 
-### Si ya tiene un cambio pedido y vuelve a pulsar (o usa `/cambio`)
+### Si ya tiene un cambio pedido y vuelve a pulsar (o usa `/cambio_rutina`)
 
 ```
 🕐 Ya le pediste un cambio a tu entrenador el 24/09: 😰 Muy difícil.
@@ -154,9 +154,9 @@ seguir entrenando con algo.
 No tengo ninguna pregunta pendiente contigo 🙂
 
 /rutina — ver tu rutina
-/cambio — pedir un cambio
+/cambio_rutina — pedir un cambio
 /checkin — enviar tu check-in
-/actualizar — cambiar tus datos
+/actualizar_datos — cambiar tus datos
 ```
 
 ### Ficha del entrenador
@@ -191,7 +191,7 @@ Si una lista está vacía, esa sección no aparece. Si las dos lo están:
 ## 5. Reglas de negocio
 
 1. **Una solicitud abierta por versión, y un aviso por solicitud.** Si ya
-   hay una abierta, pulsar «Pedir un cambio», un motivo o `/cambio` responde
+   hay una abierta, pulsar «Pedir un cambio», un motivo o `/cambio_rutina` responde
    con el estado (§4) y **no** avisa al entrenador ni cambia el motivo.
    *Reemplaza la segunda frase de SPEC-010 regla 6.*
 2. **Solo avisa quien la crea.** `request_change` pasa a devolver si la
@@ -208,7 +208,7 @@ Si una lista está vacía, esa sección no aparece. Si las dos lo están:
 5. **La pregunta más reciente es la que se hizo último**, no la de la fila más
    nueva: la solicitud guarda `asked_at`, que se actualiza cada vez que se le
    pide texto (§4), y es lo que compite con el check-in (SPEC-010 regla 11).
-6. **`/cambio`** (cliente): sin rutina enviada → «Todavía no tienes una
+6. **`/cambio_rutina`** (cliente): sin rutina enviada → «Todavía no tienes una
    rutina…» (SPEC-023); con una solicitud abierta → estado (regla 1); si no
    → el menú de motivos de la versión vigente.
 7. **`/rutina` con solicitud abierta** muestra el aviso de §4 antes de la
@@ -225,7 +225,7 @@ Si una lista está vacía, esa sección no aparece. Si las dos lo están:
 11. **Ficha del entrenador:** muestra la solicitud abierta (§4). Solo el
     motivo y la fecha: el comentario puede traer datos de salud y la ficha
     se lee de un vistazo; está completo en el aviso.
-12. `AYUDA_CLIENTE` añade `/cambio` y `/checkin` (SPEC-031). `DEPLOY.md` lista
+12. `AYUDA_CLIENTE` añade `/cambio_rutina` y `/checkin` (SPEC-031). `DEPLOY.md` lista
     los comandos para pegar en BotFather (`/setcommands`).
 13. **Enlace sin abrir 48 horas.** Si una versión sigue en `APPROVED` sin
     `clientChatId` 48 horas después de aprobarse, el entrenador recibe un
@@ -249,14 +249,14 @@ con la columna nueva `asked_at`.
 
 | Situación | Respuesta | Efecto |
 |---|---|---|
-| Motivo o `/cambio` con solicitud abierta | Estado de §4 | Nada cambia, no se avisa |
+| Motivo o `/cambio_rutina` con solicitud abierta | Estado de §4 | Nada cambia, no se avisa |
 | Detalle que supera 500 caracteres | «Guardé hasta aquí; el resto no entró» | Comentario truncado |
-| `/cambio` de un entrenador | Ayuda del entrenador | Nada |
+| `/cambio_rutina` de un entrenador | Ayuda del entrenador | Nada |
 | Versión ajena en el callback | Mensaje neutro (sin cambios) | Nada |
 
 ## 8. Seguridad
 
-- `/cambio` no recibe ningún id: sale del **perfil** del que escribe, igual
+- `/cambio_rutina` no recibe ningún id: sale del **perfil** del que escribe, igual
   que `/rutina` (SPEC-023). No hay forma de pedir sobre la rutina de otro.
 - El comentario sigue sin loguearse. La ficha no lo muestra (regla 11).
 - `force_reply` no cambia nada de autorización: el texto sigue entrando por
@@ -279,14 +279,14 @@ con la columna nueva `asked_at`.
   a la solicitud (regla 5).
 - **CA-6** — DADO una solicitud abierta, CUANDO pide `/rutina`, ENTONCES
   recibe el aviso de §4 y la rutina vigente con sus botones.
-- **CA-7** — `/cambio` en sus tres casos (regla 6).
+- **CA-7** — `/cambio_rutina` en sus tres casos (regla 6).
 - **CA-8** — DADO un texto sin nada pendiente, ENTONCES recibe la ayuda corta.
 - **CA-9** — DADO un botón del check-in, CUANDO lo pulsa, ENTONCES
   `answerCallback` lleva el texto del acuse y, si faltan preguntas, cuál.
 - **CA-10** — DADO una v2 entregada, ENTONCES la cabecera dice «actualizada».
 - **CA-11** — DADO una solicitud abierta, CUANDO el entrenador abre la ficha,
   ENTONCES ve motivo y fecha, y **no** el comentario.
-- **CA-12** — Un cliente no puede llegar con `/cambio` a una versión ajena.
+- **CA-12** — Un cliente no puede llegar con `/cambio_rutina` a una versión ajena.
 - **CA-13** — DADO una versión `APPROVED` sin `clientChatId` 48 horas después
   de aprobarse, ENTONCES el entrenador recibe el aviso con `🔗 Reenviar
   enlace`, y **no** un segundo aviso en el siguiente barrido.
@@ -308,12 +308,12 @@ con la columna nueva `asked_at`.
 ```
 supabase/migrations/0027_change_request_feedback.sql   asked_at; request_change devuelve created;
                                                        append_change_comment; ficha con la solicitud
-supabase/functions/_core/change-request/flows.ts       reglas 1–5, /cambio
+supabase/functions/_core/change-request/flows.ts       reglas 1–5, /cambio_rutina
 supabase/functions/_core/checkin/reply.ts              acuse por botón
 supabase/functions/_core/checkin/format.ts             textos del acuse
 supabase/functions/_core/ports/telegram-ports.ts       force_reply; answerCallback(id, text?)
 supabase/functions/_core/ports/change-request-ports.ts
-supabase/functions/_core/telegram/webhook.ts           /cambio, texto sin destino
+supabase/functions/_core/telegram/webhook.ts           /cambio_rutina, texto sin destino
 supabase/functions/_core/ai/sweep-stale-generations.ts  aviso de enlace sin abrir 48h (o función nueva del mismo barrido)
 supabase/functions/_core/telegram/client-format.ts     cabecera de v2, aviso de /rutina
 supabase/functions/_core/commands/router.ts            /rutina con aviso; /pendientes con las dos listas

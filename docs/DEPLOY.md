@@ -79,7 +79,7 @@ bot en todo lo que sigue.
       defecto se usa un alias móvil justamente para que eso no pase solo.
 
 - [ ] **4b. Actualizar datos: el enlace del formulario** (SPEC-027).
-      Para que un cliente pueda cambiar sus datos con `/actualizar`, o que tú
+      Para que un cliente pueda cambiar sus datos con `/actualizar_datos`, o que tú
       se lo pidas con 📝 desde su ficha:
 
       1. En Tally, añade al formulario un **campo oculto** llamado exactamente
@@ -92,7 +92,7 @@ bot en todo lo que sigue.
 
       No es un secreto —es el mismo enlace que le mandas a cada cliente—,
       pero va por el mismo sitio. **Es opcional**: sin él, el bot funciona
-      igual y `/actualizar` responde que todavía no está disponible.
+      igual y `/actualizar_datos` responde que todavía no está disponible.
 
       > ⚠️ **Sin el campo oculto, un envío por el enlace de actualización se
       > procesa como un cliente nuevo**: Tally no devuelve el token, y el bot
@@ -129,16 +129,32 @@ bot en todo lo que sigue.
       Nunca se puso por código —no hay ningún `setMyCommands` en el
       proyecto—, así que es manual, por cualquiera de las dos vías.
 
-      **Con el token, sin pasar por BotFather:**
+      **Con el token, sin pasar por BotFather.** Telegram no distingue el
+      menú por rol en un chat 1 a 1 —el mismo bot atiende a los dos—, así
+      que se resuelve con dos llamadas: el menú **por defecto** (el que ve
+      cualquiera, clientes nuevos incluidos) lleva solo lo del cliente, y tu
+      propio chat lleva el del entrenador encima.
 
       ```bash
+      # 1. El menú por defecto — solo cliente
       curl "https://api.telegram.org/bot<TOKEN>/setMyCommands" \
         -H "Content-Type: application/json" \
         -d '{
+          "scope": {"type": "default"},
           "commands": [
             {"command": "rutina", "description": "ver tu rutina actual"},
-            {"command": "cambio", "description": "pedir un cambio a tu rutina"},
-            {"command": "actualizar", "description": "cambiar tus datos (días, tiempo, objetivo, lesiones)"},
+            {"command": "cambio_rutina", "description": "pedir un cambio a tu rutina"},
+            {"command": "actualizar_datos", "description": "actualizar datos"},
+            {"command": "ayuda", "description": "qué puedes hacer"}
+          ]
+        }'
+
+      # 2. Tu menú — superpuesto por tu chat_id (el del paso 9, más abajo)
+      curl "https://api.telegram.org/bot<TOKEN>/setMyCommands" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "scope": {"type": "chat", "chat_id": <TU_CHAT_ID>},
+          "commands": [
             {"command": "clientes", "description": "listar tus clientes"},
             {"command": "cliente", "description": "ver la ficha de un cliente"},
             {"command": "pendientes", "description": "rutinas y enlaces esperando"},
@@ -149,16 +165,16 @@ bot en todo lo que sigue.
         }'
       ```
 
-      Verifica sin cambiar nada: `curl "https://api.telegram.org/bot<TOKEN>/getMyCommands"`.
+      Verifica sin cambiar nada: `curl "https://api.telegram.org/bot<TOKEN>/getMyCommands"`
+      (con `-d 'scope={"type":"chat","chat_id":<TU_CHAT_ID>}'` para ver el tuyo).
 
       **O a mano**, en **@BotFather → tu bot → Edit Bot → Edit Commands**, o
-      con `/setcommands`, pegando la misma lista en su formato
-      (`comando - descripción`, una por línea).
+      con `/setcommands` — ahí no hay `scope`, así que solo sirve para un
+      menú único (la lista combinada de los dos roles).
 
-      Los tres primeros son del cliente, el resto del entrenador. Telegram no
-      distingue el menú por rol en un chat 1 a 1 —el mismo bot atiende a los
-      dos—, así que todos ven la lista completa; cada comando ya responde
-      «eso solo lo puede tu entrenador» si no le toca (SPEC-007 regla 1).
+      Cada comando ya responde «eso solo lo puede tu entrenador» si no le
+      toca (SPEC-007 regla 1), así que el peor caso de mezclar los dos
+      menús es un botón que no hace nada — nunca un acceso indebido.
 
 - [ ] **7. Tally — Integrations → Webhooks:**
       `https://<ref>.supabase.co/functions/v1/tally-webhook`

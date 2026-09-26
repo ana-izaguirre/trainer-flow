@@ -161,7 +161,7 @@ export interface WebhookDeps {
   readonly creation: CreationDeps & EditorDeps;
   /** Lo que el cliente puede pedir sobre su rutina (SPEC-010). */
   readonly changes: ChangeRequestDeps;
-  /** SPEC-027: `/actualizar` del cliente y 📝 de la ficha. */
+  /** SPEC-027: `/actualizar_datos` del cliente y 📝 de la ficha. */
   readonly updates: UpdateRequestDeps;
 }
 
@@ -260,11 +260,11 @@ export async function handleTelegramWebhook(
         ? await editarSiEsEntrenador(update.command, update.args, identity, deps)
         : undefined;
 
-      // SPEC-027: `/actualizar` es del CLIENTE y escribe (emite un token), así
+      // SPEC-027: `/actualizar_datos` es del CLIENTE y escribe (emite un token), así
       // que no va por el router de consultas, que es de solo lectura.
-      if (update.command === 'actualizar' && identity.role === 'client') {
+      if (update.command === 'actualizar_datos' && identity.role === 'client') {
         updateRequest = await requestOwnUpdate(identity, deps.updates);
-      } else if (update.command === 'cambio' && identity.role === 'client') {
+      } else if (update.command === 'cambio_rutina' && identity.role === 'client') {
         // SPEC-030 regla 6: el mismo camino que el botón «Pedir un cambio»,
         // sobre la versión vigente del cliente. También escribe (puede tocar
         // `asked_at`), así que tampoco va por el router de solo lectura.
@@ -484,7 +484,7 @@ async function avisarSiHayCambioPendiente(identity: Identity, deps: WebhookDeps)
 }
 
 /**
- * SPEC-030 regla 6 — `/cambio`, escrito en vez de pulsado.
+ * SPEC-030 regla 6 — `/cambio_rutina`, escrito en vez de pulsado.
  *
  * Sin rutina enviada, no hay sobre qué pedir nada (mismo mensaje de
  * `/rutina`, SPEC-023). Con una, es exactamente `askReason`: si ya tiene una

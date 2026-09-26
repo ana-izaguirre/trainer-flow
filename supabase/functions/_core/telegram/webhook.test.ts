@@ -1409,7 +1409,7 @@ describe('CA-11 · el texto libre va a la última pregunta', () => {
   });
 });
 
-describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
+describe('SPEC-030 · /cambio_rutina, escrito en vez de pulsado', () => {
   const CLIENTE: Identity = {
     profileId: 'p-cliente',
     role: 'client',
@@ -1422,7 +1422,7 @@ describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
     const commands = fakeCommands({ clientRoutine: () => Promise.resolve(null) });
     const sender = fakeSender();
 
-    const { result } = ejecutar(comando('/cambio'), { repo, commands, sender });
+    const { result } = ejecutar(comando('/cambio_rutina'), { repo, commands, sender });
 
     await result;
     const respuesta = sender.sent.find((m) => m.chatId === CLIENTE.telegramChatId);
@@ -1445,7 +1445,7 @@ describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
     });
     const changes = fakeChanges();
 
-    const { result } = ejecutar(comando('/cambio'), { repo, commands, changes });
+    const { result } = ejecutar(comando('/cambio_rutina'), { repo, commands, changes });
 
     expect(await result).toMatchObject({ change: { kind: 'asked_reason' } });
     expect(changes.pasos).toContain('findVersion');
@@ -1455,9 +1455,9 @@ describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
     const repo = fakeRepo({ findIdentity: async () => ENTRENADOR });
     const commands = fakeCommands();
 
-    const { result } = ejecutar(comando('/cambio'), { repo, commands });
+    const { result } = ejecutar(comando('/cambio_rutina'), { repo, commands });
 
-    expect(await result).toMatchObject({ command: { kind: 'unknown', command: 'cambio' } });
+    expect(await result).toMatchObject({ command: { kind: 'unknown', command: 'cambio_rutina' } });
   });
 });
 
@@ -1911,12 +1911,12 @@ describe('SPEC-027 · pedir la actualización de datos se enruta', () => {
     },
   });
 
-  it('/actualizar de un CLIENTE emite SU enlace', async () => {
+  it('/actualizar_datos de un CLIENTE emite SU enlace', async () => {
     const repo = fakeRepo({ findIdentity: async () => CLIENTE });
     const updates = fakeUpdates();
     const commands = fakeCommands();
 
-    const { result } = ejecutar(comando('/actualizar'), { repo, updates, commands });
+    const { result } = ejecutar(comando('/actualizar_datos'), { repo, updates, commands });
 
     expect(await result).toMatchObject({ update: { kind: 'sent', clientId: 'c1' } });
     expect(updates.pasos).toContain('issueForProfile:p-cliente');
@@ -1924,10 +1924,10 @@ describe('SPEC-027 · pedir la actualización de datos se enruta', () => {
     expect(commands.pasos).toEqual([]);
   });
 
-  it('/actualizar del ENTRENADOR no emite nada: es un comando del cliente', async () => {
+  it('/actualizar_datos del ENTRENADOR no emite nada: es un comando del cliente', async () => {
     const updates = fakeUpdates();
 
-    const { result } = ejecutar(comando('/actualizar'), { updates });
+    const { result } = ejecutar(comando('/actualizar_datos'), { updates });
 
     expect(await result).toMatchObject({ command: { kind: 'unknown' } });
     expect(updates.pasos).toEqual([]);

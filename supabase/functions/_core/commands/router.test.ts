@@ -488,7 +488,7 @@ describe('SPEC-023 · lo que SÍ puede hacer un cliente', () => {
 
     await handleCommand('ayuda', '', CLIENTE, deps);
 
-    expect(mensajes[0]).toContain('/actualizar');
+    expect(mensajes[0]).toContain('/actualizar\\_datos');
   });
 
   it('un comando del entrenador le devuelve SU ayuda, no un muro', async () => {
