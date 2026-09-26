@@ -25,8 +25,9 @@ después.
 | 7 | En el check-in, al pulsar «3» o «💪 Bien» **no aparece nada** | Solo se contesta al completar las tres preguntas |
 | 8 | Un texto que nadie espera **no recibe respuesta** | El webhook no tiene respuesta por defecto para texto de cliente |
 | 9 | Un cliente que nunca abre su enlace se queda esperando y **el entrenador no se entera** salvo que entre a mirar la ficha | Nada avisa; solo existe `/reenviar` manual (SPEC-014) |
+| 10 | `/pendientes` solo lista `DRAFT`. Una versión `APPROVED` esperando que el cliente abra su enlace **no sale ahí**, solo se ve entrando a la ficha uno por uno | `trainer_pending_versions` filtra `v.state = 'DRAFT'` |
 
-Lo común a los nueve: **el silencio.** Esta spec cierra cada uno.
+Lo común a los diez: **el silencio.** Esta spec cierra cada uno.
 
 ### ¿Debería cambiar el estado de la rutina?
 
@@ -122,6 +123,27 @@ Una línea más cuando hay una solicitud abierta:
 🔔 Pidió un cambio hace 2 días: 😰 Muy difícil
 ```
 
+### `/pendientes`, con sus dos categorías
+
+Hoy solo trae la primera lista. Se agrega la segunda, aparte:
+
+```
+📋 Esperando tu decisión
+
+Ana Gómez · v1 · 3 días
+[✏️ Revisar]
+
+━━━━━━━━━━━━━━━
+
+🔗 Esperando que abran su enlace
+
+Carlos Pérez · v2 · aprobada hace 3 días
+[🔗 Reenviar enlace]
+```
+
+Si una lista está vacía, esa sección no aparece. Si las dos lo están:
+`👍 No hay nada pendiente.`
+
 ## 5. Reglas de negocio
 
 1. **Una solicitud abierta por versión, y un aviso por solicitud.** Si ya
@@ -166,6 +188,13 @@ Una línea más cuando hay una solicitud abierta:
     aviso con el botón `🔗 Reenviar enlace` (SPEC-014). Un solo aviso por
     versión, igual que el recordatorio del check-in (SPEC-006 regla 6): lo
     revisa el mismo `sweep` que ya corre cada 5 minutos.
+14. **`/pendientes` trae dos listas**, no una: las `DRAFT` esperando que el
+    entrenador decida (como hoy) y las `APPROVED` sin `clientChatId`
+    esperando que el cliente abra su enlace, con su propio botón `🔗
+    Reenviar enlace`. La segunda es la misma consulta que usa la regla 13
+    para decidir a quién avisar, solo que aquí se lista completa y sin
+    umbral de 48 horas: son las mismas que ya hoy solo se ven entrando a la
+    ficha, y `/pendientes` es donde deberían estar juntas.
 
 ## 6. Estados
 
@@ -217,6 +246,10 @@ con la columna nueva `asked_at`.
 - **CA-13** — DADO una versión `APPROVED` sin `clientChatId` 48 horas después
   de aprobarse, ENTONCES el entrenador recibe el aviso con `🔗 Reenviar
   enlace`, y **no** un segundo aviso en el siguiente barrido.
+- **CA-14** — DADO un `DRAFT` y un `APPROVED` sin abrir, CUANDO el entrenador
+  pide `/pendientes`, ENTONCES ve las dos en secciones separadas, cada una
+  con su botón. DADO que no hay ninguna de las dos, ENTONCES ve «No hay nada
+  pendiente».
 
 ## 10. Tests
 
@@ -239,8 +272,9 @@ supabase/functions/_core/ports/change-request-ports.ts
 supabase/functions/_core/telegram/webhook.ts           /cambio, texto sin destino
 supabase/functions/_core/ai/sweep-stale-generations.ts  aviso de enlace sin abrir 48h (o función nueva del mismo barrido)
 supabase/functions/_core/telegram/client-format.ts     cabecera de v2, aviso de /rutina
-supabase/functions/_core/commands/router.ts            /rutina con aviso
-supabase/functions/_core/commands/format.ts            ficha, AYUDA_CLIENTE
+supabase/functions/_core/commands/router.ts            /rutina con aviso; /pendientes con las dos listas
+supabase/functions/_core/commands/format.ts            ficha, AYUDA_CLIENTE, formatPending con dos secciones
+supabase/functions/_core/ports/query-ports.ts           AwaitingLink; pendingVersions o awaitingLink(trainerId)
 supabase/functions/_shared/telegram/client.ts          reply_markup force_reply; texto del callback
 supabase/functions/_shared/db.ts
 docs/specs/SPEC-010 (reglas 6 y 11), docs/DEPLOY.md (comandos de BotFather)
