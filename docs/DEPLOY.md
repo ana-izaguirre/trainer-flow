@@ -125,6 +125,28 @@ bot en todo lo que sigue.
       `pending_update_count` alto o `last_error_message` con algo dentro
       significa que el bot no está atendiendo.
 
+- [ ] **6b. El menú de comandos de Telegram** (el botón `/` junto al mensaje).
+      Nunca se puso por código —no hay ningún `setMyCommands` en el
+      proyecto—, así que es manual: en **@BotFather → tu bot → Edit Bot →
+      Edit Commands**, o con `/setcommands`, pega:
+
+      ```
+      rutina - ver tu rutina actual
+      cambio - pedir un cambio a tu rutina
+      actualizar - cambiar tus datos (días, tiempo, objetivo, lesiones)
+      clientes - listar tus clientes
+      cliente - ver la ficha de un cliente
+      pendientes - rutinas y enlaces esperando
+      checkins - check-ins sin responder
+      crear_rutina - dictar una rutina completa
+      ayuda - qué puedes hacer
+      ```
+
+      Los tres primeros son del cliente, el resto del entrenador. Telegram no
+      distingue el menú por rol en un chat 1 a 1 —el mismo bot atiende a los
+      dos—, así que todos ven la lista completa; cada comando ya responde
+      «eso solo lo puede tu entrenador» si no le toca (SPEC-007 regla 1).
+
 - [ ] **7. Tally — Integrations → Webhooks:**
       `https://<ref>.supabase.co/functions/v1/tally-webhook`
 
