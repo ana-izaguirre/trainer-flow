@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR |
+| **Estado** | APROBADA |
 | **Depende de** | SPEC-006, SPEC-010, SPEC-023 |
 | **Sesiones** | S-43 |
 
