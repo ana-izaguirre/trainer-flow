@@ -96,16 +96,22 @@ function vacioActions(): ActionDeps {
 
 /** Consultas falsas que registran qué se pidió. Por defecto, sin clientes. */
 function fakeCommands(
-  opciones: { clientes?: { clientId: string; fullName: string }[]; detalle?: unknown } = {},
+  opciones: {
+    clientes?: { clientId: string; fullName: string }[];
+    detalle?: unknown;
+    clientRoutine?: QueryRepo['clientRoutine'];
+  } = {},
 ) {
   const pasos: string[] = [];
   /** El `callback_data` de cada botón que se mandó. */
   const botones: string[] = [];
 
   const repo: QueryRepo = {
-    clientRoutine: () => {
+    clientRoutine: (profileId) => {
       pasos.push('clientRoutine');
-      return Promise.resolve(null);
+      return opciones.clientRoutine !== undefined
+        ? opciones.clientRoutine(profileId)
+        : Promise.resolve(null);
     },
     clients: () => {
       pasos.push('clients');
@@ -155,7 +161,11 @@ function fakeCommands(
  * está en SENT, que es lo único sobre lo que se puede pedir un cambio.
  */
 function fakeChanges(
-  opciones: { abierta?: { hasComment: boolean; askedAt: Date } | null; version?: unknown } = {},
+  opciones: {
+    abierta?: { hasComment: boolean; askedAt: Date } | null;
+    version?: unknown;
+    created?: boolean;
+  } = {},
 ) {
   const pasos: string[] = [];
 
@@ -178,19 +188,30 @@ function fakeChanges(
     },
     request: () => {
       pasos.push('request');
-      return Promise.resolve('req-1');
+      return Promise.resolve({ id: 'req-1', created: opciones.created ?? true });
     },
     openForClient: () => {
       pasos.push('openForClient');
       return Promise.resolve(
         opciones.abierta === undefined || opciones.abierta === null
           ? null
-          : { requestId: 'req-1', clientId: 'c1', ...opciones.abierta },
+          : {
+              requestId: 'req-1',
+              clientId: 'c1',
+              versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+              reason: 'too_hard' as const,
+              createdAt: opciones.abierta.askedAt,
+              ...opciones.abierta,
+            },
       );
+    },
+    touchAsk: () => {
+      pasos.push('touchAsk');
+      return Promise.resolve(true);
     },
     addComment: () => {
       pasos.push('addComment');
-      return Promise.resolve(true);
+      return Promise.resolve({ saved: true, truncated: false });
     },
     findRequest: () =>
       Promise.resolve({
@@ -224,6 +245,7 @@ function fakeChanges(
       },
       answerCallback: () => Promise.resolve(),
     },
+    now: () => new Date('2026-03-22T09:00:00Z'),
   };
 
   return { deps, pasos };
@@ -1340,7 +1362,10 @@ describe('CA-11 · el texto libre va a la última pregunta', () => {
     expect(changes.pasos).not.toContain('addComment');
   });
 
-  it('una solicitud que YA tiene comentario no se lo come', async () => {
+  // SPEC-030 regla 4: una solicitud que YA tiene comentario sigue aceptando
+  // texto —se AÑADE, no se pierde—. Antes se ignoraba, y era justo el hueco
+  // que hacía que un segundo mensaje del cliente cayera en el vacío.
+  it('SPEC-030 · una solicitud que YA tiene comentario también se lo queda', async () => {
     const repo = fakeRepo({ findIdentity: async () => CLIENTE });
     const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: true });
     const changes = fakeChanges({
@@ -1349,9 +1374,9 @@ describe('CA-11 · el texto libre va a la última pregunta', () => {
 
     const { result } = ejecutar(comando('otra cosa'), { repo, checkins, changes });
 
-    await result;
-    expect(checkins.pasos).toContain('saveAnswers:false');
-    expect(changes.pasos).not.toContain('addComment');
+    expect(await result).toMatchObject({ change: { kind: 'commented' } });
+    expect(checkins.pasos).not.toContain('saveAnswers:false');
+    expect(changes.pasos).toContain('addComment');
   });
 
   it('sin nada abierto, un mensaje es solo un mensaje', async () => {
@@ -1364,8 +1389,155 @@ describe('CA-11 · el texto libre va a la última pregunta', () => {
     expect(await result).toMatchObject({ checkin: { kind: 'no_open_checkin' } });
     expect(changes.pasos).not.toContain('addComment');
   });
+
+  // SPEC-030 regla 8 — ningún mensaje suelto del cliente se queda callado.
+  it('SPEC-030 · sin nada abierto, el cliente recibe la ayuda corta', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: false });
+    const changes = fakeChanges({ abierta: null });
+    const sender = fakeSender();
+
+    const { result } = ejecutar(comando('hola'), { repo, checkins, changes, sender });
+
+    await result;
+    const respuesta = sender.sent.find((m) => m.chatId === CLIENTE.telegramChatId);
+    expect(respuesta?.text).toContain('pregunta pendiente');
+  });
 });
 
+describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 500,
+    telegramChatId: 500,
+  };
+
+  it('sin rutina enviada, el mismo mensaje que /rutina', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const commands = fakeCommands({ clientRoutine: () => Promise.resolve(null) });
+    const sender = fakeSender();
+
+    const { result } = ejecutar(comando('/cambio'), { repo, commands, sender });
+
+    await result;
+    const respuesta = sender.sent.find((m) => m.chatId === CLIENTE.telegramChatId);
+    expect(respuesta?.text).toContain('Todavía no tienes una rutina');
+  });
+
+  it('con rutina enviada, pregunta los motivos igual que el botón', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const commands = fakeCommands({
+      clientRoutine: () =>
+        Promise.resolve({
+          versionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+          state: 'SENT' as const,
+          content: { summary: 's', days: [], warnings: [] },
+          clientName: 'Carlos',
+          clientChatId: 500,
+          trainerChatId: 10,
+          plan: null,
+        }),
+    });
+    const changes = fakeChanges();
+
+    const { result } = ejecutar(comando('/cambio'), { repo, commands, changes });
+
+    expect(await result).toMatchObject({ change: { kind: 'asked_reason' } });
+    expect(changes.pasos).toContain('findVersion');
+  });
+
+  it('un entrenador no dispara el camino del cliente', async () => {
+    const repo = fakeRepo({ findIdentity: async () => ENTRENADOR });
+    const commands = fakeCommands();
+
+    const { result } = ejecutar(comando('/cambio'), { repo, commands });
+
+    expect(await result).toMatchObject({ command: { kind: 'unknown', command: 'cambio' } });
+  });
+});
+
+describe('SPEC-030 regla 7 · /rutina avisa de un cambio pendiente', () => {
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 500,
+    telegramChatId: 500,
+  };
+
+  it('con una solicitud abierta, el aviso sale ANTES de la rutina', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const commands = fakeCommands();
+    const changes = fakeChanges({
+      abierta: { hasComment: false, askedAt: new Date('2026-03-20T09:00:00Z') },
+    });
+    const sender = fakeSender();
+
+    const { result } = ejecutar(comando('/rutina'), { repo, commands, changes, sender });
+
+    await result;
+    const mios = sender.sent.filter((m) => m.chatId === CLIENTE.telegramChatId);
+    expect(mios[0]?.text).toContain('Pediste un cambio');
+    expect(mios[0]?.text).toContain('Muy difícil');
+  });
+
+  it('pedida hace exactamente 1 día, dice «hace 1 día» en singular', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const commands = fakeCommands();
+    const changes = fakeChanges({
+      abierta: { hasComment: false, askedAt: new Date('2026-03-21T09:00:00Z') },
+    });
+    const sender = fakeSender();
+
+    const { result } = ejecutar(comando('/rutina'), { repo, commands, changes, sender });
+
+    await result;
+    const mios = sender.sent.filter((m) => m.chatId === CLIENTE.telegramChatId);
+    expect(mios[0]?.text).toContain('hace 1 día');
+  });
+
+  it('pedida hoy mismo, dice «hoy»', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const commands = fakeCommands();
+    const changes = fakeChanges({
+      abierta: { hasComment: false, askedAt: new Date('2026-03-22T09:00:00Z') },
+    });
+    const sender = fakeSender();
+
+    const { result } = ejecutar(comando('/rutina'), { repo, commands, changes, sender });
+
+    await result;
+    const mios = sender.sent.filter((m) => m.chatId === CLIENTE.telegramChatId);
+    expect(mios[0]?.text).toContain('hoy');
+  });
+
+  it('sin nada abierto, no manda ningún aviso extra', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const commands = fakeCommands();
+    const changes = fakeChanges({ abierta: null });
+    const sender = fakeSender();
+
+    const { result } = ejecutar(comando('/rutina'), { repo, commands, changes, sender });
+
+    await result;
+    const mios = sender.sent.filter((m) => m.chatId === CLIENTE.telegramChatId);
+    expect(mios.some((m) => m.text.includes('Pediste un cambio'))).toBe(false);
+  });
+
+  it('un entrenador no dispara el aviso', async () => {
+    const repo = fakeRepo({ findIdentity: async () => ENTRENADOR });
+    const changes = fakeChanges({
+      abierta: { hasComment: false, askedAt: new Date('2026-03-20T09:00:00Z') },
+    });
+
+    const { result } = ejecutar(comando('/rutina'), { repo, changes });
+
+    await result;
+    // `/rutina` no es un comando del entrenador: ni siquiera llega a mirar
+    // si hay una solicitud abierta.
+    expect(changes.pasos).not.toContain('openForClient');
+  });
+});
 
 // ─── SPEC-013 · el enrutado pasa la identidad, no solo el chat ──────────────
 

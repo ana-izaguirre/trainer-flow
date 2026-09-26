@@ -111,12 +111,13 @@ function espia(identity: Identity | null = null): Espia {
 
   const changeRepo: ChangeRequestRepo = {
     findVersion: () => Promise.resolve(null),
-    request: () => Promise.resolve('req-1'),
+    request: () => Promise.resolve({ id: 'req-1', created: true }),
     openForClient: () => {
       usosDelRepo.push('openForClient');
       return Promise.resolve(null);
     },
-    addComment: () => Promise.resolve(false),
+    touchAsk: () => Promise.resolve(true),
+    addComment: () => Promise.resolve({ saved: false, truncated: false }),
     findRequest: () => Promise.resolve(null),
     createRevision: () => Promise.resolve('v-2'),
     recordAccepted: () => Promise.resolve(),

@@ -70,12 +70,11 @@ async function escenario(): Promise<Escenario> {
 
 const pedir = async (versionId: string, clientId: string, reason: string) =>
   (
-    await db.query<{ request_change: string }>(`SELECT request_change($1, $2, $3)`, [
-      versionId,
-      clientId,
-      reason,
-    ])
-  ).rows[0]!.request_change;
+    await db.query<{ id: string; created: boolean }>(
+      `SELECT * FROM request_change($1, $2, $3)`,
+      [versionId, clientId, reason],
+    )
+  ).rows[0]!.id;
 
 // ---------------------------------------------------------------------------
 
@@ -111,7 +110,10 @@ describe('🔴 CA-1 y CA-4 · la rutina enviada no se toca', () => {
 });
 
 describe('CA-8 · una sola solicitud abierta por versión', () => {
-  it('la segunda actualiza el motivo, no duplica', async () => {
+  // SPEC-030 regla 1: la segunda pulsación NO pisa el motivo ya elegido —
+  // antes sí lo actualizaba, y eso hacía que el aviso al entrenador llegara
+  // dos veces con motivos distintos aunque solo hubiera una fila.
+  it('la segunda no crea otra fila NI cambia el motivo', async () => {
     const { versionId, clientId } = await escenario();
 
     const primera = await pedir(versionId, clientId, 'too_hard');
@@ -120,7 +122,24 @@ describe('CA-8 · una sola solicitud abierta por versión', () => {
     expect(segunda).toBe(primera);
     const { rows } = await db.query(`SELECT count(*), max(reason::text) AS motivo FROM change_requests`);
     expect(rows[0].count).toBe('1');
-    expect(rows[0].motivo).toBe('too_long');
+    expect(rows[0].motivo).toBe('too_hard');
+  });
+
+  it('SPEC-030 regla 2 · `created` dice cuál de las dos la creó', async () => {
+    const { versionId, clientId } = await escenario();
+
+    const { rows: primera } = await db.query<{ id: string; created: boolean }>(
+      `SELECT * FROM request_change($1, $2, 'too_hard')`,
+      [versionId, clientId],
+    );
+    const { rows: segunda } = await db.query<{ id: string; created: boolean }>(
+      `SELECT * FROM request_change($1, $2, 'too_long')`,
+      [versionId, clientId],
+    );
+
+    expect(primera[0]!.created).toBe(true);
+    expect(segunda[0]!.created).toBe(false);
+    expect(segunda[0]!.id).toBe(primera[0]!.id);
   });
 
   it('🔴 el UNIQUE lo garantiza, no una comprobación previa', async () => {
@@ -160,7 +179,7 @@ describe('CA-8 · una sola solicitud abierta por versión', () => {
   it('un motivo nuevo NO borra el comentario ya escrito', async () => {
     const { versionId, clientId } = await escenario();
     const id = await pedir(versionId, clientId, 'too_hard');
-    await db.query(`SELECT add_change_comment($1, $2, 'No termino la semana 1')`, [id, clientId]);
+    await db.query(`SELECT * FROM add_change_comment($1, $2, 'No termino la semana 1')`, [id, clientId]);
 
     await pedir(versionId, clientId, 'too_long');
 
@@ -174,7 +193,7 @@ describe('el comentario', () => {
     const { versionId, clientId } = await escenario();
     const id = await pedir(versionId, clientId, 'other');
 
-    await db.query(`SELECT add_change_comment($1, $2, $3)`, [id, clientId, 'a'.repeat(900)]);
+    await db.query(`SELECT * FROM add_change_comment($1, $2, $3)`, [id, clientId, 'a'.repeat(900)]);
 
     const { rows } = await db.query(`SELECT length(comment) AS largo FROM change_requests WHERE id=$1`, [id]);
     expect(rows[0].largo).toBe(500);
@@ -185,12 +204,12 @@ describe('el comentario', () => {
     const otro = await escenario();
     const id = await pedir(versionId, clientId, 'other');
 
-    const { rows } = await db.query<{ add_change_comment: boolean }>(
-      `SELECT add_change_comment($1, $2, 'colado')`,
+    const { rows } = await db.query<{ saved: boolean; truncated: boolean }>(
+      `SELECT * FROM add_change_comment($1, $2, 'colado')`,
       [id, otro.clientId],
     );
 
-    expect(rows[0]!.add_change_comment).toBe(false);
+    expect(rows[0]!.saved).toBe(false);
   });
 });
 
@@ -335,7 +354,7 @@ describe('las consultas', () => {
   it('`change_request_for_trainer` trae el contexto completo', async () => {
     const { versionId, clientId } = await escenario();
     const id = await pedir(versionId, clientId, 'uncomfortable_exercise');
-    await db.query(`SELECT add_change_comment($1, $2, 'el hombro')`, [id, clientId]);
+    await db.query(`SELECT * FROM add_change_comment($1, $2, 'el hombro')`, [id, clientId]);
 
     const { rows } = await db.query(`SELECT * FROM change_request_for_trainer($1)`, [id]);
 

@@ -40,7 +40,7 @@ import {
   type ChangeOutcome,
   type ChangeRequestDeps,
 } from '../change-request/flows.ts';
-import { parseChangeCallback } from '../domain/change-request.ts';
+import { parseChangeCallback, REASON_LABELS } from '../domain/change-request.ts';
 import {
   listTemplates,
   loadTemplate,
@@ -60,6 +60,7 @@ import {
   type CommandDeps,
   type CommandOutcome,
 } from '../commands/router.ts';
+import { SIN_PREGUNTA_PENDIENTE, SIN_RUTINA_TODAVIA } from '../commands/format.ts';
 import {
   handleCheckinAnswer,
   handleCheckinText,
@@ -84,6 +85,7 @@ import {
   type DeliveryDeps,
   type LinkOutcome,
 } from './delivery.ts';
+import { escapeMarkdownV2 } from './format.ts';
 import { parseStartToken } from './start.ts';
 import { parseTemplateCallback } from './template-callback.ts';
 import { parseUpdate } from './update.ts';
@@ -262,7 +264,17 @@ export async function handleTelegramWebhook(
       // que no va por el router de consultas, que es de solo lectura.
       if (update.command === 'actualizar' && identity.role === 'client') {
         updateRequest = await requestOwnUpdate(identity, deps.updates);
+      } else if (update.command === 'cambio' && identity.role === 'client') {
+        // SPEC-030 regla 6: el mismo camino que el botón «Pedir un cambio»,
+        // sobre la versión vigente del cliente. También escribe (puede tocar
+        // `asked_at`), así que tampoco va por el router de solo lectura.
+        change = await pedirCambioPorComando(identity, deps);
       } else if (editor === undefined) {
+        // SPEC-030 regla 7: si tiene un cambio pedido, se lo recuerda ANTES
+        // de mandarle la rutina — que sigue siendo la vigente, sin ocultarse.
+        if (update.command === 'rutina' && identity.role === 'client') {
+          await avisarSiHayCambioPendiente(identity, deps);
+        }
         command = await handleCommand(update.command, update.args, identity, deps.commands);
       }
     }
@@ -360,26 +372,33 @@ export async function handleTelegramWebhook(
       // Dos cosas pueden estar esperando texto: el comentario de una solicitud
       // y la molestia de un check-in. Gana la más reciente, que es a la que
       // cualquiera contestaría (SPEC-010 §3).
+      //
+      // SPEC-030 regla 4: YA NO exige que la solicitud esté sin comentario —
+      // un segundo mensaje se AÑADE, no se pierde.
       const solicitud = await deps.changes.repo.openForClient(identity.profileId);
-      const esperandoComentario =
-        solicitud !== null && !solicitud.hasComment ? solicitud : null;
 
       checkin = await handleCheckinText(
         update.text,
         identity,
         deps.checkins,
-        esperandoComentario?.askedAt ?? null,
+        solicitud?.askedAt ?? null,
       );
 
-      // El check-in no lo quiso: entonces es para la solicitud.
-      if (checkin.kind === 'no_open_checkin' && esperandoComentario !== null) {
-        change = await addComment(
-          esperandoComentario.requestId,
-          esperandoComentario.clientId,
-          update.text,
-          identity,
-          deps.changes,
-        );
+      // El check-in no lo quiso: entonces es para la solicitud, si la hay.
+      if (checkin.kind === 'no_open_checkin') {
+        if (solicitud !== null) {
+          change = await addComment(
+            solicitud.requestId,
+            solicitud.clientId,
+            update.text,
+            identity,
+            deps.changes,
+          );
+        } else {
+          // SPEC-030 regla 8: ningún mensaje del cliente se queda sin
+          // respuesta, ni siquiera uno que no era para nadie en particular.
+          await deps.sender.sendMessage(identity.telegramChatId, SIN_PREGUNTA_PENDIENTE);
+        }
       }
     }
 
@@ -441,6 +460,46 @@ function editarSiEsEntrenador(
   );
 }
 
+
+/**
+ * SPEC-030 regla 7 — antes de mandarle `/rutina`, se le recuerda si tiene un
+ * cambio pedido. La rutina vigente se manda igual: el cliente sigue
+ * entrenando con ella mientras el entrenador prepara la siguiente.
+ */
+async function avisarSiHayCambioPendiente(identity: Identity, deps: WebhookDeps): Promise<void> {
+  const abierta = await deps.changes.repo.openForClient(identity.profileId);
+  if (abierta === null) return;
+
+  const dias = Math.max(
+    0,
+    Math.floor((deps.changes.now().getTime() - abierta.createdAt.getTime()) / 86_400_000),
+  );
+  const cuando = dias === 0 ? 'hoy' : `hace ${dias} ${dias === 1 ? 'día' : 'días'}`;
+
+  await deps.sender.sendMessage(
+    identity.telegramChatId,
+    `🛠 Pediste un cambio ${cuando} \\(${escapeMarkdownV2(REASON_LABELS[abierta.reason])}\\)\\. ` +
+      'Tu entrenador lo está preparando; mientras, esta sigue siendo tu rutina\\.',
+  );
+}
+
+/**
+ * SPEC-030 regla 6 — `/cambio`, escrito en vez de pulsado.
+ *
+ * Sin rutina enviada, no hay sobre qué pedir nada (mismo mensaje de
+ * `/rutina`, SPEC-023). Con una, es exactamente `askReason`: si ya tiene una
+ * solicitud abierta, enseña su estado (regla 1); si no, el menú de motivos.
+ */
+async function pedirCambioPorComando(identity: Identity, deps: WebhookDeps): Promise<ChangeOutcome> {
+  const rutina = await deps.commands.repo.clientRoutine(identity.profileId);
+
+  if (rutina === null) {
+    await deps.sender.sendMessage(identity.telegramChatId, SIN_RUTINA_TODAVIA);
+    return { kind: 'denied' };
+  }
+
+  return askReason(rutina.versionId, identity, deps.changes);
+}
 
 /** Los tres botones de SPEC-010, cada uno a su flujo. */
 function enrutarSolicitud(

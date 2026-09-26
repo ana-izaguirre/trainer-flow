@@ -161,7 +161,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
           checkins: { repo: deps.checkinRepo(), sender },
           commands: { repo: deps.queryRepo(), sender },
           creation: { repo: deps.creationRepo(requestId), sender },
-          changes: { repo: deps.changeRepo(requestId), sender },
+          changes: { repo: deps.changeRepo(requestId), sender, now: () => new Date() },
           intake: { repo: deps.intakeRepo(), sender },
           link: { repo: deps.linkRepo(), sender, botUsername: deps.botUsername },
           updates: {

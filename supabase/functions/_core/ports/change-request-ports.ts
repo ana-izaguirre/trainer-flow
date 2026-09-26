@@ -39,27 +39,51 @@ export interface ChangeRequestView {
 export interface OpenRequest {
   readonly requestId: string;
   readonly clientId: string;
+  readonly versionId: string;
+  readonly reason: ChangeReason;
   readonly hasComment: boolean;
   /** Cuándo se le preguntó. Compite con el `sent_at` del check-in. */
   readonly askedAt: Date;
+  /** Cuándo se creó. Es lo que se muestra como «hace N días» (SPEC-030). */
+  readonly createdAt: Date;
+}
+
+/** SPEC-030 regla 2: si `created` es `false`, no se avisa al entrenador. */
+export interface RequestResult {
+  readonly id: string;
+  readonly created: boolean;
+}
+
+/** SPEC-030 regla 4: `truncated` dice si sobró texto tras los 500 caracteres. */
+export interface CommentResult {
+  readonly saved: boolean;
+  readonly truncated: boolean;
 }
 
 export interface ChangeRequestRepo {
   findVersion(versionId: string): Promise<VersionForRequest | null>;
 
   /**
-   * Crea la solicitud, o actualiza la abierta de esa versión.
+   * Crea la solicitud, o deja intacta la que ya estaba abierta.
    *
-   * El `UNIQUE` parcial sobre `OPEN` es lo que impide dos: no una
-   * comprobación previa, que dos pulsaciones simultáneas pasarían (regla 6).
+   * El `UNIQUE` parcial sobre `OPEN` es lo que impide dos filas: no una
+   * comprobación previa, que dos pulsaciones simultáneas pasarían. `created`
+   * sale del propio `INSERT`, así que sigue siendo el índice quien decide
+   * (SPEC-030 regla 2).
    */
-  request(versionId: string, clientId: string, reason: ChangeReason): Promise<string>;
+  request(versionId: string, clientId: string, reason: ChangeReason): Promise<RequestResult>;
 
-  /** La abierta de este cliente, para atribuirle un texto libre. */
+  /** La abierta de este cliente, para atribuirle un texto libre o su estado. */
   openForClient(profileId: string): Promise<OpenRequest | null>;
 
-  /** `false` si no es suya o ya se cerró. */
-  addComment(requestId: string, clientId: string, comment: string): Promise<boolean>;
+  /**
+   * Vuelve a marcar la solicitud como recién preguntada, sin tocar el
+   * motivo (SPEC-030 regla 5). `false` si ya no está abierta o no es suya.
+   */
+  touchAsk(requestId: string, clientId: string): Promise<boolean>;
+
+  /** Añade el mensaje al comentario, hasta 500 caracteres (SPEC-030 regla 4). */
+  addComment(requestId: string, clientId: string, comment: string): Promise<CommentResult>;
 
   findRequest(requestId: string): Promise<ChangeRequestView | null>;
 
