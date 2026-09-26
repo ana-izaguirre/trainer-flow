@@ -247,16 +247,15 @@ describe('los días se ajustan a los que el cliente pidió', () => {
     expect(result.workout.days[0]?.focus).toBe(tresDias.workout.days[0]?.focus);
   });
 
-  it('de 3 días a 5: vuelve a empezar, renumerando', () => {
-    const draft = applyTemplate(tresDias, { daysPerWeek: 5, hasLimitations: false });
-    const result = validateDraft(draft, { daysPerWeek: 5, hasLimitations: false });
+  it('de 3 días a 4: vuelve a empezar, renumerando', () => {
+    const draft = applyTemplate(tresDias, { daysPerWeek: 4, hasLimitations: false });
+    const result = validateDraft(draft, { daysPerWeek: 4, hasLimitations: false });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.workout.days.map((d) => d.dayNumber)).toEqual([1, 2, 3, 4, 5]);
-    // El ciclo: el cuarto día repite el primero, el quinto el segundo.
+    expect(result.workout.days.map((d) => d.dayNumber)).toEqual([1, 2, 3, 4]);
+    // El ciclo: el cuarto día repite el primero.
     expect(result.workout.days[3]?.focus).toBe(tresDias.workout.days[0]?.focus);
-    expect(result.workout.days[4]?.focus).toBe(tresDias.workout.days[1]?.focus);
   });
 
   it('si el número ya coincide, no toca nada ni avisa', () => {
@@ -504,5 +503,95 @@ describe('SPEC-028 — el equipamiento pesa más que los días', () => {
   // todas las plantillas con sus días y ajustadas de 1 a 7. Aquí, que existen.
   it.each(['home-dumbbells-3d', 'home-bands-3d'])('CA-9 · %s existe y es de 3 días', (id) => {
     expect(findTemplate(id)?.daysPerWeek).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('SPEC-028 §11 — al alargar, recuperación activa en vez de repetir', () => {
+  // ┌─ EL PROBLEMA ──────────────────────────────────────────────────────────┐
+  // │ Alargar en ciclo una plantilla de 3 días a 7 daba A, B, C, A, B, C, A: │
+  // │ siete sesiones intensas sin descanso, para cualquier equipamiento.     │
+  // └────────────────────────────────────────────────────────────────────────┘
+  const tresDias = findTemplate('home-bodyweight-3d')!;
+  const [A, B, C] = tresDias.workout.days.map((d) => d.focus);
+  const REC = 'Recuperación activa';
+
+  const focos = (template: typeof tresDias, dias: number) =>
+    adaptDays(template.workout.days, dias).map((d) => d.focus);
+
+  // CA-R1
+  it.each([
+    [1, [A]],
+    [2, [A, B]],
+    [3, [A, B, C]],
+    [4, [A, B, C, A]],
+    [5, [A, B, REC, C, REC]],
+    [6, [A, B, REC, C, A, REC]],
+    [7, [A, B, REC, C, A, REC, REC]],
+  ])('de 3 días a %i', (dias, esperado) => {
+    expect(focos(tresDias, dias)).toEqual(esperado);
+  });
+
+  it('renumera los días, recuperación incluida', () => {
+    expect(adaptDays(tresDias.workout.days, 7).map((d) => d.dayNumber)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('el día de recuperación no necesita equipo', () => {
+    const recuperacion = adaptDays(tresDias.workout.days, 5).find((d) => d.focus === REC)!;
+    const nombres = recuperacion.exercises.map((e) => e.name.toLowerCase()).join(' ');
+    expect(nombres).not.toMatch(/mancuerna|barra|banda|m[aá]quina|polea|kettlebell/);
+  });
+
+  // CA-R2
+  it('NINGUNA plantilla alargada pasa de max(sus días, 4) sesiones intensas', () => {
+    const fallos: string[] = [];
+    for (const template of TEMPLATES) {
+      const propias = template.workout.days.filter((d) => d.focus !== REC).length;
+      for (let dias = template.daysPerWeek + 1; dias <= 7; dias += 1) {
+        const intensas = focos(template, dias).filter((f) => f !== REC).length;
+        if (intensas > Math.max(propias, 4)) fallos.push(`${template.id} a ${dias}: ${intensas}`);
+      }
+    }
+    expect(fallos).toEqual([]);
+  });
+
+  it('una plantilla con más de 4 conserva las suyas y añade recuperación', () => {
+    const cinco = findTemplate('upper-lower-full-5d')!;
+    const resultado = focos(cinco, 7);
+
+    expect(resultado.filter((f) => f !== REC)).toEqual(cinco.workout.days.map((d) => d.focus));
+    expect(resultado.filter((f) => f === REC)).toHaveLength(2);
+  });
+
+  it('una de 1 día a 5: la repite hasta 3 y descansa entre medias', () => {
+    const uno = findTemplate('full-body-1d')!;
+    const [X] = uno.workout.days.map((d) => d.focus);
+    expect(focos(uno, 5)).toEqual([X, X, REC, X, REC]);
+  });
+
+  // CA-R3
+  it('al acortar no cambia nada: los primeros días', () => {
+    const seis = findTemplate('push-pull-legs-6d')!;
+    expect(focos(seis, 5)).toEqual(seis.workout.days.slice(0, 5).map((d) => d.focus));
+  });
+
+  // CA-R4
+  it('el aviso dice cuántos días de recuperación se agregaron', () => {
+    const constraints = { daysPerWeek: 7, hasLimitations: false };
+    const result = validateDraft(applyTemplate(tresDias, constraints), constraints);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.warnings[0]).toMatch(/3 d[ií]as de recuperaci[oó]n activa/);
+  });
+
+  it('sin recuperación agregada, el aviso no la menciona', () => {
+    const constraints = { daysPerWeek: 4, hasLimitations: false };
+    const result = validateDraft(applyTemplate(tresDias, constraints), constraints);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.workout.warnings[0]).not.toMatch(/recuperaci[oó]n/);
   });
 });
