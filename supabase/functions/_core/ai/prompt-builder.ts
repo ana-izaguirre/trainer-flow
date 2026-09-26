@@ -200,6 +200,22 @@ export function buildPrompt(request: AIRequest): string {
     `- sets entre ${WORKOUT_LIMITS.sets.min} y ${WORKOUT_LIMITS.sets.max}.`,
     `- restSeconds entre ${WORKOUT_LIMITS.restSeconds.min} y ${WORKOUT_LIMITS.restSeconds.max}.`,
     `- La sesión completa tiene que caber en ${request.sessionMinutes} minutos.`,
+    // SPEC-029 regla 9. La app pone su propio formato (negritas, numeración,
+    // descanso en palabras) encima de estos campos: el modelo entrega texto
+    // plano y corto, no Markdown ni la presentación ya armada.
+    '',
+    'ESTILO, sobre cada campo (la app ya se encarga del formato visual):',
+    `- summary: una o dos frases, máximo 200 caracteres, hablándole al cliente`,
+    `  de tú. NO menciones lesiones, condiciones ni fármacos: eso va en`,
+    `  warnings, que el cliente no ve.`,
+    `- focus: de 2 a 4 palabras (por ejemplo «Empuje» o «Pierna y glúteo»).`,
+    `- name: solo el nombre del ejercicio, sin series ni explicaciones.`,
+    `- reps: solo el número o el rango (por ejemplo «8-10», «12», «30 s»).`,
+    `- notes: una indicación técnica de máximo 80 caracteres, o vacío. No`,
+    `  repitas ahí las series ni el descanso.`,
+    `- warnings: una frase corta por cada cosa que tuviste en cuenta.`,
+    `- Texto plano en todos los campos: sin **negritas**, sin viñetas, sin`,
+    `  emojis.`,
   );
 
   return partes.join('\n');

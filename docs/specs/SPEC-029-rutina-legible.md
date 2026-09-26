@@ -2,9 +2,21 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | APROBADA |
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 26/09/2026 |
 | **Depende de** | SPEC-002, SPEC-005, SPEC-008 |
 | **Sesiones** | S-43 |
+
+## Resultado
+
+| Pieza | Dónde | Estado |
+|---|---|---|
+| Bloques de ejercicio, cabecera de día, limpieza de Markdown | `_core/telegram/format.ts` | ✅ CA-1 a CA-5, 100% cobertura |
+| Descanso en palabras y reps con en dash | `formatExerciseBlock` | ✅ CA-2, CA-3 |
+| Vista del cliente con la misma numeración | `_core/telegram/client-format.ts` | ✅ CA-5 |
+| Mensajes largos partidos por bloque, botones en el último | `packBlocks`, `sendLongMessage` | ✅ CA-6 |
+| Reglas de estilo al modelo, después del texto libre | `_core/ai/prompt-builder.ts` | ✅ CA-7 |
+| Todos los envíos de rutina usan `sendLongMessage` | `delivery.ts`, `router.ts`, `editor-session.ts`, `generate-version.ts`, `creation/flows.ts` | ✅ |
+| Detector de MarkdownV2 sobre todo mensaje nuevo | `tests/integration/security.test.ts`, E2E | ✅ CA-9 |
 
 ## 1. Objetivo
 

@@ -14,6 +14,7 @@
  */
 import type { Identity } from '../domain/identity.ts';
 import { formatForClient } from '../telegram/client-format.ts';
+import { sendLongMessage } from '../telegram/format.ts';
 import { buildKeyboard, CLIENT_ACTIONS } from '../telegram/keyboard.ts';
 import type { ClientDetail, QueryRepo } from '../ports/query-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
@@ -114,7 +115,9 @@ async function atenderCliente(
       return { kind: 'answered', command, messages: 1 };
     }
 
-    await deps.sender.sendMessage(
+    // SPEC-029 §6: la misma partición por bloques que en la entrega.
+    await sendLongMessage(
+      deps.sender,
       actor.telegramChatId,
       formatForClient(rutina.content, { clientName: rutina.clientName, plan: rutina.plan }),
       // Los mismos botones que traía al entregarse: sin ellos, «pedir un

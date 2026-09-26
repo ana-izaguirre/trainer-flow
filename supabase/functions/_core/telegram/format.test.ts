@@ -1,12 +1,26 @@
 /**
- * SPEC-003 reglas 4 y 5 — formateo de mensajes para Telegram.
+ * SPEC-003 reglas 4 y 5, SPEC-029 — formateo de mensajes para Telegram.
  *
  * Dos límites que Telegram no perdona: 4096 caracteres por mensaje, y
  * MarkdownV2 rompe el mensaje entero si un carácter especial va sin escapar.
+ *
+ * SPEC-029 además exige que se LEA bien: bloques por ejercicio, series y
+ * descanso en palabras, y nada del Markdown que el modelo mete por costumbre.
  */
-import { describe, expect, it } from 'vitest';
-import type { Workout } from '../domain/workout.ts';
-import { TELEGRAM_MAX_MESSAGE, escapeMarkdownV2, formatWorkout, splitMessage } from './format.ts';
+import { describe, expect, it, vi } from 'vitest';
+import type { Exercise, Workout, WorkoutDay } from '../domain/workout.ts';
+import type { TelegramSender } from '../ports/telegram-ports.ts';
+import {
+  cleanFreeText,
+  escapeMarkdownV2,
+  formatDayHeader,
+  formatExerciseBlock,
+  formatWorkout,
+  packBlocks,
+  sendLongMessage,
+  splitMessage,
+  TELEGRAM_MAX_MESSAGE,
+} from './format.ts';
 
 // ---------------------------------------------------------------------------
 
@@ -31,7 +45,6 @@ describe('escapeMarkdownV2', () => {
   });
 
   it('no escapa dos veces una barra ya presente', () => {
-    // La barra invertida también es especial y se escapa una sola vez.
     expect(escapeMarkdownV2('a\\b')).toBe('a\\\\b');
   });
 
@@ -39,7 +52,6 @@ describe('escapeMarkdownV2', () => {
     expect(escapeMarkdownV2('')).toBe('');
   });
 
-  // El nombre del cliente viene de Tally: es texto que escribe un desconocido.
   it('neutraliza un nombre hostil sin perder el contenido', () => {
     const escapado = escapeMarkdownV2('*Ana* [click](http://malo.com)');
 
@@ -71,7 +83,6 @@ describe('splitMessage', () => {
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) {
       for (const linea of chunk.split('\n')) {
-        // Ninguna línea quedó partida por la mitad.
         expect(linea === '' || lineas.includes(linea)).toBe(true);
       }
     }
@@ -102,6 +113,114 @@ describe('splitMessage', () => {
   it('devuelve una lista vacía ante texto vacío', () => {
     expect(splitMessage('')).toEqual([]);
     expect(splitMessage('   ')).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPEC-029 — limpieza del texto libre de la IA
+
+describe('cleanFreeText', () => {
+  it('quita la negrita de Markdown sin perder el texto', () => {
+    expect(cleanFreeText('Rutina de **hipertrofia** clásica')).toBe('Rutina de hipertrofia clásica');
+  });
+
+  it('quita el subrayado de Markdown', () => {
+    expect(cleanFreeText('__importante__ leer esto')).toBe('importante leer esto');
+  });
+
+  it('quita comillas invertidas', () => {
+    expect(cleanFreeText('usa el `rack` de sentadilla')).toBe('usa el rack de sentadilla');
+  });
+
+  it('quita viñetas al inicio de línea, de los tres estilos', () => {
+    expect(cleanFreeText('- primero')).toBe('primero');
+    expect(cleanFreeText('* segundo')).toBe('segundo');
+    expect(cleanFreeText('• tercero')).toBe('tercero');
+  });
+
+  it('no toca un guion que no es viñeta', () => {
+    expect(cleanFreeText('press inclinado 30-45 grados')).toBe('press inclinado 30-45 grados');
+  });
+
+  it('recorta espacios sobrantes en los extremos', () => {
+    expect(cleanFreeText('  con espacios  ')).toBe('con espacios');
+  });
+
+  it('deja intacto un texto ya limpio', () => {
+    expect(cleanFreeText('Sube el peso cada semana')).toBe('Sube el peso cada semana');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPEC-029 CA-2 — el descanso, en palabras
+
+describe('formatExerciseBlock', () => {
+  const base: Exercise = { name: 'Sentadilla', sets: 4, reps: '8-10', restSeconds: 90, notes: null };
+
+  it('el nombre va numerado y en negrita', () => {
+    expect(formatExerciseBlock(base, 3)).toContain('*3\\. Sentadilla*');
+  });
+
+  it('series y reps con el signo ×, sin la x pegada', () => {
+    expect(formatExerciseBlock(base, 1)).toContain('4 × 8–10');
+  });
+
+  it('el guion entre dos números de reps se vuelve un en dash', () => {
+    expect(formatExerciseBlock({ ...base, reps: '8-10' }, 1)).toContain('8–10');
+  });
+
+  it('un rango que no es numérico no se toca', () => {
+    expect(formatExerciseBlock({ ...base, reps: 'AMRAP' }, 1)).toContain('AMRAP');
+  });
+
+  it.each([
+    [0, 'sin descanso'],
+    [45, '45 s'],
+    [60, '1 min'],
+    [90, '1 min 30 s'],
+    [120, '2 min'],
+    [150, '2 min 30 s'],
+  ])('restSeconds %i se lee «%s»', (segundos, esperado) => {
+    expect(formatExerciseBlock({ ...base, restSeconds: segundos }, 1)).toContain(esperado);
+  });
+
+  it('la nota va con 💡 y sin cursiva', () => {
+    const texto = formatExerciseBlock({ ...base, notes: 'Baja controlado' }, 1);
+    expect(texto).toContain('💡 Baja controlado');
+    expect(texto).not.toContain('_Baja controlado_');
+  });
+
+  it('sin nota, no deja una línea de más', () => {
+    const texto = formatExerciseBlock(base, 1);
+    expect(texto.split('\n')).toHaveLength(2);
+  });
+
+  it('una nota vacía o solo espacios tampoco deja línea', () => {
+    expect(formatExerciseBlock({ ...base, notes: '   ' }, 1).split('\n')).toHaveLength(2);
+  });
+
+  it('limpia y escapa el nombre y la nota', () => {
+    const texto = formatExerciseBlock(
+      { ...base, name: '**Press** (inclinado)', notes: '- baja despacio' },
+      1,
+    );
+    expect(texto).toContain('Press \\(inclinado\\)');
+    expect(texto).not.toContain('**');
+    expect(texto).toContain('💡 baja despacio');
+  });
+});
+
+describe('formatDayHeader', () => {
+  const day: WorkoutDay = { dayNumber: 2, focus: 'Tren superior', exercises: [] };
+
+  it('lleva el emoji, el número y el foco, en negrita', () => {
+    expect(formatDayHeader(day)).toBe('📅 *Día 2 · Tren superior*');
+  });
+
+  it('limpia y escapa el foco', () => {
+    expect(formatDayHeader({ ...day, focus: '**Empuje** (pecho)' })).toBe(
+      '📅 *Día 2 · Empuje \\(pecho\\)*',
+    );
   });
 });
 
@@ -138,15 +257,14 @@ describe('formatWorkout', () => {
     expect(texto).toContain('Remo');
   });
 
-  it('muestra series, repeticiones y descanso', () => {
+  it('muestra series, repeticiones y descanso ya en palabras', () => {
     const texto = formatWorkout(RUTINA, { clientName: 'Carlos', versionNumber: 1 });
-    expect(texto).toContain('4x8\\-10');
-    expect(texto).toContain('90');
+    expect(texto).toContain('4 × 8–10 · descanso 1 min 30 s');
   });
 
-  it('destaca los avisos de limitaciones', () => {
+  it('destaca los avisos de limitaciones bajo su propio título', () => {
     const texto = formatWorkout(RUTINA, { clientName: 'Carlos', versionNumber: 1 });
-    expect(texto).toContain('⚠️');
+    expect(texto).toContain('⚠️ *Tenido en cuenta*');
     expect(texto).toContain('hombro');
   });
 
@@ -157,7 +275,6 @@ describe('formatWorkout', () => {
   it('numera los ejercicios para poder referirlos en /quitar', () => {
     const texto = formatWorkout(RUTINA, { clientName: 'Carlos', versionNumber: 1 });
 
-    // El punto va escapado: en MarkdownV2 es un carácter especial.
     expect(texto).toContain('1\\. Press banca');
     expect(texto).toContain('2\\. Press militar');
   });
@@ -192,7 +309,77 @@ describe('formatWorkout', () => {
     expect(formatWorkout(sinAvisos, { clientName: 'C', versionNumber: 1 })).not.toContain('⚠️');
   });
 
-  it('el resultado dividido cabe siempre en mensajes de Telegram', () => {
+  it('limpia el Markdown que mete la IA en el resumen y el foco', () => {
+    const conMarkdown: Workout = {
+      ...RUTINA,
+      summary: 'Rutina de **hipertrofia**',
+      days: [{ ...RUTINA.days[0]!, focus: '__Empuje__' }],
+    };
+    const texto = formatWorkout(conMarkdown, { clientName: 'C', versionNumber: 1 });
+    expect(texto).not.toContain('**');
+    expect(texto).not.toContain('__');
+    expect(texto).toContain('hipertrofia');
+  });
+
+  it('sin resumen ni foco no deja dobles saltos de línea', () => {
+    // No debería pasar en la práctica (el esquema lo exige), pero un
+    // resumen vacío no debe dejar el mensaje con huecos raros.
+    const texto = formatWorkout({ ...RUTINA, summary: '' }, { clientName: 'C', versionNumber: 1 });
+    expect(texto).not.toContain('\n\n\n');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPEC-029 §6 — mensajes largos
+
+describe('packBlocks', () => {
+  it('deja intacto un texto corto', () => {
+    expect(packBlocks('uno\n\ndos')).toEqual(['uno\n\ndos']);
+  });
+
+  it('devuelve una lista vacía ante texto vacío', () => {
+    expect(packBlocks('')).toEqual([]);
+    expect(packBlocks('   ')).toEqual([]);
+  });
+
+  it('nunca parte un bloque a la mitad', () => {
+    const bloques = Array.from({ length: 50 }, (_, i) => `Bloque ${i}\nsegunda línea del ${i}`);
+    const chunks = packBlocks(bloques.join('\n\n'), 200);
+
+    for (const bloque of bloques) {
+      const enUnSoloChunk = chunks.some((c) => c.includes(bloque));
+      expect(enUnSoloChunk).toBe(true);
+    }
+  });
+
+  it('ningún chunk supera el límite', () => {
+    const bloques = Array.from({ length: 50 }, (_, i) => `Bloque ${i}\nsegunda línea del ${i}`);
+    const chunks = packBlocks(bloques.join('\n\n'), 200);
+
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('no pierde ningún bloque', () => {
+    const bloques = Array.from({ length: 50 }, (_, i) => `Bloque número ${i}`);
+    const recompuesto = packBlocks(bloques.join('\n\n'), 200).join('\n\n');
+
+    for (const bloque of bloques) {
+      expect(recompuesto).toContain(bloque);
+    }
+  });
+
+  it('un solo bloque más grande que el límite se parte por última instancia', () => {
+    const chunks = packBlocks('x'.repeat(500), 200);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('el resultado de una rutina de 7 días cabe siempre en mensajes de Telegram', () => {
     const grande: Workout = {
       summary: 'Rutina larga',
       warnings: [],
@@ -209,11 +396,82 @@ describe('formatWorkout', () => {
       })),
     };
 
-    const chunks = splitMessage(formatWorkout(grande, { clientName: 'C', versionNumber: 1 }));
+    const chunks = packBlocks(formatWorkout(grande, { clientName: 'C', versionNumber: 1 }));
 
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) {
       expect(chunk.length).toBeLessThanOrEqual(TELEGRAM_MAX_MESSAGE);
     }
+  });
+
+  it('ningún ejercicio queda partido entre dos chunks', () => {
+    const grande: Workout = {
+      summary: 'Rutina larga',
+      warnings: [],
+      days: Array.from({ length: 7 }, (_day, d) => ({
+        dayNumber: d + 1,
+        focus: `Día ${d + 1}`,
+        exercises: Array.from({ length: 15 }, (_ex, e) => ({
+          name: `Ejercicio número ${e + 1} con un nombre bastante largo`,
+          sets: 4,
+          reps: '10-12',
+          restSeconds: 90,
+          notes: 'Una nota razonablemente larga para inflar el mensaje',
+        })),
+      })),
+    };
+
+    const chunks = packBlocks(formatWorkout(grande, { clientName: 'C', versionNumber: 1 }));
+
+    for (let d = 1; d <= 7; d++) {
+      for (let e = 1; e <= 15; e++) {
+        const bloque = `${e}\\. Ejercicio número ${e} con un nombre bastante largo`;
+        expect(chunks.some((c) => c.includes(bloque))).toBe(true);
+      }
+    }
+  });
+});
+
+describe('sendLongMessage', () => {
+  function capturar(): { sender: TelegramSender; enviados: { chatId: number; text: string; keyboard: unknown }[] } {
+    const enviados: { chatId: number; text: string; keyboard: unknown }[] = [];
+    return {
+      enviados,
+      sender: {
+        sendMessage: vi.fn((chatId: number, text: string, keyboard) => {
+          enviados.push({ chatId, text, keyboard: keyboard ?? null });
+          return Promise.resolve();
+        }),
+        answerCallback: vi.fn(() => Promise.resolve()),
+      },
+    };
+  }
+
+  it('un mensaje corto se manda entero, con el teclado', () => {
+    const { sender, enviados } = capturar();
+    return sendLongMessage(sender, 42, 'hola', { inline_keyboard: [] }).then(() => {
+      expect(enviados).toEqual([{ chatId: 42, text: 'hola', keyboard: { inline_keyboard: [] } }]);
+    });
+  });
+
+  it('un mensaje largo se manda en varios envíos, y el teclado va en el último', async () => {
+    const { sender, enviados } = capturar();
+    const bloques = Array.from({ length: 200 }, (_, i) => `Bloque ${i} con relleno para pasar el límite`).join(
+      '\n\n',
+    );
+    const teclado = { inline_keyboard: [[{ text: 'ok', callback_data: 'x' }]] };
+
+    await sendLongMessage(sender, 7, bloques, teclado);
+
+    expect(enviados.length).toBeGreaterThan(1);
+    for (const [i, envio] of enviados.entries()) {
+      expect(envio.keyboard).toBe(i === enviados.length - 1 ? teclado : null);
+    }
+  });
+
+  it('sin teclado, ningún envío lleva uno', async () => {
+    const { sender, enviados } = capturar();
+    await sendLongMessage(sender, 7, 'hola');
+    expect(enviados[0]!.keyboard).toBeNull();
   });
 });
