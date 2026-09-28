@@ -99,7 +99,7 @@ jobs:
             echo "reason=$(echo "$touched" | wc -l) file(s) under supabase/" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         if: steps.changes.outputs.any == 'true'
         with:
           version: latest
