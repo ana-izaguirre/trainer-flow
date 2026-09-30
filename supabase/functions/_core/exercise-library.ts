@@ -94,15 +94,22 @@ function searchUrl(name: string): string {
 }
 
 /**
- * `REPDB_EXERCISE_SLUGS` por nombre en minúsculas: el `name_es` de RepDB
- * no sigue un único estilo de mayúsculas (repdb-exercises.ts), y nada
- * garantiza cómo capitaliza el nombre quien genera la rutina. Se
- * construye una sola vez, al cargar el módulo — la búsqueda en
- * `exerciseUrl` queda en O(1), no en un recorrido de las 601 entradas.
+ * Busca en `REPDB_EXERCISE_SLUGS` sin distinguir mayúsculas de minúsculas:
+ * el `name_es` de RepDB no sigue un único estilo (repdb-exercises.ts), y
+ * nada garantiza cómo capitaliza el nombre quien genera la rutina.
+ *
+ * El índice se arma en cada llamada, no una vez al cargar el módulo: son
+ * como mucho unas pocas decenas de ejercicios por rutina generada, nada
+ * que justifique guardar un caché — y una constante de módulo aquí cae
+ * fuera de lo que Stryker puede probar (mutation testing de estáticos:
+ * docs/TESTING.md), que es justo el motivo por el que no se hizo así.
  */
-const REPDB_SLUGS_BY_LOWER_NAME: ReadonlyMap<string, string> = new Map(
-  Object.entries(REPDB_EXERCISE_SLUGS).map(([name, slug]) => [name.toLowerCase(), slug]),
-);
+function repdbSlugFor(name: string): string | undefined {
+  const byLowerName = new Map(
+    Object.entries(REPDB_EXERCISE_SLUGS).map(([repdbName, slug]) => [repdbName.toLowerCase(), slug]),
+  );
+  return byLowerName.get(name.toLowerCase());
+}
 
 /**
  * Reglas 2 y 3 de SPEC-019: coincidencia exacta o búsqueda — nunca sin
@@ -116,9 +123,6 @@ const REPDB_SLUGS_BY_LOWER_NAME: ReadonlyMap<string, string> = new Map(
  * RepDB, sin distinguir mayúsculas de minúsculas.
  */
 export function exerciseUrl(name: string): string {
-  const slug =
-    TEMPLATE_EXERCISE_SLUGS[name] !== undefined
-      ? TEMPLATE_EXERCISE_SLUGS[name]
-      : REPDB_SLUGS_BY_LOWER_NAME.get(name.toLowerCase());
+  const slug = TEMPLATE_EXERCISE_SLUGS[name] !== undefined ? TEMPLATE_EXERCISE_SLUGS[name] : repdbSlugFor(name);
   return slug === undefined ? searchUrl(name) : `${REPDB_BASE}/${slug}/`;
 }
