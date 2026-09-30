@@ -19,6 +19,13 @@
 //                      RepDB. Un slug mal elegido llega directo al cliente
 //                      — repdb-exercises.ts es solo el dato y no entra
 //                      aquí (ver su propio comentario de cabecera).
+//   edit-version.ts  → SPEC-004: la edición conversacional. Un fallo de la
+//                      IA aquí NUNCA puede tocar el contenido que ya había
+//                      — es la misma garantía de degradación que generar,
+//                      pero editando en vez de creando.
+//   provider-call.ts → el reintento ante el proveedor de IA, compartido
+//                      entre generar y editar: la regla de qué falla se
+//                      reintenta tiene que ser la MISMA en los dos casos.
 //
 // validate-draft.ts se mutó desde antes (docs/TESTING.md), pero con deuda
 // abierta (mensajes de texto, ~20 guardas redundantes sin documentar aún):
@@ -33,6 +40,8 @@ const REQUIRED_100 = [
   'supabase/functions/_core/telegram/callback-data.ts',
   'supabase/functions/_core/telegram/navigation.ts',
   'supabase/functions/_core/exercise-library.ts',
+  'supabase/functions/_core/ai/edit-version.ts',
+  'supabase/functions/_core/ai/provider-call.ts',
 ];
 
 const reportPath = process.argv[2] ?? 'reports/mutation/mutation.json';

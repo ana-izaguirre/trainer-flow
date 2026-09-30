@@ -157,8 +157,11 @@ El *mutation score* es el porcentaje de mutantes que murieron.
 cobertura (`authorization.ts`, `state-machine.ts`, `validate-draft.ts`), dos
 de SPEC-031 (`callback-data.ts`: parsea el `callback_data` de cualquier
 botón, dato no confiable; `navigation.ts`: decide qué ve cada rol al navegar
-la rutina) y uno de SPEC-019 (`exercise-library.ts`: decide si un ejercicio
-enlaza a la librería real o a una búsqueda).
+la rutina), uno de SPEC-019 (`exercise-library.ts`: decide si un ejercicio
+enlaza a la librería real o a una búsqueda) y dos de SPEC-004
+(`edit-version.ts`: la edición conversacional — un fallo NUNCA puede tocar
+el contenido que ya había; `provider-call.ts`: el reintento ante la IA,
+compartido con generar).
 
 ```bash
 pnpm test:mutation                 # ~1,5 min; reporte en reports/mutation/index.html
@@ -180,6 +183,8 @@ Actions. No en cada PR: ejecuta los tests cientos de veces.
 | `callback-data.ts` | **100%** | 100% (74/74) | Parsea `callback_data`, dato no confiable de cualquier botón |
 | `navigation.ts` | **100%** | 100% (63/63) | Decide qué ve cada rol al navegar la rutina (SPEC-031) |
 | `exercise-library.ts` | **100%** | 100% (66/66) | Decide si un ejercicio enlaza a RepDB o a una búsqueda (SPEC-019) |
+| `edit-version.ts` | **100%** | 100% (59/59) | Un fallo de la IA al editar no puede tocar el contenido que ya había (SPEC-004) |
+| `provider-call.ts` | **100%** | 100% (8/8) | El reintento ante la IA, compartido entre generar y editar |
 | `validate-draft.ts` | Se reporta | 83,9% (281/335) | Deuda conocida, abajo |
 
 Stryker solo admite umbrales globales; `scripts/mutation-policy.mjs` los

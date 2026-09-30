@@ -26,6 +26,12 @@ export interface GenerationRecord {
   readonly provider: string;
   readonly model: string;
   readonly versionId: string;
+  /**
+   * `ai_generations.operation` — el `check` ya distinguía `'generate'` de
+   * `'edit'` desde la migración inicial. SPEC-004 es quien empieza a usar
+   * `'edit'`: antes de eso, todo era `'generate'`.
+   */
+  readonly operation: 'generate' | 'edit';
 }
 
 export type GenerationOutcome =

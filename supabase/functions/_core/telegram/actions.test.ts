@@ -44,7 +44,10 @@ const RUTINA = {
   warnings: [],
 };
 
-function version(state: VersionState = 'DRAFT'): VersionForAction {
+function version(
+  state: VersionState = 'DRAFT',
+  overrides: Partial<VersionForAction> = {},
+): VersionForAction {
   return {
     versionId: 'v1',
     state,
@@ -59,6 +62,8 @@ function version(state: VersionState = 'DRAFT'): VersionForAction {
     // tests de aprobar midan la autorización, no la validación.
     constraints: { daysPerWeek: 1, hasLimitations: false },
     plan: { goal: 'Fuerza', daysPerWeek: 1, sessionMinutes: 60 },
+    editCount: 0,
+    ...overrides,
   };
 }
 
@@ -75,6 +80,7 @@ function espia(
     version?: VersionForAction | null;
     transicionFalla?: boolean;
     disparoFalla?: boolean;
+    startEditWaitFalla?: boolean;
   } = {},
 ): Espia {
   const pasos: string[] = [];
@@ -89,6 +95,10 @@ function espia(
     transition: (_v, from, to) => {
       pasos.push(`transition:${from}->${to}`);
       return Promise.resolve(!(opciones.transicionFalla ?? false));
+    },
+    startEditWait: () => {
+      pasos.push('startEditWait');
+      return Promise.resolve(!(opciones.startEditWaitFalla ?? false));
     },
   };
 
@@ -304,31 +314,67 @@ describe('lo que todavía no está', () => {
   });
 });
 
-describe('«✏️ Editar» redirige, en vez de fingir', () => {
-  // Antes decía «Eso todavía no está listo» para cualquier estado: cierto,
-  // pero inútil. El editor de verdad ya existe (/ver); solo faltaba decirlo.
+describe('«✏️ Editar» — SPEC-004', () => {
+  it('sobre un DRAFT con margen, prende la espera y pregunta qué cambiar', async () => {
+    const { deps, pasos, mensajes } = espia({ version: version('DRAFT') });
 
-  it('sobre un DRAFT, manda al editor de verdad', async () => {
-    const { deps, mensajes } = espia({ version: version('DRAFT') });
+    const outcome = await handleAction(pulsar('edit'), TRAINER, deps);
+
+    expect(outcome).toEqual({ kind: 'editing', versionId: 'v1' });
+    expect(pasos).toContain('startEditWait');
+    expect(mensajes).toHaveLength(1);
+    expect(mensajes[0]).toContain('María Ruiz');
+    expect(mensajes[0]).not.toContain('/ver');
+  });
+
+  it('sin evaluación de Tally (plantilla o manual), sigue mandando al editor de siempre', async () => {
+    const { deps, pasos, mensajes } = espia({
+      version: version('DRAFT', { constraints: null }),
+    });
 
     const outcome = await handleAction(pulsar('edit'), TRAINER, deps);
 
     expect(outcome).toEqual({ kind: 'not_implemented', action: 'edit' });
-    expect(mensajes).toHaveLength(1);
+    expect(pasos).not.toContain('startEditWait');
     expect(mensajes[0]).toContain('/ver');
   });
 
+  it('con 5 ediciones ya hechas, NO prende la espera: sugiere rechazar y regenerar', async () => {
+    const { deps, pasos, mensajes } = espia({
+      version: version('DRAFT', { editCount: 5 }),
+    });
+
+    const outcome = await handleAction(pulsar('edit'), TRAINER, deps);
+
+    expect(outcome).toEqual({ kind: 'invalid_action', state: 'DRAFT', action: 'edit' });
+    expect(pasos).not.toContain('startEditWait');
+    expect(mensajes[0]?.toLowerCase()).toMatch(/rech/);
+  });
+
   it.each(['NEW', 'GENERATING', 'APPROVED', 'SENT', 'REJECTED'] as const)(
-    'sobre un botón viejo — la rutina ya está en %s — dice en qué está, no manda a /ver',
+    'sobre un botón viejo — la rutina ya está en %s — dice en qué está, no prende nada',
     async (estado) => {
-      const { deps, mensajes } = espia({ version: version(estado) });
+      const { deps, pasos, mensajes } = espia({ version: version(estado) });
 
       const outcome = await handleAction(pulsar('edit'), TRAINER, deps);
 
-      expect(outcome).toEqual({ kind: 'not_implemented', action: 'edit' });
+      expect(outcome).toEqual({ kind: 'invalid_action', state: estado, action: 'edit' });
+      expect(pasos).not.toContain('startEditWait');
       expect(mensajes[0]).not.toContain('/ver');
     },
   );
+
+  it('si alguien se adelantó (ya no está en DRAFT al prender la espera), no finge que preguntó', async () => {
+    const { deps, mensajes } = espia({
+      version: version('DRAFT'),
+      startEditWaitFalla: true,
+    });
+
+    const outcome = await handleAction(pulsar('edit'), TRAINER, deps);
+
+    expect(outcome).toEqual({ kind: 'already_processed' });
+    expect(mensajes[0]).toContain('ya fue procesada');
+  });
 
   it('no transiciona nada: seguir en DRAFT tras "editar" no es un evento de la máquina', async () => {
     const { deps, pasos } = espia({ version: version('DRAFT') });

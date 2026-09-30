@@ -63,7 +63,7 @@ const NIVEL: Readonly<Record<Level, string>> = {
  */
 const REINTENTABLES: readonly AIFailureReason[] = ['API_ERROR', 'TIMEOUT'];
 
-const MOTIVO: Readonly<Record<AIFailureReason, string>> = {
+export const MOTIVO: Readonly<Record<AIFailureReason, string>> = {
   RATE_LIMITED: 'La IA no tiene margen de cuota ahora mismo.',
   TIMEOUT: 'La IA tardó demasiado en responder.',
   API_ERROR: 'La IA no respondió.',
@@ -217,5 +217,25 @@ export function buildGenerationFailed(
       sePuedeReintentar ? RETRYABLE_FALLBACK_ACTIONS : FALLBACK_ACTIONS,
       versionId,
     ),
+  };
+}
+
+/**
+ * SPEC-004 — La IA no pudo editar. A diferencia de `buildGenerationFailed`,
+ * esta versión YA tenía contenido y sigue en `DRAFT`: no hay «seguir con
+ * plantilla o a mano» porque no está en `NEW`. Se conserva tal cual estaba.
+ */
+export function buildEditFailed(
+  reason: AIFailureReason,
+  clientName: string,
+  versionId: string,
+): Notification {
+  return {
+    text: [
+      `⚠️ ${escapeMarkdownV2(MOTIVO[reason])}`,
+      '',
+      `La rutina de ${escapeMarkdownV2(clientName)} no cambió\\. Puedes reintentar la edición\\.`,
+    ].join('\n'),
+    keyboard: buildKeyboard(DRAFT_ACTIONS, versionId),
   };
 }

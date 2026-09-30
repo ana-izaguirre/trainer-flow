@@ -15,7 +15,9 @@
     "supabase/functions/_core/domain/validate-draft.ts",
     "supabase/functions/_core/telegram/navigation.ts",
     "supabase/functions/_core/telegram/callback-data.ts",
-    "supabase/functions/_core/exercise-library.ts"
+    "supabase/functions/_core/exercise-library.ts",
+    "supabase/functions/_core/ai/edit-version.ts",
+    "supabase/functions/_core/ai/provider-call.ts"
   ],
   "coverageAnalysis": "perTest",
   "reporters": [

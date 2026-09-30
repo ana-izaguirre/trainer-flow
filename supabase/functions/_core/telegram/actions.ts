@@ -49,6 +49,8 @@ export type ActionOutcome =
   | { readonly kind: 'generating'; readonly versionId: string }
   | { readonly kind: 'approved'; readonly versionId: string }
   | { readonly kind: 'rejected'; readonly versionId: string }
+  /** SPEC-004 — se prendió la espera de instrucción. El resultado llega aparte. */
+  | { readonly kind: 'editing'; readonly versionId: string }
   | { readonly kind: 'not_implemented'; readonly action: CallbackAction };
 
 export interface ActionDeps {
@@ -87,6 +89,9 @@ const ESTADO_EN_PALABRAS: Readonly<Record<VersionState, string>> = {
  */
 const RESPUESTA_NEUTRA = 'No puedo hacer eso con esta rutina\\.';
 
+/** SPEC-004 regla 9. Comparte la columna con el editor manual (SPEC-008). */
+const MAX_EDICIONES = 5;
+
 export async function handleAction(
   request: ActionRequest,
   actor: Identity,
@@ -108,20 +113,52 @@ export async function handleAction(
   // ── El botón de generar, antes del despacho normal ─────────────────────
   if (request.action === 'generate') return generar(version, actor, deps);
 
-  // ── «✏️ Editar», que redirige en vez de fingir ──────────────────────────
-  // El flujo conversacional que debía completar este botón nunca se
-  // construyó (SPEC-004 sigue PARCIAL). Decir «no está listo» y nada más era
-  // peor que la verdad: el editor de verdad —/ver, con /add, /quitar, /nota
-  // y /dia— ya existe (SPEC-008/SPEC-022) y hace exactamente esto. Solo
-  // faltaba no mentirle al entrenador sobre cómo llegar ahí.
+  // ── «✏️ Editar»: prende la espera de instrucción ────────────────────────
+  // El siguiente mensaje de TEXTO LIBRE de este entrenador se interpreta
+  // como la instrucción (webhook.ts + _core/ai/edit-version.ts). Aquí solo
+  // se decide si corresponde preguntar.
   if (request.action === 'edit') {
+    if (version.state !== 'DRAFT') {
+      await deps.sender.sendMessage(
+        actor.telegramChatId,
+        `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}\\.`,
+      );
+      return { kind: 'invalid_action', state: version.state, action: 'edit' };
+    }
+
+    // Sin evaluación de Tally no hay `goal`/`level`/etc. con qué llamar a la
+    // IA (una de plantilla o manual, SPEC-008 §11): sigue siendo el editor
+    // de siempre, sin prender ninguna espera que nunca se resolvería.
+    if (version.constraints === null) {
+      await deps.sender.sendMessage(
+        actor.telegramChatId,
+        'Para editarla escribe /ver: desde ahí se retoca con /add, /quitar, /nota y /dia\\.',
+      );
+      return { kind: 'not_implemented', action: 'edit' };
+    }
+
+    // Regla 9: con 5 ya hechas, no se pregunta nada — ni siquiera se prende
+    // la espera. Reescribir la instrucción no cambia el límite.
+    if (version.editCount >= MAX_EDICIONES) {
+      await deps.sender.sendMessage(
+        actor.telegramChatId,
+        `Ya editaste esta rutina ${MAX_EDICIONES} veces\\. Mejor recházala y arranca una nueva\\.`,
+      );
+      return { kind: 'invalid_action', state: version.state, action: 'edit' };
+    }
+
+    // Guarda de concurrencia, igual que `transition`: si alguien se
+    // adelantó (aprobó o rechazó) entre que se buscó la versión y aquí.
+    if (!(await deps.repo.startEditWait(version.versionId))) {
+      await deps.sender.sendMessage(actor.telegramChatId, 'Esta rutina ya fue procesada\\.');
+      return { kind: 'already_processed' };
+    }
+
     await deps.sender.sendMessage(
       actor.telegramChatId,
-      version.state === 'DRAFT'
-        ? 'Para editarla escribe /ver: desde ahí se retoca con /add, /quitar, /nota y /dia\\.'
-        : `No puedo: esta rutina ${ESTADO_EN_PALABRAS[version.state]}\\.`,
+      `¿Qué quieres cambiar en la rutina de ${escapeMarkdownV2(version.clientName)}?`,
     );
-    return { kind: 'not_implemented', action: 'edit' };
+    return { kind: 'editing', versionId: version.versionId };
   }
 
   const evento = EVENTO[request.action];

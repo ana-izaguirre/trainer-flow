@@ -21,6 +21,7 @@ import type {
   GenerationRepo,
   VersionForGeneration,
 } from '../_core/ports/generation-ports.ts';
+import type { EditRepo } from '../_core/ports/edit-ports.ts';
 import type { Level } from '../_core/domain/assessment.ts';
 import type { VersionState } from '../_core/domain/version.ts';
 import type { Workout } from '../_core/domain/workout.ts';
@@ -374,11 +375,14 @@ export function createUpdateTokenRepo(db: Db): UpdateTokenRepo {
 // Generación con IA (SPEC-002)
 // -----------------------------------------------------------------------------
 
-export function createGenerationRepo(db: Db, requestId: string): GenerationRepo {
+/**
+ * Las tres operaciones sobre `ai_generations` que generar (SPEC-002) y
+ * editar (SPEC-004) comparten: es la MISMA tabla, la MISMA cuota — solo
+ * cambia `operation` entre `'generate'` y `'edit'`.
+ */
+function sharedGenerationLog(db: Db, requestId: string) {
   return {
-    findVersion: (versionId) => findVersionForGeneration(db, versionId),
-
-    async recentGenerations(windowMinutes) {
+    async recentGenerations(windowMinutes: number): Promise<readonly Date[]> {
       const desde = new Date(Date.now() - windowMinutes * 60_000).toISOString();
 
       // Solo las fechas: el rate limit cuenta llamadas, no le importa qué
@@ -393,13 +397,13 @@ export function createGenerationRepo(db: Db, requestId: string): GenerationRepo 
       return (data ?? []).map((fila) => new Date(fila.created_at as string));
     },
 
-    async startGeneration(record: GenerationRecord) {
+    async startGeneration(record: GenerationRecord): Promise<number> {
       const { data, error } = await db
         .from('ai_generations')
         .insert({
           provider: record.provider,
           model: record.model,
-          operation: 'generate',
+          operation: record.operation,
           version_id: record.versionId,
           request_id: requestId,
           status: 'GENERATING',
@@ -408,13 +412,13 @@ export function createGenerationRepo(db: Db, requestId: string): GenerationRepo 
         .single();
 
       if (error !== null || data === null) {
-        throw new Error(`No se pudo registrar la generación: ${error?.code ?? 'sin datos'}`);
+        throw new Error(`No se pudo registrar la llamada a la IA: ${error?.code ?? 'sin datos'}`);
       }
 
       return data.id as number;
     },
 
-    async finishGeneration(id, outcome: GenerationOutcome) {
+    async finishGeneration(id: number, outcome: GenerationOutcome): Promise<void> {
       const comun = { latency_ms: outcome.latencyMs, finished_at: new Date().toISOString() };
 
       const fila =
@@ -429,11 +433,18 @@ export function createGenerationRepo(db: Db, requestId: string): GenerationRepo 
 
       const { error } = await db.from('ai_generations').update(fila).eq('id', id);
 
-      // Que el cierre falle no puede tumbar una generación que sí funcionó,
-      // pero tampoco puede pasar en silencio: la fila queda en GENERATING para
+      // Que el cierre falle no puede tumbar una llamada que sí funcionó, pero
+      // tampoco puede pasar en silencio: la fila queda en GENERATING para
       // siempre y la cuota deja de cuadrar.
-      if (error !== null) throw new Error(`No se pudo cerrar la generación: ${error.code}`);
+      if (error !== null) throw new Error(`No se pudo cerrar el registro: ${error.code}`);
     },
+  };
+}
+
+export function createGenerationRepo(db: Db, requestId: string): GenerationRepo {
+  return {
+    findVersion: (versionId) => findVersionForGeneration(db, versionId),
+    ...sharedGenerationLog(db, requestId),
 
     async transition(versionId, from, to) {
       // `apply_version_transition` lleva la guarda de concurrencia: devuelve
@@ -736,6 +747,8 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
           trainerId: fila.trainer_id as string,
           profileId: (fila.client_profile_id as string | null) ?? null,
         },
+        // SPEC-004 regla 9: con 5, «✏️ Editar» no pregunta nada.
+        editCount: Number(fila.edit_count),
         // `null` si el plan no viene de Tally: entonces al aprobar se valida
         // la forma, no el encaje con unos criterios que no existen.
         constraints:
@@ -769,6 +782,102 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
       });
 
       if (error !== null) throw new Error(`No se pudo aplicar la transición: ${error.code}`);
+
+      return data === true;
+    },
+
+    async startEditWait(versionId) {
+      const { data, error } = await db.rpc('start_edit_instruction', { p_version_id: versionId });
+
+      if (error !== null) throw new Error(`No se pudo prender la espera de edición: ${error.code}`);
+
+      return data === true;
+    },
+  };
+}
+
+// -----------------------------------------------------------------------------
+// La edición conversacional (SPEC-004)
+// -----------------------------------------------------------------------------
+
+/**
+ * Implementa el puerto `EditRepo`.
+ *
+ * `findAwaitingEdit` es el mismo patrón que `findVersionForGeneration`
+ * (SPEC-002): mismas columnas, mismo `AIRequest` armado a mano. La única
+ * diferencia real es la función SQL que RPC-ea (`version_awaiting_edit` en
+ * vez de `version_for_generation`).
+ */
+export function createEditRepo(db: Db, requestId: string): EditRepo {
+  return {
+    async findAwaitingEdit(trainerId) {
+      const { data, error } = await db
+        .rpc('version_awaiting_edit', { p_trainer_id: trainerId })
+        .maybeSingle();
+
+      if (error !== null) throw new Error(`No se pudo leer la espera de edición: ${error.code}`);
+      if (data === null) return null;
+
+      const fila = data;
+      const limitations = (fila.limitations as string | null) ?? null;
+
+      return {
+        versionId: fila.version_id as string,
+        editCount: Number(fila.edit_count),
+        clientName: fila.client_name as string,
+        versionNumber: Number(fila.version_number),
+        request: {
+          goal: fila.goal as string,
+          level: fila.level as Level,
+          daysPerWeek: fila.days_per_week as number,
+          sessionMinutes: fila.session_minutes as number,
+          equipment: fila.equipment as string,
+          limitations,
+          // La instrucción la completa `applyEditInstruction` con el texto
+          // recibido: aquí todavía no se sabe.
+          instruction: null,
+          gender: (fila.gender as string | null) ?? null,
+          age: fila.age === null ? null : Number(fila.age),
+          weightKg: fila.weight_kg === null ? null : Number(fila.weight_kg),
+          heightCm: fila.height_cm === null ? null : Number(fila.height_cm),
+          quitReasons: (fila.quit_reasons as string | null) ?? null,
+          menopauseStage: (fila.menopause_stage as string | null) ?? null,
+          lastWeighed: (fila.last_weighed as string | null) ?? null,
+          chronicConditions: (fila.chronic_conditions as string | null) ?? null,
+          medications: (fila.medications as string | null) ?? null,
+          equipmentDetail: (fila.equipment_detail as string | null) ?? null,
+          lifestyle: (fila.lifestyle as string | null) ?? null,
+          notes: (fila.notes as string | null) ?? null,
+        },
+        constraints: {
+          daysPerWeek: fila.days_per_week as number,
+          hasLimitations: fila.has_limitations as boolean,
+        },
+        trainerChatId: Number(fila.trainer_chat_id),
+      };
+    },
+
+    async cancelEditWait(versionId) {
+      const { error } = await db.rpc('cancel_edit_instruction', { p_version_id: versionId });
+      if (error !== null) throw new Error(`No se pudo cancelar la espera de edición: ${error.code}`);
+    },
+
+    async cancelAnyEditWait(trainerId) {
+      const { error } = await db.rpc('cancel_any_edit_instruction', { p_trainer_id: trainerId });
+      if (error !== null) throw new Error(`No se pudo cancelar la espera de edición: ${error.code}`);
+    },
+
+    ...sharedGenerationLog(db, requestId),
+
+    async saveEditedContent(versionId, workout) {
+      // Misma función SQL que el editor manual (`save_draft_content`): es la
+      // MISMA columna `edit_count`, y las dos apagan la espera al guardar.
+      const { data, error } = await db.rpc('save_draft_content', {
+        p_version_id: versionId,
+        p_content: toJson(workout),
+      });
+
+      if (error !== null) throw new Error(`No se pudo guardar la edición: ${error.code}`);
 
       return data === true;
     },

@@ -24,17 +24,13 @@
 import { validateDraft } from '../domain/validate-draft.ts';
 import { nextState } from '../domain/state-machine.ts';
 import type { VersionState } from '../domain/version.ts';
-import type {
-  AIFailureReason,
-  AIProvider,
-  AIRequest,
-  AIResult,
-} from '../ports/ai-provider.ts';
+import type { AIFailureReason, AIProvider } from '../ports/ai-provider.ts';
 import type { GenerationRepo } from '../ports/generation-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { buildDraftReady, buildGenerationFailed } from '../telegram/notify.ts';
 import { sendLongMessage } from '../telegram/format.ts';
 import type { InlineKeyboard } from '../telegram/keyboard.ts';
+import { callWithRetry } from './provider-call.ts';
 import { checkRateLimit, type RateLimitConfig } from './rate-limit.ts';
 
 export type GenerateOutcome =
@@ -54,14 +50,6 @@ export interface GenerateDeps {
   readonly newTimeoutSignal: () => AbortSignal;
   readonly now: () => Date;
 }
-
-/**
- * Qué fallos merecen un segundo intento.
- *
- * `RATE_LIMITED` no: reintentar sobre una cuota agotada la agota más.
- * `INVALID_OUTPUT` tampoco: la misma petición devolvería la misma basura.
- */
-const REINTENTABLES: readonly AIFailureReason[] = ['API_ERROR', 'TIMEOUT'];
 
 export async function generateVersion(
   versionId: string,
@@ -107,10 +95,11 @@ export async function generateVersion(
     provider: deps.provider.name,
     model: deps.provider.model,
     versionId,
+    operation: 'generate',
   });
 
   const started = deps.now().getTime();
-  const result = await llamarConReintento(deps, version.request);
+  const result = await callWithRetry(deps.provider, version.request, deps.newTimeoutSignal);
   const latencyMs = deps.now().getTime() - started;
 
   // ── 5. Lo que devuelve es dato no confiable ────────────────────────────
@@ -170,20 +159,6 @@ export async function generateVersion(
   await enviar(deps, version.trainerChatId, buildGenerationFailed(reason, versionId));
 
   return { kind: 'generation_failed', reason };
-}
-
-/**
- * Un intento, y uno más solo si el fallo puede salir distinto (regla 8).
- *
- * Cada intento estrena su propio timeout: reusar el primero le daría al
- * segundo lo que quedara del reloj, que puede ser nada.
- */
-async function llamarConReintento(deps: GenerateDeps, request: AIRequest): Promise<AIResult> {
-  const primera = await deps.provider.generate(request, deps.newTimeoutSignal());
-
-  if (primera.ok || !REINTENTABLES.includes(primera.reason)) return primera;
-
-  return deps.provider.generate(request, deps.newTimeoutSignal());
 }
 
 /** Aplica una transición que la máquina de estados ya aprobó. */

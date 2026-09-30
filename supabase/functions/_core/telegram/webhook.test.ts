@@ -26,6 +26,8 @@ import type { ChangeRequestDeps } from '../change-request/flows.ts';
 import type { CreationDeps } from '../creation/flows.ts';
 import type { EditorDeps } from '../creation/editor-session.ts';
 import type { DeliveryDeps } from './delivery.ts';
+import type { AIResult } from '../ports/ai-provider.ts';
+import type { EditRepo } from '../ports/edit-ports.ts';
 import { handleTelegramWebhook, outcomeToStatus } from './webhook.ts';
 
 const SECRET = 'un-secreto-de-webhook-largo-y-aleatorio';
@@ -91,7 +93,11 @@ const FROM = { id: 500, first_name: 'Ana' };
  */
 function vacioActions(): ActionDeps {
   return {
-    repo: { findVersion: () => Promise.resolve(null), transition: () => Promise.resolve(false) },
+    repo: {
+      findVersion: () => Promise.resolve(null),
+      transition: () => Promise.resolve(false),
+      startEditWait: () => Promise.resolve(false),
+    },
     sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
     generation: { trigger: () => Promise.resolve() },
     requestId: 'req-1',
@@ -567,6 +573,83 @@ function fakeUpdates() {
   };
 }
 
+/** SPEC-004: la edición conversacional. Por defecto, nada esperando. */
+function fakeEdit(opciones: { pendiente?: unknown; outcome?: { kind: string } } = {}) {
+  const pasos: string[] = [];
+  return {
+    pasos,
+    deps: {
+      repo: {
+        findAwaitingEdit: () => {
+          pasos.push('findAwaitingEdit');
+          return Promise.resolve((opciones.pendiente ?? null) as never);
+        },
+        cancelEditWait: () => {
+          pasos.push('cancelEditWait');
+          return Promise.resolve();
+        },
+        cancelAnyEditWait: (trainerId: string) => {
+          pasos.push(`cancelAnyEditWait:${trainerId}`);
+          return Promise.resolve();
+        },
+        recentGenerations: () => {
+          pasos.push('recentGenerations');
+          return Promise.resolve([]);
+        },
+        startGeneration: () => {
+          pasos.push('startGeneration');
+          return Promise.resolve(1);
+        },
+        finishGeneration: () => {
+          pasos.push('finishGeneration');
+          return Promise.resolve();
+        },
+        saveEditedContent: () => {
+          pasos.push('saveEditedContent');
+          return Promise.resolve(true);
+        },
+      } as EditRepo,
+      provider: {
+        name: 'x',
+        model: 'x',
+        generate: (): Promise<AIResult> => {
+          pasos.push('generate');
+          return Promise.resolve({
+            ok: true,
+            draft: {
+              source: 'ai',
+              raw: {
+                summary: 'Rutina de fuerza',
+                days: [
+                  {
+                    dayNumber: 1,
+                    focus: 'Empuje',
+                    exercises: [
+                      { name: 'Press banca', sets: 4, reps: '8', restSeconds: 120, notes: null },
+                    ],
+                  },
+                ],
+                warnings: [],
+              },
+            },
+            usage: { tokensIn: 1, tokensOut: 1 },
+          });
+        },
+      },
+      sender: {
+        sendMessage: (_c: number, text: string) => {
+          pasos.push(`sendMessage:${text.slice(0, 30)}`);
+          return Promise.resolve();
+        },
+        answerCallback: () => Promise.resolve(),
+      },
+      rateLimit: { maxCalls: 5, windowMinutes: 60 },
+      newTimeoutSignal: () => new AbortController().signal,
+      now: () => new Date('2026-09-30T12:00:00Z'),
+    },
+  };
+}
+
 function ejecutar(
   body: unknown,
   opts: {
@@ -580,6 +663,7 @@ function ejecutar(
     creation?: ReturnType<typeof fakeCreation>;
     changes?: ReturnType<typeof fakeChanges>;
     updates?: ReturnType<typeof fakeUpdates>;
+    edit?: ReturnType<typeof fakeEdit>;
   } = {},
 ) {
   const repo = opts.repo ?? fakeRepo();
@@ -604,6 +688,7 @@ function ejecutar(
         intake: fakeIntake().deps,
         link: fakeLink().deps,
         updates: (opts.updates ?? fakeUpdates()).deps,
+        edit: (opts.edit ?? fakeEdit()).deps,
       },
     ),
   };
@@ -932,10 +1017,15 @@ describe('los botones se enrutan', () => {
             },
             constraints: { daysPerWeek: 1, hasLimitations: false },
             plan: { goal: 'Fuerza', daysPerWeek: 1, sessionMinutes: 60 },
+            editCount: 0,
           });
         },
         transition: (_v, from, to) => {
           pasos.push(`transition:${from}->${to}`);
+          return Promise.resolve(true);
+        },
+        startEditWait: () => {
+          pasos.push('startEditWait');
           return Promise.resolve(true);
         },
       },
@@ -1231,6 +1321,7 @@ describe('el check-in se enruta', () => {
           return Promise.resolve(null);
         },
         transition: () => Promise.resolve(false),
+        startEditWait: () => Promise.resolve(false),
       },
       sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
       generation: { trigger: () => Promise.resolve() },
@@ -1278,6 +1369,84 @@ describe('el check-in se enruta', () => {
 
     await result;
     expect(checkins.pasos).toEqual([]);
+  });
+});
+
+describe('SPEC-004 — la instrucción de edición, cuando el entrenador escribe suelto', () => {
+  const CLIENTE: Identity = {
+    profileId: 'p-cliente',
+    role: 'client',
+    telegramUserId: 500,
+    telegramChatId: 500,
+  };
+
+  const PENDIENTE = {
+    versionId: 'v1',
+    editCount: 1,
+    clientName: 'Carlos',
+    versionNumber: 1,
+    request: {
+      goal: 'Fuerza',
+      level: 'intermediate',
+      gender: null,
+      age: null,
+      weightKg: null,
+      heightCm: null,
+      quitReasons: null,
+      menopauseStage: null,
+      lastWeighed: null,
+      chronicConditions: null,
+      medications: null,
+      equipmentDetail: null,
+      lifestyle: null,
+      notes: null,
+      daysPerWeek: 1,
+      sessionMinutes: 60,
+      equipment: 'Barra',
+      limitations: null,
+      instruction: null,
+    },
+    constraints: { daysPerWeek: 1, hasLimitations: false },
+    trainerChatId: 500,
+  };
+
+  it('sin nada esperando, se mira pero no se dispara nada más', async () => {
+    const edit = fakeEdit();
+
+    const { result } = ejecutar(comando('una nota cualquiera'), { edit });
+
+    expect(await result).toMatchObject({ editInstruction: { kind: 'nothing_pending' } });
+    expect(edit.pasos).toEqual(['findAwaitingEdit']);
+  });
+
+  it('con algo esperando, el texto se interpreta como la instrucción', async () => {
+    const edit = fakeEdit({ pendiente: PENDIENTE });
+
+    const { result } = ejecutar(comando('Quita sentadilla'), { edit });
+
+    expect(await result).toMatchObject({ editInstruction: { kind: 'edited', versionId: 'v1' } });
+    expect(edit.pasos).toContain('generate');
+    expect(edit.pasos).toContain('saveEditedContent');
+  });
+
+  it('un COMANDO del entrenador cancela cualquier espera pendiente, antes de procesar el comando', async () => {
+    const edit = fakeEdit();
+
+    const { result } = ejecutar(comando('/clientes'), { edit });
+
+    await result;
+    expect(edit.pasos[0]).toBe('cancelAnyEditWait:p-trainer');
+  });
+
+  it('un comando o texto del CLIENTE nunca toca la espera de edición del entrenador', async () => {
+    const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+    const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: false });
+    const edit = fakeEdit();
+
+    const { result } = ejecutar(comando('hola'), { repo, checkins, edit });
+
+    await result;
+    expect(edit.pasos).toEqual([]);
   });
 });
 
@@ -1335,6 +1504,7 @@ describe('el camino sin IA se enruta', () => {
           return Promise.resolve(null);
         },
         transition: () => Promise.resolve(false),
+        startEditWait: () => Promise.resolve(false),
       },
       sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
       generation: { trigger: () => Promise.resolve() },
@@ -1827,6 +1997,7 @@ describe('un callback fabricado no da acceso ajeno', () => {
           intake: fakeIntake().deps,
         link: fakeLink().deps,
         updates: fakeUpdates().deps,
+        edit: fakeEdit().deps,
         },
       ),
     };
@@ -1886,6 +2057,7 @@ describe('la ficha de admisión', () => {
         intake: intake.deps,
         link: fakeLink().deps,
         updates: fakeUpdates().deps,
+        edit: fakeEdit().deps,
       },
     );
 
@@ -1918,6 +2090,10 @@ describe('la ficha de admisión', () => {
               acciones.push('transition');
               return Promise.resolve(false);
             },
+            startEditWait: () => {
+              acciones.push('startEditWait');
+              return Promise.resolve(false);
+            },
           },
           sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
           generation: { trigger: () => Promise.resolve() },
@@ -1926,6 +2102,7 @@ describe('la ficha de admisión', () => {
         intake: intake.deps,
         link: fakeLink().deps,
         updates: fakeUpdates().deps,
+        edit: fakeEdit().deps,
       },
     );
 
@@ -1968,6 +2145,7 @@ describe('reenviar el enlace de vinculación', () => {
         intake: fakeIntake().deps,
         link: link.deps,
         updates: fakeUpdates().deps,
+        edit: fakeEdit().deps,
       },
     );
 
@@ -2000,6 +2178,10 @@ describe('reenviar el enlace de vinculación', () => {
               acciones.push('transition');
               return Promise.resolve(false);
             },
+            startEditWait: () => {
+              acciones.push('startEditWait');
+              return Promise.resolve(false);
+            },
           },
           sender: { sendMessage: () => Promise.resolve(), answerCallback: () => Promise.resolve() },
           generation: { trigger: () => Promise.resolve() },
@@ -2008,6 +2190,7 @@ describe('reenviar el enlace de vinculación', () => {
         intake: fakeIntake().deps,
         link: link.deps,
         updates: fakeUpdates().deps,
+        edit: fakeEdit().deps,
       },
     );
 
@@ -2038,6 +2221,7 @@ describe('reenviar el enlace de vinculación', () => {
         intake: fakeIntake().deps,
         link: link.deps,
         updates: fakeUpdates().deps,
+        edit: fakeEdit().deps,
       },
     );
 
