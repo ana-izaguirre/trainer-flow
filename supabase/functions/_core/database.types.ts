@@ -629,7 +629,10 @@ export type Database = {
         Args: { p_trainer_id: string }
         Returns: undefined
       }
-      cancel_edit_instruction: { Args: { p_version_id: string }; Returns: undefined }
+      cancel_edit_instruction: {
+        Args: { p_version_id: string }
+        Returns: undefined
+      }
       change_request_for_trainer: {
         Args: { p_request_id: string }
         Returns: {
