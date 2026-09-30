@@ -179,7 +179,7 @@ Actions. No en cada PR: ejecuta los tests cientos de veces.
 | `state-machine.ts` | **100%** | 100% (38/38) | Es lo que impide `DRAFT → SENT` |
 | `callback-data.ts` | **100%** | 100% (74/74) | Parsea `callback_data`, dato no confiable de cualquier botón |
 | `navigation.ts` | **100%** | 100% (63/63) | Decide qué ve cada rol al navegar la rutina (SPEC-031) |
-| `exercise-library.ts` | **100%** | 100% (58/58) | Decide si un ejercicio enlaza a RepDB o a una búsqueda (SPEC-019) |
+| `exercise-library.ts` | **100%** | 100% (66/66) | Decide si un ejercicio enlaza a RepDB o a una búsqueda (SPEC-019) |
 | `validate-draft.ts` | Se reporta | 83,9% (281/335) | Deuda conocida, abajo |
 
 Stryker solo admite umbrales globales; `scripts/mutation-policy.mjs` los
