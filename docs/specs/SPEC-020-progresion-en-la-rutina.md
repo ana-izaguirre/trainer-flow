@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR — pendiente de que Ana y Carlos la aprueben |
+| **Estado** | APROBADA por Ana el 30/09/2026 — pendiente del visto de Carlos, pendiente de implementar |
 | **Depende de** | SPEC-002, SPEC-008 |
 | **Sesiones** | Por asignar |
 

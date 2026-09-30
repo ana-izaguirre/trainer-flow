@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | BORRADOR — pendiente de que Ana la apruebe |
+| **Estado** | APROBADA — aprobada por Ana el 30/09/2026, pendiente de implementar |
 | **Depende de** | SPEC-006, SPEC-007, SPEC-010 |
 | **Sesiones** | Por asignar |
 
