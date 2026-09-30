@@ -14,7 +14,9 @@ import {
   cleanFreeText,
   escapeMarkdownV2,
   formatDayHeader,
+  formatDayView,
   formatExerciseBlock,
+  formatIndexForTrainer,
   formatWorkout,
   packBlocks,
   sendLongMessage,
@@ -326,6 +328,72 @@ describe('formatWorkout', () => {
     // resumen vacío no debe dejar el mensaje con huecos raros.
     const texto = formatWorkout({ ...RUTINA, summary: '' }, { clientName: 'C', versionNumber: 1 });
     expect(texto).not.toContain('\n\n\n');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPEC-031 — navegación: índice y un día a la vez
+
+describe('formatDayView', () => {
+  it('trae la cabecera y los ejercicios de ESE día, numerados desde 1', () => {
+    const texto = formatDayView(RUTINA, 2)!;
+
+    expect(texto).toContain('📅 *Día 2 · Tirón*');
+    expect(texto).toContain('1\\. Remo');
+    expect(texto).not.toContain('Press banca');
+    expect(texto).not.toContain('Empuje');
+  });
+
+  it('un día con varios ejercicios los trae todos', () => {
+    const texto = formatDayView(RUTINA, 1)!;
+
+    expect(texto).toContain('1\\. Press banca');
+    expect(texto).toContain('2\\. Press militar');
+    expect(texto).not.toContain('Remo');
+  });
+
+  it('un día que no existe en la rutina da null', () => {
+    expect(formatDayView(RUTINA, 3)).toBeNull();
+    expect(formatDayView(RUTINA, 99)).toBeNull();
+  });
+
+  it('respeta el descanso en palabras y el escape, igual que en la vista completa', () => {
+    const texto = formatDayView(RUTINA, 1)!;
+    expect(texto).toContain('4 × 8–10 · descanso 1 min 30 s');
+  });
+});
+
+describe('formatIndexForTrainer', () => {
+  it('trae el título con el nombre y la versión', () => {
+    const texto = formatIndexForTrainer(RUTINA, { clientName: 'Ana-María', versionNumber: 2 });
+    expect(texto).toContain('Ana\\-María');
+    expect(texto).toContain('v2');
+  });
+
+  it('trae el resumen', () => {
+    expect(formatIndexForTrainer(RUTINA, { clientName: 'C', versionNumber: 1 })).toContain(
+      'Ganancia muscular',
+    );
+  });
+
+  it('trae un renglón por día, sin ningún ejercicio', () => {
+    const texto = formatIndexForTrainer(RUTINA, { clientName: 'C', versionNumber: 1 });
+
+    expect(texto).toContain('📅 *Día 1 · Empuje*');
+    expect(texto).toContain('📅 *Día 2 · Tirón*');
+    expect(texto).not.toContain('Press banca');
+    expect(texto).not.toContain('Remo');
+  });
+
+  it('los renglones de día van pegados, no como bloques separados', () => {
+    const texto = formatIndexForTrainer(RUTINA, { clientName: 'C', versionNumber: 1 });
+    expect(texto).toContain('📅 *Día 1 · Empuje*\n📅 *Día 2 · Tirón*');
+  });
+
+  it('NUNCA trae las advertencias: son de la vista completa (regla 9 de SPEC-031)', () => {
+    const texto = formatIndexForTrainer(RUTINA, { clientName: 'C', versionNumber: 1 });
+    expect(texto).not.toContain('⚠️');
+    expect(texto).not.toContain('hombro');
   });
 });
 

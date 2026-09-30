@@ -12,7 +12,9 @@
   "mutate": [
     "supabase/functions/_core/authorization.ts",
     "supabase/functions/_core/domain/state-machine.ts",
-    "supabase/functions/_core/domain/validate-draft.ts"
+    "supabase/functions/_core/domain/validate-draft.ts",
+    "supabase/functions/_core/telegram/navigation.ts",
+    "supabase/functions/_core/telegram/callback-data.ts"
   ],
   "coverageAnalysis": "perTest",
   "reporters": [

@@ -1,13 +1,22 @@
 // Política de mutation testing, sobre el reporte JSON de Stryker.
 //
-// Stryker solo admite umbrales GLOBALES. Aquí se exige por archivo: los dos
-// módulos que CLAUDE.md declara no negociables no pueden bajar del 100%, y
-// el resto se reporta sin romper nada.
+// Stryker solo admite umbrales GLOBALES. Aquí se exige por archivo: los
+// módulos que se consideran no negociables no pueden bajar del 100%, y el
+// resto se reporta sin romper nada.
 //
 //   authorization.ts → con RLS en denegación total, es LO ÚNICO que separa
 //                      a un cliente de los datos de otro (ADR-010).
 //   state-machine.ts → hace imposible que una rutina llegue al cliente sin
 //                      aprobación humana.
+//   callback-data.ts → parsea el `callback_data` de CUALQUIER botón, dato NO
+//                      confiable (lo fabrica quien quiera): es la puerta de
+//                      entrada antes de que authorization.ts decida nada.
+//   navigation.ts    → decide qué ve cada rol al navegar la rutina
+//                      (SPEC-031); usa canViewVersion, no la reimplementa.
+//
+// validate-draft.ts se mutó desde antes (docs/TESTING.md), pero con deuda
+// abierta (mensajes de texto, ~20 guardas redundantes sin documentar aún):
+// no entra aquí todavía — ver "La deuda de validate-draft.ts" en ese doc.
 //
 // Uso: node scripts/mutation-policy.mjs [reports/mutation/mutation.json]
 import { appendFileSync, readFileSync } from 'node:fs';
@@ -15,6 +24,8 @@ import { appendFileSync, readFileSync } from 'node:fs';
 const REQUIRED_100 = [
   'supabase/functions/_core/authorization.ts',
   'supabase/functions/_core/domain/state-machine.ts',
+  'supabase/functions/_core/telegram/callback-data.ts',
+  'supabase/functions/_core/telegram/navigation.ts',
 ];
 
 const reportPath = process.argv[2] ?? 'reports/mutation/mutation.json';

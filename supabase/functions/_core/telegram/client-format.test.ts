@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Workout } from '../domain/workout.ts';
-import { formatForClient } from './client-format.ts';
+import { formatForClient, formatIndexForClient } from './client-format.ts';
 
 const RUTINA: Workout = {
   summary: 'Cuatro días de fuerza',
@@ -140,5 +140,42 @@ describe('una rutina sin evaluación detrás', () => {
     expect(texto).not.toContain('🎯');
     // Y los ejercicios siguen ahí: es una rutina completa.
     expect(texto).toContain('Remo');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPEC-031 — la vista de índice: la cabecera de siempre, sin ejercicios.
+
+describe('formatIndexForClient', () => {
+  it('saluda y trae el objetivo, igual que la vista completa', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+
+    expect(texto).toContain('Hola Carlos');
+    expect(texto).toContain('Ganancia muscular');
+  });
+
+  it('trae un renglón por día, pero NINGÚN ejercicio', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+
+    expect(texto).toContain('📅 *Día 1 · Empuje*');
+    expect(texto).toContain('📅 *Día 2 · Tirón*');
+    expect(texto).not.toContain('Press banca');
+    expect(texto).not.toContain('Remo');
+  });
+
+  it('sin evaluación, omite 🎯 igual que la vista completa', () => {
+    const texto = formatIndexForClient(RUTINA, { clientName: 'Carlos', plan: null });
+    expect(texto).not.toContain('🎯');
+  });
+
+  it('nunca trae `warnings`, ni siquiera el símbolo', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+    expect(texto).not.toContain('⚠️');
+    expect(texto).not.toContain('hombro');
+  });
+
+  it('escapa el nombre del cliente', () => {
+    const texto = formatIndexForClient(RUTINA, { ...CONTEXTO, clientName: 'Ana-María' });
+    expect(texto).toContain('Ana\\-María');
   });
 });

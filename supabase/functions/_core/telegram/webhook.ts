@@ -68,6 +68,7 @@ import {
   type ReplyOutcome,
 } from '../checkin/reply.ts';
 import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
+import { handleNavigation, type NavOutcome } from './navigation.ts';
 import { showIntake, type IntakeOutcome, type IntakeDeps } from '../assessment/intake.ts';
 import {
   requestClientUpdate,
@@ -76,7 +77,7 @@ import {
   type UpdateRequestOutcome,
 } from '../assessment/update-request.ts';
 import { resendLink, type ResendLinkOutcome, type ResendLinkDeps } from './resend-link.ts';
-import { parseCallbackData } from './callback-data.ts';
+import { parseCallbackData, parseNavCallback } from './callback-data.ts';
 import { parseClientCallback } from './client-callback.ts';
 import {
   deliverVersion,
@@ -128,6 +129,8 @@ export type WebhookOutcome =
       readonly editor?: EditorOutcome;
       /** Qué pasó con una solicitud de cambio. */
       readonly change?: ChangeOutcome;
+      /** SPEC-031: qué vista de la rutina se mostró al navegar. */
+      readonly navigation?: NavOutcome;
       /** SPEC-027: qué pasó al pedir la actualización de datos. Sin el token. */
       readonly update?: UpdateRequestOutcome;
     }
@@ -247,6 +250,7 @@ export async function handleTelegramWebhook(
     let creation: CreationOutcome | undefined;
     let editor: EditorOutcome | undefined;
     let change: ChangeOutcome | undefined;
+    let navigation: NavOutcome | undefined;
     let intake: IntakeOutcome | undefined;
     let link: ResendLinkOutcome | undefined;
     let updateRequest: UpdateRequestOutcome | undefined;
@@ -281,8 +285,8 @@ export async function handleTelegramWebhook(
 
     if (update.kind === 'callback') {
       // Los prefijos viajan por el mismo canal, así que se prueban en orden.
-      // `chk:`, `tpl:`, `chg:`, `cli:` y `act:` no pueden confundirse: son
-      // literales distintos.
+      // `chk:`, `tpl:`, `chg:`, `cli:`, `nav:` y `act:` no pueden confundirse:
+      // son literales distintos.
       const respuesta = parseCheckinCallback(update.data);
       const plantilla = respuesta === null ? parseTemplateCallback(update.data) : null;
       const motivo =
@@ -291,8 +295,16 @@ export async function handleTelegramWebhook(
         respuesta === null && plantilla === null && motivo === null
           ? parseClientCallback(update.data)
           : null;
-      const payload =
+      const navegacion =
         respuesta === null && plantilla === null && motivo === null && ficha === null
+          ? parseNavCallback(update.data)
+          : null;
+      const payload =
+        respuesta === null &&
+        plantilla === null &&
+        motivo === null &&
+        ficha === null &&
+        navegacion === null
           ? parseCallbackData(update.data)
           : null;
 
@@ -301,6 +313,21 @@ export async function handleTelegramWebhook(
         // una lectura, como `/cliente`, y `showClient` comprueba que el id
         // esté en SU cartera: el `callback_data` se puede fabricar.
         command = await showClient(ficha.clientId, identity, deps.commands);
+      } else if (navegacion !== null) {
+        // SPEC-031. De solo lectura, igual que `intake`: nunca transiciona
+        // la versión, solo decide qué vista mandar de vuelta.
+        navigation = await handleNavigation(
+          {
+            view: navegacion.view,
+            versionId: navegacion.versionId,
+            callbackQueryId: update.callbackQueryId,
+          },
+          identity,
+          // El mismo `sender` de `deps.actions`, no `deps.sender`: son el
+          // mismo objeto en producción, pero declarar la dependencia desde
+          // `ActionDeps` es el patrón que ya sigue `handleAction`.
+          { repo: deps.actions.repo, sender: deps.actions.sender },
+        );
       } else if (motivo !== null) {
         // El cliente eligió por qué quiere el cambio.
         change = await requestChange(motivo.reason, motivo.versionId, identity, deps.changes);
@@ -426,6 +453,7 @@ export async function handleTelegramWebhook(
       ...(creation === undefined ? {} : { creation }),
       ...(editor === undefined ? {} : { editor }),
       ...(change === undefined ? {} : { change }),
+      ...(navigation === undefined ? {} : { navigation }),
       ...(updateRequest === undefined ? {} : { update: updateRequest }),
     };
   } catch (error) {

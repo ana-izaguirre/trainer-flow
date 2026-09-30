@@ -24,7 +24,7 @@ que ya muestra los tres fotogramas:
 
 ```
 • Peso muerto rumano — 3x8-10 · descanso 120s
-  ↑ tocable → .../exercises/romanian-deadlift/
+  ↑ tocable → exercise-dataset.com/exercise/romanian-deadlift/
 ```
 
 Cero imágenes enviadas, cero alojamiento, y **la longitud del mensaje no
@@ -58,27 +58,30 @@ no genera identificadores.
 
 ## 4. La librería
 
-[workout-guide](https://github.com/bryllim/workout-guide) — 302 ejercicios,
-3 fotogramas cada uno (PNG y SVG), metadatos con slug, equipo y músculos.
-**CC BY-SA 4.0.**
+[RepDB](https://github.com/RepDB/exercise-dataset) (edición pública gratuita,
+vía `repdb.co` / `exercise-dataset.com`) — **601 ejercicios**, ilustraciones
+WebP (inicio y pico del movimiento), metadatos con slug, equipo, músculos e
+**instrucciones en español nativo** (`name_es`, no una traducción nuestra).
+
+Reemplaza a workout-guide (302 ejercicios, decidido originalmente): más
+cobertura, y el nombre en español nativo hace el mapeo contra las plantillas
+mucho más confiable que traducir desde el inglés a mano.
+
+**Licencia:** propia, con atribución obligatoria («Exercise data by RepDB
+(repdb.co)» visible en `/ayuda` o créditos), gratis para uso comercial dentro
+de una app. **No es CC BY-SA:** prohíbe explícitamente re-publicar,
+revender o reempaquetar el dataset como repositorio o API independiente. Esto
+cambia la mitigación de §8 — ver ahí.
 
 ### La cobertura, medida y no supuesta
 
-Se temía que un cliente sin equipo se quedara fuera. **Es al revés:**
-
-| Equipo | Ejercicios |
-|---|---|
-| **Bodyweight** | **111** ← la categoría más grande |
-| Dumbbell | 45 |
-| Machine | 35 |
-| Barbell | 29 |
-| Cable | 26 |
-| Resistance Band | 19 |
-| Resto | 37 |
-
-Probando 14 ejercicios de las plantillas actuales: **12 encontrados**. Los
-dos que fallan —«flexiones inclinadas» y «dominadas lastradas»— **no son
-categorías que falten, son variantes** de ejercicios que sí están.
+Probando los ~60 nombres de ejercicio únicos de las plantillas actuales
+contra los 601 de RepDB: la mayoría con coincidencia exacta o muy cercana
+(mismo movimiento, equipo implícito). Los que no matchean son sobre todo
+variantes con banda elástica poco comunes («face pull con banda», «aperturas
+con banda») y términos genéricos sin un ejercicio único al que apuntar
+(«movilidad de cadera», «estiramientos generales») — esos caen a búsqueda,
+por regla 2.
 
 ### Por qué una variante NO cae a su ejercicio base
 
@@ -89,22 +92,24 @@ no a su base.
 
 ## 5. Reglas
 
-1. **Coincidencia exacta o nada.** El slug se valida contra la lista de 302.
+1. **Coincidencia exacta o nada.** El slug se valida contra la lista de 601.
    Uno inventado no llega jamás al cliente.
 2. **Una variante sin coincidencia cae a la búsqueda**, nunca a su base (§4).
 3. **Ningún ejercicio se queda sin referencia.** Si no hay slug, hay
    búsqueda; si el nombre está vacío, no hay enlace y se pinta como hoy.
 4. **La longitud del mensaje no crece.** El nombre es el enlace.
-5. **La atribución de CC BY-SA se cumple** con una línea en el mensaje o en
-   `/ayuda`. Sirviendo las imágenes **sin modificar** no hay adaptación, así
-   que ShareAlike no alcanza al código del proyecto.
+5. **La atribución de RepDB se cumple** con una línea fija («Exercise data by
+   RepDB (repdb.co)») en `/ayuda`. A diferencia de CC BY-SA, esta licencia no
+   exige ShareAlike — exige la atribución y nada de re-publicar el dataset
+   (§8), que es justo lo que esta spec no hace: solo enlaza.
 
 ## 6. El orden de implementación
 
-**Primero las plantillas.** 38 ejercicios, tabla hecha a mano una vez,
-cobertura completa, riesgo cero. Ya cubre toda rutina salida de plantilla.
+**Primero las plantillas.** Los ~60 nombres de ejercicio únicos de
+`templates.ts`, tabla hecha a mano una vez, cobertura completa, riesgo cero.
+Ya cubre toda rutina salida de plantilla.
 
-**Después la IA.** Se le dan los 302 slugs y se le obliga a elegir uno o
+**Después la IA.** Se le dan los 601 slugs y se le obliga a elegir uno o
 `null`. Va segundo porque conviene tener datos de si acierta antes de
 confiarle el enlace que ve el cliente.
 
@@ -122,11 +127,18 @@ confiarle el enlace que ve el cliente.
 
 ## 8. La dependencia, dicha en voz alta
 
-Los enlaces apuntan al GitHub Pages **de otra persona**. Si lo baja, mueren.
+Los enlaces apuntan a `exercise-dataset.com`, de RepDB. Si lo bajan, mueren.
 
-Es un sitio estático con licencia abierta: si pasa, se clona y se publica en
-otro sitio. Medio día, y solo si pasa. Se anota aquí para que sea una
-decisión y no una sorpresa.
+**A diferencia de la opción original (workout-guide, CC BY-SA), acá no hay
+plan B de un día:** la licencia de RepDB prohíbe expresamente
+re-publicar el dataset como sitio o API propia. Si el dominio cae, la
+mitigación no es «se clona y se aloja en otro lado» — es migrar a otra
+fuente de datos, con el mismo trabajo de mapeo que costó llegar a esta.
+
+Se acepta el riesgo por la ganancia real: 601 ejercicios contra 302, y
+nombres en español nativo en vez de una traducción nuestra desde el inglés.
+Se anota aquí para que sea una decisión tomada con los ojos abiertos, no una
+sorpresa si algún día pasa.
 
 ## 9. Lo que queda para después
 

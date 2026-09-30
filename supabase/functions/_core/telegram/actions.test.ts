@@ -58,6 +58,7 @@ function version(state: VersionState = 'DRAFT'): VersionForAction {
     // La rutina de prueba tiene un día; los criterios encajan para que los
     // tests de aprobar midan la autorización, no la validación.
     constraints: { daysPerWeek: 1, hasLimitations: false },
+    plan: { goal: 'Fuerza', daysPerWeek: 1, sessionMinutes: 60 },
   };
 }
 

@@ -3,12 +3,19 @@
  */
 import type { VersionRef, VersionState } from '../domain/version.ts';
 import type { Workout } from '../domain/workout.ts';
+import type { PlanSummary } from '../telegram/client-format.ts';
 
 export interface VersionForAction extends VersionRef {
   readonly clientName: string;
   readonly versionNumber: number;
   /** Para volver a pintar la rutina cuando hace falta. */
   readonly content: Workout | null;
+  /**
+   * SPEC-031 — para reconstruir la vista de índice o completa del CLIENTE al
+   * navegar. `null` en una rutina manual o de plantilla (SPEC-005 regla 13),
+   * igual que en `VersionForDelivery`.
+   */
+  readonly plan: PlanSummary | null;
   /**
    * Lo que el cliente pidió. Hace falta para validar AL APROBAR: es la última
    * puerta antes de que una rutina salga, y la única por la que pasa una

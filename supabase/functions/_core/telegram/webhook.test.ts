@@ -919,6 +919,7 @@ describe('los botones se enrutan', () => {
               warnings: [],
             },
             constraints: { daysPerWeek: 1, hasLimitations: false },
+            plan: { goal: 'Fuerza', daysPerWeek: 1, sessionMinutes: 60 },
           });
         },
         transition: (_v, from, to) => {
@@ -1022,6 +1023,47 @@ describe('los botones se enrutan', () => {
 
     expect((await result).kind).toBe('handled');
     expect(pasos).toEqual([]);
+  });
+
+  // SPEC-031, de punta a punta: el prefijo `nav:` llega a `handleNavigation`
+  // y NUNCA transiciona la versión — es el mismo cuidado que exige
+  // docs/STATE-MACHINE.md para cualquier código que toque `workout_versions`.
+  it('un botón de navegación (`nav:idx:`) llega a `handleNavigation`, sin transicionar nada', async () => {
+    const { pasos, actions } = enrutador();
+
+    const { result } = ejecutar(conBoton(`nav:idx:${VERSION}`), { actions });
+    const outcome = await result;
+
+    expect(outcome).toMatchObject({ navigation: { kind: 'shown', view: { kind: 'index' } } });
+    expect(pasos).toContain(`answerCallback:cb-1`);
+    expect(pasos.some((p) => p.startsWith('transition'))).toBe(false);
+  });
+
+  it('`nav:d1:` manda solo ese día (el único que trae el fixture)', async () => {
+    const { actions, botones } = enrutador();
+
+    const { result } = ejecutar(conBoton(`nav:d1:${VERSION}`), { actions });
+
+    expect(await result).toMatchObject({
+      navigation: { kind: 'shown', view: { kind: 'day', dayNumber: 1 } },
+    });
+    // Un solo día: la navegación solo trae «Índice» (ni anterior ni
+    // siguiente); DRAFT es el estado del fixture, así que abajo van sus tres
+    // acciones — la fila de decisión también va en la vista de un día.
+    expect(botones).toEqual([
+      `nav:idx:${VERSION}`,
+      `act:approve:${VERSION}`,
+      `act:reject:${VERSION}`,
+      `act:intake:${VERSION}`,
+    ]);
+  });
+
+  it('un día que no existe cae al índice, sin error', async () => {
+    const { actions } = enrutador();
+
+    const { result } = ejecutar(conBoton(`nav:d9:${VERSION}`), { actions });
+
+    expect(await result).toMatchObject({ navigation: { kind: 'shown', view: { kind: 'index' } } });
   });
 
 });

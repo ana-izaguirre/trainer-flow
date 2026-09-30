@@ -19,7 +19,13 @@
  * dos (SPEC-029 §4).
  */
 import type { Workout } from '../domain/workout.ts';
-import { cleanFreeText, escapeMarkdownV2, formatDayHeader, formatExerciseBlock } from './format.ts';
+import {
+  cleanFreeText,
+  escapeMarkdownV2,
+  formatDayHeader,
+  formatDayIndex,
+  formatExerciseBlock,
+} from './format.ts';
 
 /** Lo que viene de la evaluación de Tally. Los tres o ninguno. */
 export interface PlanSummary {
@@ -68,6 +74,28 @@ export function formatForClient(workout: Workout, context: ClientContext): strin
 
   // Aquí NO va un bloque de warnings. Ver el recuadro de arriba.
   bloques.push('💬 Cualquier duda, habla con tu entrenador\\.');
+
+  return bloques.filter((bloque) => bloque.length > 0).join('\n\n');
+}
+
+/**
+ * SPEC-031 regla 1 — la vista de índice del cliente: la misma cabecera de
+ * siempre (saludo, objetivo si hubo evaluación, resumen) y un renglón por
+ * día, sin ejercicios. Es el primer mensaje que recibe al entregarse la
+ * rutina o pedir `/rutina`; `formatForClient` queda para «Ver todo».
+ */
+export function formatIndexForClient(workout: Workout, context: ClientContext): string {
+  const bloques: string[] = [`👋 Hola ${escapeMarkdownV2(context.clientName)}, tu rutina está lista\\.`];
+
+  if (context.plan !== null) {
+    bloques.push(
+      `🎯 ${escapeMarkdownV2(context.plan.goal)} · ${context.plan.daysPerWeek} días · ` +
+        `${context.plan.sessionMinutes} min`,
+    );
+  }
+
+  bloques.push(escapeMarkdownV2(cleanFreeText(workout.summary)));
+  bloques.push(formatDayIndex(workout));
 
   return bloques.filter((bloque) => bloque.length > 0).join('\n\n');
 }

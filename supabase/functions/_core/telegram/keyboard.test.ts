@@ -6,8 +6,8 @@
  * el entrenador se queda sin aviso sin que nadie sepa por qué.
  */
 import { describe, expect, it } from 'vitest';
-import { buildKeyboard, DRAFT_ACTIONS, FALLBACK_ACTIONS } from './keyboard.ts';
-import { parseCallbackData } from './callback-data.ts';
+import { buildKeyboard, buildNavKeyboard, CLIENT_ACTIONS, DRAFT_ACTIONS, FALLBACK_ACTIONS } from './keyboard.ts';
+import { parseCallbackData, parseNavCallback } from './callback-data.ts';
 
 const VERSION = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
 
@@ -104,5 +104,96 @@ describe('extraRow — una segunda fila, la excepción de SPEC-007 regla 7', () 
 
   it('las dos vacías siguen dando null', () => {
     expect(buildKeyboard([], VERSION, [])).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPEC-031 — navegación de la rutina: índice, por día, completa.
+// ---------------------------------------------------------------------------
+
+describe('buildNavKeyboard', () => {
+  it('el índice de una rutina de 5 días trae «Ver todo» y «Día 1»', () => {
+    const teclado = buildNavKeyboard({ view: { kind: 'index' }, totalDays: 5, versionId: VERSION }, [])!;
+    expect(teclado.inline_keyboard[0]!.map((b) => b.text)).toEqual(['📖 Ver todo', '▶️ Día 1']);
+  });
+
+  it('el día 1 de 5 no ofrece «anterior»', () => {
+    const teclado = buildNavKeyboard(
+      { view: { kind: 'day', dayNumber: 1 }, totalDays: 5, versionId: VERSION },
+      [],
+    )!;
+    expect(teclado.inline_keyboard[0]!.map((b) => b.text)).toEqual(['📋 Índice', 'Día 2 ▶️']);
+  });
+
+  it('un día del medio (3 de 5) ofrece los dos lados', () => {
+    const teclado = buildNavKeyboard(
+      { view: { kind: 'day', dayNumber: 3 }, totalDays: 5, versionId: VERSION },
+      [],
+    )!;
+    expect(teclado.inline_keyboard[0]!.map((b) => b.text)).toEqual(['◀️ Día 2', '📋 Índice', 'Día 4 ▶️']);
+  });
+
+  it('el último día (5 de 5) no ofrece «siguiente»', () => {
+    const teclado = buildNavKeyboard(
+      { view: { kind: 'day', dayNumber: 5 }, totalDays: 5, versionId: VERSION },
+      [],
+    )!;
+    expect(teclado.inline_keyboard[0]!.map((b) => b.text)).toEqual(['◀️ Día 4', '📋 Índice']);
+  });
+
+  it('una rutina de un solo día no ofrece ni anterior ni siguiente', () => {
+    const teclado = buildNavKeyboard(
+      { view: { kind: 'day', dayNumber: 1 }, totalDays: 1, versionId: VERSION },
+      [],
+    )!;
+    expect(teclado.inline_keyboard[0]!.map((b) => b.text)).toEqual(['📋 Índice']);
+  });
+
+  it('la vista completa solo ofrece «Índice»', () => {
+    const teclado = buildNavKeyboard({ view: { kind: 'full' }, totalDays: 5, versionId: VERSION }, [])!;
+    expect(teclado.inline_keyboard[0]!.map((b) => b.text)).toEqual(['📋 Índice']);
+  });
+
+  it('la fila de decisión va SEGUNDA, con las acciones que le correspondan al rol y estado', () => {
+    const teclado = buildNavKeyboard(
+      { view: { kind: 'index' }, totalDays: 5, versionId: VERSION },
+      CLIENT_ACTIONS,
+    )!;
+    expect(teclado.inline_keyboard).toHaveLength(2);
+    expect(teclado.inline_keyboard[1]!.map((b) => parseCallbackData(b.callback_data)?.action)).toEqual([
+      'accept',
+      'change',
+    ]);
+  });
+
+  it('sin acciones de decisión, sale una sola fila: la de navegación', () => {
+    // A diferencia de `buildKeyboard`, nunca da null: «Índice»/«Ver todo»
+    // garantizan que la fila de navegación nunca está vacía.
+    const teclado = buildNavKeyboard({ view: { kind: 'full' }, totalDays: 5, versionId: VERSION }, []);
+    expect(teclado.inline_keyboard).toHaveLength(1);
+    expect(teclado.inline_keyboard[0]!.map((b) => b.text)).toEqual(['📋 Índice']);
+  });
+
+  it('cada botón de navegación apunta a ESTA versión y se puede volver a leer', () => {
+    const teclado = buildNavKeyboard(
+      { view: { kind: 'day', dayNumber: 3 }, totalDays: 5, versionId: VERSION },
+      [],
+    )!;
+    for (const boton of teclado.inline_keyboard[0]!) {
+      expect(parseNavCallback(boton.callback_data)?.versionId).toBe(VERSION);
+    }
+  });
+
+  it('ningún callback_data se pasa de 64 bytes, ni con un día de dos dígitos', () => {
+    for (const view of [
+      { kind: 'index' as const },
+      { kind: 'full' as const },
+      { kind: 'day' as const, dayNumber: 15 },
+    ]) {
+      const teclado = buildNavKeyboard({ view, totalDays: 15, versionId: VERSION }, CLIENT_ACTIONS)!;
+      for (const boton of teclado.inline_keyboard.flat()) {
+        expect(new TextEncoder().encode(boton.callback_data).length).toBeLessThanOrEqual(64);
+      }
+    }
   });
 });

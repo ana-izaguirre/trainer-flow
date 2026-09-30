@@ -743,6 +743,16 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
                 daysPerWeek: Number(fila.days_per_week),
                 hasLimitations: fila.has_limitations === true,
               },
+        // SPEC-031 — para repintar la vista del cliente al navegar. Mismo
+        // criterio que `constraints`: sin evaluación, no hay plan que mostrar.
+        plan:
+          fila.goal === null || fila.goal === undefined
+            ? null
+            : {
+                goal: fila.goal as string,
+                daysPerWeek: Number(fila.days_per_week),
+                sessionMinutes: Number(fila.session_minutes),
+              },
       };
     },
 

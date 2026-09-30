@@ -13,9 +13,9 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { Identity } from '../domain/identity.ts';
-import { formatForClient } from '../telegram/client-format.ts';
+import { formatIndexForClient } from '../telegram/client-format.ts';
 import { sendLongMessage } from '../telegram/format.ts';
-import { buildKeyboard, CLIENT_ACTIONS } from '../telegram/keyboard.ts';
+import { buildNavKeyboard, CLIENT_ACTIONS } from '../telegram/keyboard.ts';
 import type { ClientDetail, QueryRepo } from '../ports/query-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import {
@@ -115,14 +115,17 @@ async function atenderCliente(
       return { kind: 'answered', command, messages: 1 };
     }
 
-    // SPEC-029 §6: la misma partición por bloques que en la entrega.
+    // SPEC-031 regla 1: mismo primer mensaje que en la entrega, el índice.
     await sendLongMessage(
       deps.sender,
       actor.telegramChatId,
-      formatForClient(rutina.content, { clientName: rutina.clientName, plan: rutina.plan }),
+      formatIndexForClient(rutina.content, { clientName: rutina.clientName, plan: rutina.plan }),
       // Los mismos botones que traía al entregarse: sin ellos, «pedir un
       // cambio» solo existiría en el mensaje original (SPEC-010 regla 10).
-      buildKeyboard(CLIENT_ACTIONS, rutina.versionId),
+      buildNavKeyboard(
+        { view: { kind: 'index' }, totalDays: rutina.content.days.length, versionId: rutina.versionId },
+        CLIENT_ACTIONS,
+      ),
     );
     return { kind: 'answered', command, messages: 1 };
   }

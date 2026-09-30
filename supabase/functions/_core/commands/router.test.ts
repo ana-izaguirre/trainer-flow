@@ -435,13 +435,15 @@ describe('SPEC-023 · lo que SÍ puede hacer un cliente', () => {
     plan: null,
   };
 
-  it('/rutina le devuelve la suya', async () => {
+  it('/rutina le devuelve la suya, como ÍNDICE (SPEC-031)', async () => {
     const { deps, mensajes } = espia({ rutinaDelCliente: RUTINA });
 
     const outcome = await handleCommand('rutina', '', CLIENTE, deps);
 
     expect(outcome).toMatchObject({ kind: 'answered', command: 'rutina' });
-    expect(mensajes[0]).toContain('Press banca');
+    expect(mensajes[0]).toContain('📅 *Día 1 · Empuje*');
+    // El ejercicio vive en la vista de un día, que se pide aparte con ▶️.
+    expect(mensajes[0]).not.toContain('Press banca');
   });
 
   it('con los botones de aceptar y pedir cambio', async () => {

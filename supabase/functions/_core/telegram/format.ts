@@ -209,6 +209,45 @@ export interface FormatContext {
 }
 
 /**
+ * SPEC-031 — un renglón por día, sin ejercicios: lo que arma el índice.
+ * Compartido por la vista del entrenador y la del cliente.
+ */
+export function formatDayIndex(workout: Workout): string {
+  return workout.days.map((day) => formatDayHeader(day)).join('\n');
+}
+
+/**
+ * SPEC-031 — un solo día: su cabecera y sus ejercicios, nada más. `null` si
+ * ese número de día no existe en la rutina — un `callback_data` de
+ * navegación es dato no confiable, igual que cualquier otro (regla 13).
+ */
+export function formatDayView(workout: Workout, dayNumber: number): string | null {
+  const day = workout.days.find((d) => d.dayNumber === dayNumber);
+  if (day === undefined) return null;
+
+  const bloques = [formatDayHeader(day)];
+  day.exercises.forEach((exercise, index) => {
+    bloques.push(formatExerciseBlock(exercise, index + 1));
+  });
+  return bloques.join('\n\n');
+}
+
+/**
+ * SPEC-031 regla 1 — la vista de índice del entrenador: título, resumen y un
+ * renglón por día. Es el primer mensaje que ve al entregarse o pedir
+ * `/rutina`; `formatWorkout` (abajo) queda para cuando pide «Ver todo».
+ */
+export function formatIndexForTrainer(workout: Workout, context: FormatContext): string {
+  const bloques: string[] = [
+    `🏋️ *Rutina para ${escapeMarkdownV2(context.clientName)}* · v${context.versionNumber}`,
+    escapeMarkdownV2(cleanFreeText(workout.summary)),
+    formatDayIndex(workout),
+  ];
+
+  return bloques.filter((bloque) => bloque.length > 0).join('\n\n');
+}
+
+/**
  * La rutina, formateada para que el entrenador la lea en el móvil.
  *
  * Los ejercicios van numerados a propósito: ese número es el que se usa en

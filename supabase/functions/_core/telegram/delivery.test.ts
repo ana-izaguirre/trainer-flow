@@ -404,6 +404,18 @@ describe('entregar', () => {
     );
   });
 
+  it('SPEC-031: el primer mensaje es el ÍNDICE, no la rutina entera', async () => {
+    const { deps, mensajes } = espia();
+
+    await deliverVersion('v1', deps);
+
+    const alCliente = mensajes.find((m) => m.chatId === 500)!;
+    expect(alCliente.text).toContain('📅 *Día 1 · Empuje*');
+    // El nombre del ejercicio NO aparece: eso vive en la vista de un día,
+    // que se pide aparte con el botón ▶️.
+    expect(alCliente.text).not.toContain('Press');
+  });
+
   it('el mensaje al cliente NO lleva sus limitaciones', async () => {
     // CA-7, de extremo a extremo.
     const { deps, mensajes } = espia();

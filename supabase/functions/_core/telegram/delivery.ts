@@ -22,9 +22,9 @@ import type {
   VersionForDelivery,
 } from '../ports/delivery-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
-import { formatForClient } from './client-format.ts';
+import { formatIndexForClient } from './client-format.ts';
 import { escapeMarkdownV2, sendLongMessage } from './format.ts';
-import { buildKeyboard, CLIENT_ACTIONS } from './keyboard.ts';
+import { buildNavKeyboard, CLIENT_ACTIONS } from './keyboard.ts';
 
 export interface DeliveryDeps {
   readonly repo: DeliveryRepo;
@@ -181,18 +181,25 @@ async function enviar(
 
   // ── 1. Mandar PRIMERO ──────────────────────────────────────────────────
   try {
-    // SPEC-029 §6: una rutina de varios días puede no caber en un mensaje.
-    // `sendLongMessage` la parte por bloque, sin cortar ningún ejercicio, y
-    // pone el teclado SOLO en el último: sin estos dos botones, «pedir un
-    // cambio» sería una función que el cliente nunca ve (SPEC-010 regla 10).
+    // SPEC-031 regla 1: el primer mensaje es el ÍNDICE (cabecera + un
+    // renglón por día), no la rutina entera — nunca se acerca al límite de
+    // Telegram, así que `sendLongMessage` lo manda siempre en un solo envío,
+    // con el teclado de navegación + los dos botones de SPEC-010 regla 10.
     await sendLongMessage(
       deps.sender,
       version.clientChatId,
-      formatForClient(version.content, {
+      formatIndexForClient(version.content, {
         clientName: version.clientName,
         plan: version.plan,
       }),
-      buildKeyboard(CLIENT_ACTIONS, version.versionId),
+      buildNavKeyboard(
+        {
+          view: { kind: 'index' },
+          totalDays: version.content.days.length,
+          versionId: version.versionId,
+        },
+        CLIENT_ACTIONS,
+      ),
     );
   } catch {
     // El cliente bloqueó el bot, o Telegram falló. La rutina NO se pierde:
