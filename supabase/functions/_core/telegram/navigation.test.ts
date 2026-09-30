@@ -234,7 +234,7 @@ describe('la vista de un día', () => {
 
     for (const { mensajes } of [entrenador, cliente]) {
       expect(mensajes[0]).toContain('📅 *Día 2 · Tirón*');
-      expect(mensajes[0]).toContain('1\\. Remo');
+      expect(mensajes[0]).toContain('1\\. [Remo]');
       expect(mensajes[0]).not.toContain('Empuje');
       expect(mensajes[0]).not.toContain('Press banca');
     }

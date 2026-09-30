@@ -77,12 +77,12 @@ describe('lo que sí llega', () => {
     expect(texto).toContain('60');
   });
 
-  it('trae todos los días con sus ejercicios, numerados', () => {
+  it('trae todos los días con sus ejercicios, numerados y como enlace (SPEC-019)', () => {
     const texto = formatForClient(RUTINA, CONTEXTO);
 
-    expect(texto).toContain('1\\. Press banca');
-    expect(texto).toContain('2\\. Fondos');
-    expect(texto).toContain('1\\. Remo');
+    expect(texto).toContain('1\\. [Press banca]');
+    expect(texto).toContain('2\\. [Fondos]');
+    expect(texto).toContain('1\\. [Remo]');
     expect(texto).toContain('Empuje');
     expect(texto).toContain('Tirón');
   });

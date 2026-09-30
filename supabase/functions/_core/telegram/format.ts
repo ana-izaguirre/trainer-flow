@@ -11,6 +11,7 @@
  * líneas, el descanso se dice en palabras y nada del Markdown que el modelo
  * mete por costumbre (`**negrita**`, viñetas) llega al chat sin procesar.
  */
+import { exerciseUrl } from '../exercise-library.ts';
 import type { Exercise, Workout, WorkoutDay } from '../domain/workout.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import type { InlineKeyboard } from './keyboard.ts';
@@ -29,6 +30,16 @@ const MARKDOWN_V2_SPECIALS = /[\\_*[\]()~`>#+\-=|{}.!]/g;
  */
 export function escapeMarkdownV2(text: string): string {
   return text.replace(MARKDOWN_V2_SPECIALS, (char) => `\\${char}`);
+}
+
+/**
+ * Escapa una URL para la parte `(...)` de un enlace `[texto](url)`.
+ *
+ * Dentro de esa parte, MarkdownV2 exige escapar SOLO `\` y `)` — no la lista
+ * completa de `escapeMarkdownV2`. Escapar de más ahí rompería la URL misma.
+ */
+function escapeMarkdownV2LinkUrl(url: string): string {
+  return url.replace(/\\/g, '\\\\').replace(/\)/g, '\\)');
 }
 
 /**
@@ -179,15 +190,21 @@ function formatReps(reps: string): string {
 }
 
 /**
- * SPEC-029 §4 — un ejercicio, como un bloque de 2 o 3 líneas: nombre
- * numerado en negrita, series con su descanso, y la nota si la hay.
+ * SPEC-029 §4, SPEC-019 — un ejercicio, como un bloque de 2 o 3 líneas:
+ * nombre numerado en negrita y **tocable** (enlaza a su referencia visual),
+ * series con su descanso, y la nota si la hay.
  *
  * Compartido por la vista del entrenador y la del cliente: los dos numeran
  * igual, y la numeración del entrenador es la que usan `/quitar` y `/nota`.
+ *
+ * SPEC-019 regla 4 — la longitud no crece por imágenes: en MarkdownV2 el
+ * nombre ES el enlace, no un adjunto ni una línea de más.
  */
 export function formatExerciseBlock(exercise: Exercise, number: number): string {
+  const nombreLimpio = cleanFreeText(exercise.name);
+  const url = escapeMarkdownV2LinkUrl(exerciseUrl(nombreLimpio));
   const lineas = [
-    `*${number}\\. ${escapeMarkdownV2(cleanFreeText(exercise.name))}*`,
+    `*${number}\\. [${escapeMarkdownV2(nombreLimpio)}](${url})*`,
     `${exercise.sets} × ${formatReps(exercise.reps)} · descanso ${formatRestSeconds(exercise.restSeconds)}`,
   ];
 

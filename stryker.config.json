@@ -14,7 +14,8 @@
     "supabase/functions/_core/domain/state-machine.ts",
     "supabase/functions/_core/domain/validate-draft.ts",
     "supabase/functions/_core/telegram/navigation.ts",
-    "supabase/functions/_core/telegram/callback-data.ts"
+    "supabase/functions/_core/telegram/callback-data.ts",
+    "supabase/functions/_core/exercise-library.ts"
   ],
   "coverageAnalysis": "perTest",
   "reporters": [

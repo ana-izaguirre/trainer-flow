@@ -13,6 +13,9 @@
 //                      entrada antes de que authorization.ts decida nada.
 //   navigation.ts    → decide qué ve cada rol al navegar la rutina
 //                      (SPEC-031); usa canViewVersion, no la reimplementa.
+//   exercise-library.ts → decide si un ejercicio enlaza a la librería real o
+//                      a una búsqueda (SPEC-019); un slug mal elegido llega
+//                      directo al cliente.
 //
 // validate-draft.ts se mutó desde antes (docs/TESTING.md), pero con deuda
 // abierta (mensajes de texto, ~20 guardas redundantes sin documentar aún):
@@ -26,6 +29,7 @@ const REQUIRED_100 = [
   'supabase/functions/_core/domain/state-machine.ts',
   'supabase/functions/_core/telegram/callback-data.ts',
   'supabase/functions/_core/telegram/navigation.ts',
+  'supabase/functions/_core/exercise-library.ts',
 ];
 
 const reportPath = process.argv[2] ?? 'reports/mutation/mutation.json';

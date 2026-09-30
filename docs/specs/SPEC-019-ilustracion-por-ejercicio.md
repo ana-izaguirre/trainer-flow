@@ -2,9 +2,26 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | APROBADA — pendiente de implementar |
+| **Estado** | **IMPLEMENTADA (fase 1: plantillas)** — la fase 2 (IA, §6) queda pendiente |
 | **Depende de** | SPEC-005 |
-| **Sesiones** | Por asignar |
+| **Sesiones** | S-50 |
+
+## Resultado (fase 1 — plantillas)
+
+| Pieza | Dónde | Estado |
+|---|---|---|
+| Diccionario nombre → slug, verificado contra los 601 reales | `_core/exercise-library.ts` | ✅ CA-1, CA-3, 100% mutation |
+| Búsqueda armada con el nombre, sin inventar nada | `exercise-library.ts` (`searchUrl`) | ✅ CA-2 |
+| El nombre del ejercicio se vuelve el enlace, en las dos vistas | `telegram/format.ts` (`formatExerciseBlock`) | ✅ CA-1, CA-2 |
+| Variante sin match no cae a su base | `exercise-library.ts` (slugs distintos para «Remo con mancuerna» vs «Remo inclinado con dos mancuernas») | ✅ CA-5 |
+| La longitud sigue cabiendo en 1 mensaje | medido sobre las 10 plantillas reales | ✅ CA-4 — la más larga (`strength-recovery-7d`, 27 ejercicios) da 3868/4096 |
+
+**Fase 2 (IA) pendiente**, tal como pide §6: «conviene tener datos de si
+acierta [la plantilla] antes de confiarle el enlace que ve el cliente».
+Hoy un ejercicio generado por IA no tiene forma de matchear el diccionario
+(las claves son los nombres exactos de `templates.ts`), así que cae siempre
+a la búsqueda — comportamiento correcto por CA-2, solo que no aprovecha
+todavía los 601 slugs para lo que genera el modelo.
 
 ## 1. Objetivo
 
