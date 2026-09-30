@@ -367,7 +367,7 @@ supabase/functions/_core/checkin/format.ts             textos del acuse
 supabase/functions/_core/ports/telegram-ports.ts       force_reply; answerCallback(id, text?)
 supabase/functions/_core/ports/change-request-ports.ts
 supabase/functions/_core/telegram/webhook.ts           /cambio_rutina, texto sin destino
-supabase/migrations/0029_version_number_en_entrega.sql  version_number en las tres funciones de entrega
+supabase/migrations/0031_version_number_en_entrega.sql  version_number en las tres funciones de entrega
 supabase/migrations/0030_link_reminder.sql              link_reminder_sent_at; versions_awaiting_link_reminder; mark_link_reminded
 supabase/functions/_core/delivery/sweep-unopened-links.ts  regla 13, nuevo
 supabase/functions/_core/ports/link-reminder-ports.ts   nuevo
