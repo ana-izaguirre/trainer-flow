@@ -38,6 +38,12 @@ export interface ClientContext {
    * la base no puede producir.
    */
   readonly plan: PlanSummary | null;
+  /**
+   * SPEC-030 regla 10: `1` es la primera rutina, más que eso es una v2 que
+   * responde a algo — la cabecera lo dice, en vez de dejar que el cliente
+   * adivine si esto es nuevo o ya lo había visto.
+   */
+  readonly versionNumber: number;
 }
 
 /**
@@ -46,7 +52,11 @@ export interface ClientContext {
  * en varios mensajes si no cabe.
  */
 export function formatForClient(workout: Workout, context: ClientContext): string {
-  const bloques: string[] = [`👋 Hola ${escapeMarkdownV2(context.clientName)}, tu rutina está lista\\.`];
+  const saludo =
+    context.versionNumber > 1
+      ? `👋 Hola ${escapeMarkdownV2(context.clientName)}, aquí está tu rutina actualizada\\.`
+      : `👋 Hola ${escapeMarkdownV2(context.clientName)}, tu rutina está lista\\.`;
+  const bloques: string[] = [saludo];
 
   // Sin evaluación no hay objetivo que mostrar. Se omite la línea: inventarla
   // sería mentir, y no enviarla dejaría al cliente sin rutina (regla 13).

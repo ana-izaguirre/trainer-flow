@@ -191,6 +191,7 @@ async function enviar(
       formatForClient(version.content, {
         clientName: version.clientName,
         plan: version.plan,
+        versionNumber: version.versionNumber,
       }),
       buildKeyboard(CLIENT_ACTIONS, version.versionId),
     );

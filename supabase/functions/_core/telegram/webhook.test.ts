@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { tieneCaracterSinEscapar } from '../../../../tests/helpers/markdown.ts';
 import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
+import type { CheckinAnswers } from '../checkin/answers.ts';
 import type { ChangeRequestRepo } from '../ports/change-request-ports.ts';
 import type { CreationRepo } from '../ports/creation-ports.ts';
 import type { IntakeRepo } from '../ports/intake-ports.ts';
@@ -61,6 +62,8 @@ function fakeRepo(overrides: Partial<TelegramRepo> = {}) {
 function fakeSender() {
   const sent: Array<{ chatId: number; text: string }> = [];
   const answered: string[] = [];
+  /** SPEC-030 regla 9: el texto del acuse, cuando lo lleva. */
+  const answeredWithText: Array<{ id: string; text: string | undefined }> = [];
   const calls: string[] = [];
 
   const sender: TelegramSender = {
@@ -68,13 +71,14 @@ function fakeSender() {
       calls.push('sendMessage');
       sent.push({ chatId, text });
     },
-    answerCallback: async (id) => {
+    answerCallback: async (id, text) => {
       calls.push('answerCallback');
       answered.push(id);
+      answeredWithText.push({ id, text });
     },
   };
 
-  return { sender, sent, answered, calls };
+  return { sender, sent, answered, answeredWithText, calls };
 }
 
 const FROM = { id: 500, first_name: 'Ana' };
@@ -333,7 +337,14 @@ const CHECKIN_ID = '9a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
  * Un check-in falso. Por defecto es de OTRO cliente: así, si el enrutado
  * dejara de comprobar la pertenencia, los tests lo notarían.
  */
-function fakeCheckins(opciones: { dueño?: string | null; abierto?: boolean } = {}) {
+function fakeCheckins(
+  opciones: {
+    dueño?: string | null;
+    abierto?: boolean;
+    /** SPEC-030 regla 9: para probar el acuse con distintas respuestas ya guardadas. */
+    answers?: CheckinAnswers;
+  } = {},
+) {
   const pasos: string[] = [];
 
   const registro = {
@@ -342,7 +353,7 @@ function fakeCheckins(opciones: { dueño?: string | null; abierto?: boolean } = 
     clientName: 'Carlos',
     weekNumber: 2,
     state: 'PENDING' as const,
-    answers: { sessions: null, feeling: null, discomfort: null },
+    answers: opciones.answers ?? { sessions: null, feeling: null, discomfort: null },
     sentAt: new Date('2026-03-16T09:00:00Z'),
     trainerChatId: 10,
     daysPerWeek: 4,
@@ -430,6 +441,7 @@ function fakeDelivery(opciones: { cliente?: unknown; entregable?: boolean } = {}
         clientChatId: 500,
         trainerChatId: 10,
         plan: null,
+        versionNumber: 1,
       });
     },
     transition: (_v, from, to) => {
@@ -1057,6 +1069,100 @@ describe('el check-in se enruta', () => {
     expect(checkins.pasos).toContain('saveAnswers:false');
   });
 
+  describe('SPEC-030 regla 9 · el acuse lleva el texto de lo que se guardó', () => {
+    it('el botón se responde UNA vez, con el acuse — no en blanco al llegar', async () => {
+      const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+      const checkins = fakeCheckins({ dueño: 'p-cliente' });
+      const sender = fakeSender();
+
+      const { result } = ejecutar(conBotonChk(`chk:feeling:good:${CHECKIN_ID}`), {
+        repo,
+        checkins,
+        sender,
+      });
+
+      await result;
+      // Exactamente una vez: nada respondió en blanco antes de saber qué decir.
+      expect(sender.calls.filter((c) => c === 'answerCallback')).toHaveLength(1);
+      const [acuse] = sender.answeredWithText;
+      expect(acuse?.id).toBe('cb-1');
+      expect(acuse?.text).toContain('Anotado: 💪 Bien');
+      // Solo contestó feeling: sessions y discomfort siguen sin responder.
+      expect(acuse?.text).toContain('Falta: ¿cuántas sesiones?');
+    });
+
+    it('completar las tres no lleva «Falta»', async () => {
+      const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+      // Solo falta `discomfort`, que es justo lo que este botón contesta.
+      const checkins = fakeCheckins({
+        dueño: 'p-cliente',
+        answers: { sessions: 3, feeling: 'good', discomfort: null },
+      });
+      const sender = fakeSender();
+
+      const { result } = ejecutar(conBotonChk(`chk:discomfort:none:${CHECKIN_ID}`), {
+        repo,
+        checkins,
+        sender,
+      });
+
+      await result;
+      const [acuse] = sender.answeredWithText;
+      expect(acuse?.text).toContain('Anotado: sin molestias');
+      expect(acuse?.text).not.toContain('Falta');
+    });
+
+    it('un check-in ajeno se responde en blanco, no con un acuse', async () => {
+      const repo = fakeRepo({ findIdentity: async () => CLIENTE });
+      const checkins = fakeCheckins({ dueño: 'otro-perfil' });
+      const sender = fakeSender();
+
+      const { result } = ejecutar(conBotonChk(`chk:feeling:good:${CHECKIN_ID}`), {
+        repo,
+        checkins,
+        sender,
+      });
+
+      await result;
+      expect(sender.calls.filter((c) => c === 'answerCallback')).toHaveLength(1);
+      expect(sender.answeredWithText[0]?.text).toBeUndefined();
+    });
+
+    it('identidad desconocida: igual se responde el botón, para no dejarlo girando', async () => {
+      const repo = fakeRepo({ findIdentity: async () => null });
+      const sender = fakeSender();
+
+      const { result } = ejecutar(conBotonChk(`chk:feeling:good:${CHECKIN_ID}`), {
+        repo,
+        sender,
+      });
+
+      await result;
+      expect(sender.calls.filter((c) => c === 'answerCallback')).toHaveLength(1);
+      expect(sender.answeredWithText[0]?.text).toBeUndefined();
+    });
+
+    it('un botón que NO es de check-in sigue respondiéndose de inmediato, en blanco', async () => {
+      const creation = fakeCreation();
+      const sender = fakeSender();
+      const otroBoton = {
+        update_id: 1,
+        callback_query: {
+          id: 'cb-1',
+          from: FROM,
+          message: { message_id: 9, chat: { id: 500 } },
+          data: `act:template:3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b`,
+        },
+      };
+
+      const { result } = ejecutar(otroBoton, { creation, sender });
+
+      await result;
+      expect(sender.calls.filter((c) => c === 'answerCallback')).toHaveLength(1);
+      expect(sender.answeredWithText[0]?.text).toBeUndefined();
+    });
+  });
+
   it('CA-7 · el check-in de OTRO se rechaza', async () => {
     // El `checkinId` viaja en el `callback_data`: cualquiera puede fabricarlo.
     // Lo que lo detiene es la pertenencia, no el parseo.
@@ -1250,6 +1356,91 @@ describe('el camino sin IA se enruta', () => {
 
 // ---------------------------------------------------------------------------
 
+describe('SPEC-031 · /crear_rutina <cliente>, de un mensaje', () => {
+  /** Coincide con el `versionId` que `fakeCreation().findVersion()` da por defecto. */
+  const VERSION = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+  function detalleNew() {
+    return {
+      clientId: 'c1',
+      fullName: 'Carlos',
+      versionState: 'NEW' as const,
+      versionNumber: 1,
+      linked: true,
+      pendingCheckinDays: null,
+      versionId: VERSION,
+      goal: null,
+      level: null,
+      daysPerWeek: null,
+      sessionMinutes: null,
+      equipment: null,
+      hasLimitations: false,
+      sentDaysAgo: null,
+      lastCheckin: null,
+      openChangeRequest: null,
+    };
+  }
+
+  it('un nombre que matchea llena la versión SIN pasar por el editor', async () => {
+    const commands = fakeCommands({
+      clientes: [{ clientId: 'c1', fullName: 'Carlos' }],
+      detalle: detalleNew(),
+    });
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(comando('/crear_rutina Carlos\nDía 1: Empuje\nPress banca 4x8 90'), {
+      commands,
+      creation,
+    });
+
+    expect(await result).toMatchObject({ quickCreate: { kind: 'filled', versionId: VERSION } });
+    expect(creation.pasos).toContain('fillVersion:manual');
+    // No pasó por `currentDraft`: el editor de siempre nunca se llamó.
+    expect(creation.pasos).not.toContain('currentDraft');
+  });
+
+  it('sin nombre que matchee, cae exactamente al editor de siempre', async () => {
+    const commands = fakeCommands(); // sin clientes: ningún nombre puede matchear
+    const creation = fakeCreation();
+
+    const { result } = ejecutar(comando('/crear_rutina\nDía 1: Empuje\nPress banca 4x8 90'), {
+      commands,
+      creation,
+    });
+
+    const outcome = await result;
+    expect(outcome).not.toHaveProperty('quickCreate');
+    expect(outcome).toMatchObject({ editor: { kind: 'edited' } });
+    expect(creation.pasos).toContain('currentDraft');
+  });
+
+  it('un CLIENTE que escribe /crear_rutina no dispara el atajo', async () => {
+    const repo = fakeRepo({
+      findIdentity: async () => ({
+        profileId: 'p-cliente',
+        role: 'client' as const,
+        telegramUserId: 500,
+        telegramChatId: 500,
+      }),
+    });
+    const commands = fakeCommands({
+      clientes: [{ clientId: 'c1', fullName: 'Carlos' }],
+      detalle: detalleNew(),
+    });
+
+    const { result } = ejecutar(comando('/crear_rutina Carlos\nDía 1: Empuje\nPress banca 4x8 90'), {
+      repo,
+      commands,
+    });
+
+    const outcome = await result;
+    expect(outcome).not.toHaveProperty('quickCreate');
+    expect(commands.pasos).not.toContain('clients');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('las solicitudes de cambio se enrutan', () => {
   const VERSION_SENT = '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
 
@@ -1409,7 +1600,7 @@ describe('CA-11 · el texto libre va a la última pregunta', () => {
   });
 });
 
-describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
+describe('SPEC-030 · /cambio_rutina, escrito en vez de pulsado', () => {
   const CLIENTE: Identity = {
     profileId: 'p-cliente',
     role: 'client',
@@ -1422,7 +1613,7 @@ describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
     const commands = fakeCommands({ clientRoutine: () => Promise.resolve(null) });
     const sender = fakeSender();
 
-    const { result } = ejecutar(comando('/cambio'), { repo, commands, sender });
+    const { result } = ejecutar(comando('/cambio_rutina'), { repo, commands, sender });
 
     await result;
     const respuesta = sender.sent.find((m) => m.chatId === CLIENTE.telegramChatId);
@@ -1441,11 +1632,12 @@ describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
           clientChatId: 500,
           trainerChatId: 10,
           plan: null,
+          versionNumber: 1,
         }),
     });
     const changes = fakeChanges();
 
-    const { result } = ejecutar(comando('/cambio'), { repo, commands, changes });
+    const { result } = ejecutar(comando('/cambio_rutina'), { repo, commands, changes });
 
     expect(await result).toMatchObject({ change: { kind: 'asked_reason' } });
     expect(changes.pasos).toContain('findVersion');
@@ -1455,9 +1647,9 @@ describe('SPEC-030 · /cambio, escrito en vez de pulsado', () => {
     const repo = fakeRepo({ findIdentity: async () => ENTRENADOR });
     const commands = fakeCommands();
 
-    const { result } = ejecutar(comando('/cambio'), { repo, commands });
+    const { result } = ejecutar(comando('/cambio_rutina'), { repo, commands });
 
-    expect(await result).toMatchObject({ command: { kind: 'unknown', command: 'cambio' } });
+    expect(await result).toMatchObject({ command: { kind: 'unknown', command: 'cambio_rutina' } });
   });
 });
 
@@ -1911,12 +2103,12 @@ describe('SPEC-027 · pedir la actualización de datos se enruta', () => {
     },
   });
 
-  it('/actualizar de un CLIENTE emite SU enlace', async () => {
+  it('/actualizar_datos de un CLIENTE emite SU enlace', async () => {
     const repo = fakeRepo({ findIdentity: async () => CLIENTE });
     const updates = fakeUpdates();
     const commands = fakeCommands();
 
-    const { result } = ejecutar(comando('/actualizar'), { repo, updates, commands });
+    const { result } = ejecutar(comando('/actualizar_datos'), { repo, updates, commands });
 
     expect(await result).toMatchObject({ update: { kind: 'sent', clientId: 'c1' } });
     expect(updates.pasos).toContain('issueForProfile:p-cliente');
@@ -1924,10 +2116,10 @@ describe('SPEC-027 · pedir la actualización de datos se enruta', () => {
     expect(commands.pasos).toEqual([]);
   });
 
-  it('/actualizar del ENTRENADOR no emite nada: es un comando del cliente', async () => {
+  it('/actualizar_datos del ENTRENADOR no emite nada: es un comando del cliente', async () => {
     const updates = fakeUpdates();
 
-    const { result } = ejecutar(comando('/actualizar'), { updates });
+    const { result } = ejecutar(comando('/actualizar_datos'), { updates });
 
     expect(await result).toMatchObject({ command: { kind: 'unknown' } });
     expect(updates.pasos).toEqual([]);

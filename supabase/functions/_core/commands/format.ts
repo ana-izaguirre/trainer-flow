@@ -221,6 +221,23 @@ export function formatAmbiguous(
   }));
 }
 
+/**
+ * SPEC-031 §3.6 — Ambigüedad al nombrar un cliente EN el mismo mensaje que
+ * la rutina. Sin botones a propósito: un botón `cli:` solo abre la ficha, y
+ * la rutina ya escrita se perdería. Se lista y se pide repetir el comando
+ * entero con un nombre más específico.
+ */
+export function formatQuickCreateAmbiguous(
+  clients: readonly { fullName: string }[],
+): string {
+  const nombres = clients.slice(0, PAGE_SIZE).map((c) => escapeMarkdownV2(c.fullName));
+
+  return [
+    `Hay varios clientes que encajan: ${nombres.join(', ')}\\.`,
+    `Repite el comando con el nombre completo, por ejemplo /crear\\_rutina ${nombres[0]}\\.`,
+  ].join('\n');
+}
+
 export function formatNotFound(suggestions: readonly { fullName: string }[]): string {
   if (suggestions.length === 0) return 'No tengo a nadie con ese nombre\\.';
 
@@ -343,10 +360,11 @@ export const PIDE_NOMBRE_CLIENTE = 'Escribe el nombre: `/cliente Carlos`\\.';
 /** Las líneas de comandos, compartidas por `AYUDA_CLIENTE` y `SIN_PREGUNTA_PENDIENTE`. */
 const COMANDOS_CLIENTE = [
   '/rutina — ver tu rutina actual',
-  // SPEC-030: pedirlo también por comando, no solo desde el botón.
-  '/cambio — pedir un cambio',
+  // SPEC-030: pedirlo también por comando, no solo desde el botón. El guion
+  // bajo se escapa: fuera de un bloque de código es un especial de MarkdownV2.
+  '/cambio\\_rutina — pedir un cambio a tu rutina',
   // SPEC-027: sabe antes que nadie cuándo le cambió algo.
-  '/actualizar — cambiar tus datos \\(días, tiempo, objetivo, lesiones…\\)',
+  '/actualizar\\_datos — cambiar tus datos \\(días, tiempo, objetivo, lesiones…\\)',
   '/ayuda — esto',
 ];
 

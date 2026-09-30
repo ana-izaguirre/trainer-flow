@@ -2,10 +2,11 @@
  * SPEC-006 §3 — Los mensajes del check-in.
  */
 import { describe, expect, it } from 'vitest';
-import { parseCheckinCallback, type CheckinAnswers } from './answers.ts';
+import { EMPTY_ANSWERS, parseCheckinCallback, type CheckinAnswers } from './answers.ts';
 import {
   buildCheckinMessage,
   buildReminderMessage,
+  formatCheckinAck,
   formatCheckinSummary,
   formatTrainerAlert,
 } from './format.ts';
@@ -128,5 +129,65 @@ describe('el aviso inmediato', () => {
     expect(texto).toContain('Sesiones:');
     expect(texto).toContain('Sensación:');
     expect(texto).toContain('semana 3');
+  });
+});
+
+describe('SPEC-030 regla 9 · el acuse de cada botón', () => {
+  it('sesiones: singular en 1, plural en el resto, «4 o más» en 4', () => {
+    expect(
+      formatCheckinAck({ field: 'sessions', value: '0' }, { ...EMPTY_ANSWERS, sessions: 0 }),
+    ).toContain('0 sesiones');
+    expect(
+      formatCheckinAck({ field: 'sessions', value: '1' }, { ...EMPTY_ANSWERS, sessions: 1 }),
+    ).toContain('1 sesión.');
+    expect(
+      formatCheckinAck({ field: 'sessions', value: '3' }, { ...EMPTY_ANSWERS, sessions: 3 }),
+    ).toContain('3 sesiones');
+    expect(
+      formatCheckinAck({ field: 'sessions', value: '4' }, { ...EMPTY_ANSWERS, sessions: 4 }),
+    ).toContain('4 o más sesiones');
+  });
+
+  it('sensación: el mismo texto que en el resumen', () => {
+    const texto = formatCheckinAck(
+      { field: 'feeling', value: 'good' },
+      { ...EMPTY_ANSWERS, feeling: 'good' },
+    );
+    expect(texto).toContain('💪 Bien');
+  });
+
+  it('molestia por botón siempre es «sin molestias»', () => {
+    const texto = formatCheckinAck(
+      { field: 'discomfort', value: 'none' },
+      { ...EMPTY_ANSWERS, discomfort: '' },
+    );
+    expect(texto).toContain('sin molestias');
+  });
+
+  it('nombra la SIGUIENTE pregunta que falta, en orden', () => {
+    expect(
+      formatCheckinAck({ field: 'sessions', value: '3' }, { ...EMPTY_ANSWERS, sessions: 3 }),
+    ).toContain('Falta: ¿cómo te sentiste?');
+
+    expect(
+      formatCheckinAck(
+        { field: 'feeling', value: 'good' },
+        { sessions: 3, feeling: 'good', discomfort: null },
+      ),
+    ).toContain('Falta: ¿alguna molestia?');
+  });
+
+  it('completas las tres, no dice «Falta»', () => {
+    const texto = formatCheckinAck({ field: 'discomfort', value: 'none' }, COMPLETAS);
+    expect(texto).not.toContain('Falta');
+  });
+
+  it('texto plano: nada de MarkdownV2', () => {
+    // El aviso emergente de Telegram no interpreta Markdown.
+    const texto = formatCheckinAck(
+      { field: 'sessions', value: '3' },
+      { ...EMPTY_ANSWERS, sessions: 3 },
+    );
+    expect(texto).not.toMatch(/\\/);
   });
 });

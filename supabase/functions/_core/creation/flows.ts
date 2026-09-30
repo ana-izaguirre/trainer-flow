@@ -40,8 +40,14 @@ export type CreationOutcome =
   /** Ajena, inexistente, o ya no está en el estado que permitía cargar. */
   | { readonly kind: 'rejected'; readonly reason: string };
 
-/** Una rutina manual nace así: sin días, y por eso no se puede aprobar. */
-const VACIA: Workout = { summary: 'Rutina en preparación', days: [], warnings: [] };
+/**
+ * Una rutina manual nace así: sin días, y por eso no se puede aprobar.
+ *
+ * Exportada: SPEC-031 la reutiliza como base de `setDays` cuando dicta de
+ * un tirón, sea sobre una versión `NEW` o reemplazando un `DRAFT` — mismo
+ * punto de partida que ✍️, para no mantener dos definiciones de «vacío».
+ */
+export const VACIA: Workout = { summary: 'Rutina en preparación', days: [], warnings: [] };
 
 /**
  * ┌─ POR QUÉ EMPIEZA POR `/rutina` ────────────────────────────────────────┐
@@ -289,7 +295,9 @@ async function rechazar(
  * Cada estado dice qué hacer a continuación. Aquí sí se explica el motivo:
  * solo llega el dueño de la rutina, así que no hay nada que filtrar.
  */
-const SIGUIENTE_PASO: Readonly<Record<VersionState, string>> = {
+// Exportada: SPEC-031 reutiliza los mensajes de GENERATING y APPROVED tal
+// cual — dos definiciones del mismo aviso terminan diciéndose distinto.
+export const SIGUIENTE_PASO: Readonly<Record<VersionState, string>> = {
   // No llega: desde NEW se permiten los tres caminos. Si apareciera, es un bug.
   NEW: 'Esa rutina está lista para empezar. Vuelve a pulsar un botón del aviso.',
   GENERATING: 'La IA está trabajando en esta rutina. Dale un momento y te aviso.',

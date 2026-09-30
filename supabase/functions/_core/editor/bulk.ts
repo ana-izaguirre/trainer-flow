@@ -41,6 +41,15 @@ export type BulkResult =
  */
 const CABECERA = /^d[ií]a\s*(\d{1,2})\s*[:.\-–—]?\s*(.*)$/i;
 
+/**
+ * SPEC-031 §3.1 — si un renglón ya es una cabecera de día, no es un intento
+ * de nombrar a un cliente. Se expone para que `quick-create.ts` decida ANTES
+ * de intentar el matching, sin duplicar esta regex.
+ */
+export function isDayHeader(line: string): boolean {
+  return CABECERA.test(line.trim());
+}
+
 function problema(renglon: number, texto: string, problem: ExerciseProblem): string {
   const donde = `Renglón ${renglon} («${texto}»): `;
 

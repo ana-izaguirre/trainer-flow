@@ -1,5 +1,5 @@
 /**
- * SPEC-027 — Pedir la actualización de datos: el cliente con `/actualizar`,
+ * SPEC-027 — Pedir la actualización de datos: el cliente con `/actualizar_datos`,
  * o el entrenador con 📝 desde la ficha.
  */
 import { describe, expect, it } from 'vitest';
@@ -90,7 +90,7 @@ const enlace = `${FORM}?update=${TOKEN}`;
 /** El enlace tal como queda escapado para MarkdownV2. */
 const enlaceEscapado = enlace.replace(/[_.\-=]/g, (c) => `\\${c}`);
 
-describe('/actualizar — el cliente pide el suyo', () => {
+describe('/actualizar_datos — el cliente pide el suyo', () => {
   it('CA-1 · emite el token con SU perfil y le manda el enlace', async () => {
     const { deps, pasos, mensajes } = espia();
 
