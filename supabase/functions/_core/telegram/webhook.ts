@@ -69,6 +69,7 @@ import {
   type ReplyOutcome,
 } from '../checkin/reply.ts';
 import { handleAction, type ActionOutcome, type ActionDeps } from './actions.ts';
+import { applyEditInstruction, type EditDeps, type EditOutcome } from '../ai/edit-version.ts';
 import { handleNavigation, type NavOutcome } from './navigation.ts';
 import { showIntake, type IntakeOutcome, type IntakeDeps } from '../assessment/intake.ts';
 import {
@@ -136,6 +137,8 @@ export type WebhookOutcome =
       readonly navigation?: NavOutcome;
       /** SPEC-027: qué pasó al pedir la actualización de datos. Sin el token. */
       readonly update?: UpdateRequestOutcome;
+      /** SPEC-004 — qué pasó con la instrucción de edición del entrenador. */
+      readonly editInstruction?: EditOutcome;
     }
   | { readonly kind: 'failed'; readonly message: string };
 
@@ -169,6 +172,8 @@ export interface WebhookDeps {
   readonly changes: ChangeRequestDeps;
   /** SPEC-027: `/actualizar_datos` del cliente y 📝 de la ficha. */
   readonly updates: UpdateRequestDeps;
+  /** SPEC-004 — la edición conversacional sobre un borrador en DRAFT. */
+  readonly edit: EditDeps;
 }
 
 /**
@@ -269,10 +274,19 @@ export async function handleTelegramWebhook(
     let intake: IntakeOutcome | undefined;
     let link: ResendLinkOutcome | undefined;
     let updateRequest: UpdateRequestOutcome | undefined;
+    let editInstruction: EditOutcome | undefined;
 
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
     if (update.kind === 'command') {
+      // SPEC-004 — cambiar de intención no es un error: un comando en vez de
+      // la instrucción que se esperaba cancela la espera en silencio. Sin
+      // esto, el entrenador queda con una versión «esperando» indefinidamente
+      // hasta que por casualidad escriba texto sin `/` — el tipo de encierro
+      // que la spec pide evitar explícitamente.
+      if (identity.role === 'trainer') {
+        await deps.edit.repo.cancelAnyEditWait(identity.profileId);
+      }
       // SPEC-031: solo `/crear_rutina` puede nombrar a alguien EN el mismo
       // mensaje. Va antes del resto del editor: si el patrón no encaja
       // (`not_applicable`), sigue exactamente el camino de siempre.
@@ -457,6 +471,14 @@ export async function handleTelegramWebhook(
       }
     }
 
+    // SPEC-004 — un mensaje suelto del entrenador puede ser la instrucción
+    // que una versión suya está esperando. `applyEditInstruction` mira si
+    // hay alguna; si no, no hace nada — un mensaje del entrenador sin nada
+    // pendiente sigue sin generar respuesta, igual que hoy.
+    if (update.kind === 'text' && identity.role === 'trainer') {
+      editInstruction = await applyEditInstruction(identity.profileId, update.text, deps.edit);
+    }
+
     // Aprobar deja la versión lista; entregarla es SPEC-005 (regla 14). Sin
     // este enlace, el entrenador pulsa Aprobar y al cliente no le llega nada.
     const delivery =
@@ -484,6 +506,7 @@ export async function handleTelegramWebhook(
       ...(change === undefined ? {} : { change }),
       ...(navigation === undefined ? {} : { navigation }),
       ...(updateRequest === undefined ? {} : { update: updateRequest }),
+      ...(editInstruction === undefined ? {} : { editInstruction }),
     };
   } catch (error) {
     return {

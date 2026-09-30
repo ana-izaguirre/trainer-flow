@@ -56,6 +56,7 @@ function version(state: VersionState, overrides: Partial<VersionForAction> = {})
     content: RUTINA,
     constraints: { daysPerWeek: 2, hasLimitations: false },
     plan: { goal: 'Fuerza', daysPerWeek: 2, sessionMinutes: 60 },
+    editCount: 0,
     ...overrides,
   };
 }
@@ -80,6 +81,10 @@ function espia(opciones: { version?: VersionForAction | null } = {}): Espia {
     // Nunca debería llamarse — ver el recuadro de arriba.
     transition: () => {
       pasos.push('transition');
+      return Promise.resolve(true);
+    },
+    startEditWait: () => {
+      pasos.push('startEditWait');
       return Promise.resolve(true);
     },
   };

@@ -14,8 +14,10 @@ import { assertEquals, assertStringIncludes, assertThrows } from 'jsr:@std/asser
 import type { Identity } from '../_core/domain/identity.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { AIProvider } from '../_core/ports/ai-provider.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { EditRepo } from '../_core/ports/edit-ports.ts';
 import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
@@ -62,6 +64,17 @@ function espia(identity: Identity | null = null): Espia {
   const actionRepo: ActionRepo = {
     findVersion: () => Promise.resolve(null),
     transition: () => Promise.resolve(false),
+    startEditWait: () => Promise.resolve(false),
+  };
+
+  const editRepo: EditRepo = {
+    findAwaitingEdit: () => Promise.resolve(null),
+    cancelEditWait: () => Promise.resolve(),
+    cancelAnyEditWait: () => Promise.resolve(),
+    recentGenerations: () => Promise.resolve([]),
+    startGeneration: () => Promise.resolve(1),
+    finishGeneration: () => Promise.resolve(),
+    saveEditedContent: () => Promise.resolve(false),
   };
 
   const deliveryRepo: DeliveryRepo = {
@@ -150,6 +163,13 @@ function espia(identity: Identity | null = null): Espia {
           return Promise.resolve();
         },
       }),
+      editRepo: () => editRepo,
+      aiProvider: (): AIProvider => ({
+        name: 'x',
+        model: 'x',
+        generate: () => Promise.reject(new Error('no debería llamarse en este test')),
+      }),
+      aiRateLimit: { maxCalls: 20, windowMinutes: 60 },
     },
     usosDelRepo,
     enviados,

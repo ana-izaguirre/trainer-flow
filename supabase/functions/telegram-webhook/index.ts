@@ -20,8 +20,10 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { ActionRepo } from '../_core/ports/action-ports.ts';
+import type { AIProvider } from '../_core/ports/ai-provider.ts';
 import type { CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { DeliveryRepo } from '../_core/ports/delivery-ports.ts';
+import type { EditRepo } from '../_core/ports/edit-ports.ts';
 import type { IntakeRepo } from '../_core/ports/intake-ports.ts';
 import type { LinkResendRepo } from '../_core/ports/link-ports.ts';
 import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
@@ -30,10 +32,12 @@ import type { GenerationTrigger } from '../_core/ports/generation-trigger.ts';
 import type { QueryRepo } from '../_core/ports/query-ports.ts';
 import type { TelegramRepo, TelegramSender } from '../_core/ports/telegram-ports.ts';
 import type { UpdateTokenRepo } from '../_core/ports/update-ports.ts';
+import type { RateLimitConfig } from '../_core/ai/rate-limit.ts';
 import { handleTelegramWebhook, outcomeToStatus } from '../_core/telegram/webhook.ts';
 import type { Logger } from '../_shared/logger.ts';
 import { createLogger } from '../_shared/logger.ts';
 import { createGenerationTrigger } from '../_shared/generation-trigger.ts';
+import { createProvider } from '../_shared/ai/gemini-provider.ts';
 import { asSender, createTelegramClient } from '../_shared/telegram/client.ts';
 import {
   createActionRepo,
@@ -41,6 +45,7 @@ import {
   createCheckinRepo,
   createCreationRepo,
   createDb,
+  createEditRepo,
   createIntakeRepo,
   createLinkResendRepo,
   createDeliveryRepo,
@@ -52,6 +57,21 @@ import { optionalEnv, requireEnv } from '../_shared/env.ts';
 import { newLinkToken } from '../_shared/link-token.ts';
 
 const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
+
+/** SPEC-002 regla 8 / SPEC-004: cada intento a la IA estrena el suyo. */
+const AI_TIMEOUT_MS = 45_000;
+
+/** Mismo alias móvil que usa `generate-version` — ver ahí el porqué. */
+const DEFAULT_AI_MODEL = 'gemini-flash-latest';
+
+/** Un entero de una variable de entorno, o el valor por defecto. */
+function readInt(name: string, fallback: number): number {
+  const raw = optionalEnv(name);
+  if (raw === null) return fallback;
+
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
 
 /**
  * Lo que el handler necesita del mundo exterior.
@@ -86,6 +106,10 @@ export interface HandlerDeps {
    * de que la función entera no arranque.
    */
   readonly tallyFormUrl: string | null;
+  /** SPEC-004: la edición conversacional llama al mismo proveedor que generar. */
+  readonly editRepo: (requestId: string) => EditRepo;
+  readonly aiProvider: (log: Logger) => AIProvider;
+  readonly aiRateLimit: RateLimitConfig;
 }
 
 /**
@@ -101,6 +125,15 @@ export function readDeps(): HandlerDeps {
   // desde aquí necesita la misma variable.
   const botUsername = requireEnv('TELEGRAM_BOT_USERNAME');
   const db = createDb();
+
+  // Misma clave y modelo que `generate-version`: es el mismo proveedor,
+  // llamado desde un botón distinto (SPEC-004).
+  const geminiApiKey = requireEnv('GEMINI_API_KEY');
+  const aiModel = optionalEnv('AI_MODEL') ?? DEFAULT_AI_MODEL;
+  const aiRateLimit: RateLimitConfig = {
+    maxCalls: readInt('AI_MAX_CALLS', 20),
+    windowMinutes: readInt('AI_WINDOW_MINUTES', 60),
+  };
 
   return {
     expectedSecret,
@@ -120,6 +153,9 @@ export function readDeps(): HandlerDeps {
     newToken: newLinkToken,
     // No es un secreto: es el enlace público que ya se le manda a cada cliente.
     tallyFormUrl: optionalEnv('TALLY_FORM_URL'),
+    editRepo: (requestId) => createEditRepo(db, requestId),
+    aiProvider: (log) => createProvider({ apiKey: geminiApiKey, model: aiModel, log }),
+    aiRateLimit,
   };
 }
 
@@ -170,6 +206,14 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
             sender,
             newToken: deps.newToken,
             formUrl: deps.tallyFormUrl,
+          },
+          edit: {
+            repo: deps.editRepo(requestId),
+            provider: deps.aiProvider(log),
+            sender,
+            rateLimit: deps.aiRateLimit,
+            newTimeoutSignal: () => AbortSignal.timeout(AI_TIMEOUT_MS),
+            now: () => new Date(),
           },
         },
       );

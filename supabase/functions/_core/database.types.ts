@@ -488,6 +488,7 @@ export type Database = {
       }
       workout_versions: {
         Row: {
+          awaiting_edit_instruction: boolean
           content: Json | null
           created_at: string
           created_by: string
@@ -504,6 +505,7 @@ export type Database = {
           version_number: number
         }
         Insert: {
+          awaiting_edit_instruction?: boolean
           content?: Json | null
           created_at?: string
           created_by: string
@@ -520,6 +522,7 @@ export type Database = {
           version_number: number
         }
         Update: {
+          awaiting_edit_instruction?: boolean
           content?: Json | null
           created_at?: string
           created_by?: string
@@ -622,6 +625,11 @@ export type Database = {
           weight_kg: number
         }[]
       }
+      cancel_any_edit_instruction: {
+        Args: { p_trainer_id: string }
+        Returns: undefined
+      }
+      cancel_edit_instruction: { Args: { p_version_id: string }; Returns: undefined }
       change_request_for_trainer: {
         Args: { p_request_id: string }
         Returns: {
@@ -920,6 +928,10 @@ export type Database = {
           version_id: string
         }[]
       }
+      start_edit_instruction: {
+        Args: { p_version_id: string }
+        Returns: boolean
+      }
       touch_change_request_ask: {
         Args: { p_client_id: string; p_request_id: string }
         Returns: boolean
@@ -986,6 +998,35 @@ export type Database = {
         }[]
       }
       update_token_hash: { Args: { p_token: string }; Returns: string }
+      version_awaiting_edit: {
+        Args: { p_trainer_id: string }
+        Returns: {
+          age: number
+          chronic_conditions: string
+          client_name: string
+          days_per_week: number
+          edit_count: number
+          equipment: string
+          equipment_detail: string
+          gender: string
+          goal: string
+          has_limitations: boolean
+          height_cm: number
+          last_weighed: string
+          level: string
+          lifestyle: string
+          limitations: string
+          medications: string
+          menopause_stage: string
+          notes: string
+          quit_reasons: string
+          session_minutes: number
+          trainer_chat_id: number
+          version_id: string
+          version_number: number
+          weight_kg: number
+        }[]
+      }
       version_for_action: {
         Args: { p_version_id: string }
         Returns: {
@@ -994,6 +1035,7 @@ export type Database = {
           client_profile_id: string
           content: Json
           days_per_week: number
+          edit_count: number
           goal: string
           has_limitations: boolean
           session_minutes: number

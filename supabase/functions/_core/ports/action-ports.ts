@@ -25,6 +25,8 @@ export interface VersionForAction extends VersionRef {
    * no el encaje con unos criterios que no existen.
    */
   readonly constraints: { readonly daysPerWeek: number; readonly hasLimitations: boolean } | null;
+  /** SPEC-004 regla 9: con 5, «✏️ Editar» no pregunta nada, sugiere regenerar. */
+  readonly editCount: number;
 }
 
 export interface ActionRepo {
@@ -37,4 +39,13 @@ export interface ActionRepo {
    * Es la guarda contra la doble pulsación, no un error.
    */
   transition(versionId: string, from: VersionState, to: VersionState): Promise<boolean>;
+
+  /**
+   * SPEC-004 — «✏️ Editar» prende la espera de instrucción en esta versión y
+   * apaga la de cualquier otra del mismo entrenador (a lo sumo una pendiente
+   * a la vez).
+   *
+   * `false` si ya no aplica: alguien se adelantó y ya no está en `DRAFT`.
+   */
+  startEditWait(versionId: string): Promise<boolean>;
 }
