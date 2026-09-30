@@ -62,6 +62,13 @@ describe('lo que NO llega al cliente', () => {
       expect(texto).not.toContain(filtrado);
     }
   });
+
+  // SPEC-019 §10: el aviso de que el nombre es tocable va SOLO en el índice
+  // (el primer mensaje). Repetirlo también en la vista completa sería ruido
+  // — el cliente ya lo vio antes de llegar hasta acá.
+  it('el aviso de que el nombre es tocable no se repite: ya lo vio en el índice', () => {
+    expect(formatForClient(RUTINA, CONTEXTO)).not.toContain('Toca el nombre');
+  });
 });
 
 describe('lo que sí llega', () => {
@@ -172,6 +179,21 @@ describe('formatIndexForClient', () => {
     const texto = formatIndexForClient(RUTINA, CONTEXTO);
     expect(texto).not.toContain('⚠️');
     expect(texto).not.toContain('hombro');
+  });
+
+  // SPEC-019 §10: nada más en el mensaje dice que el nombre del ejercicio es
+  // tocable, así que el aviso va en el índice — el primer mensaje que ve
+  // cualquier cliente, antes de navegar a un día o a la vista completa.
+  it('SPEC-019 §10 · avisa que el nombre del ejercicio es tocable', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+    expect(texto).toContain('Toca el nombre de un ejercicio para ver fotos de cómo hacerlo');
+  });
+
+  it('el aviso va al final, después del renglón de días', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+    const posicionDias = texto.indexOf('📅 *Día 2');
+    const posicionAviso = texto.indexOf('Toca el nombre');
+    expect(posicionAviso).toBeGreaterThan(posicionDias);
   });
 
   it('escapa el nombre del cliente', () => {

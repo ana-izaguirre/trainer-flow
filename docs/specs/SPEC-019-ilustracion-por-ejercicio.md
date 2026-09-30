@@ -188,3 +188,40 @@ Las imágenes **dentro** del chat, bajo demanda: un botón «📸 Ver un
 ejercicio» que liste los de esa rutina y mande el álbum o un GIF del elegido.
 Un ejercicio a la vez, cuando el cliente lo pide — que es la única forma de
 no ahogar la rutina.
+
+## 10. Ampliación: el cliente sabe que el nombre es tocable
+
+| Campo | Valor |
+|---|---|
+| **Estado** | **IMPLEMENTADA** — aprobada por Ana el 30/09/2026 |
+| **Origen** | Revisando los ejemplos de rutina en Telegram: nada le dice al cliente que el nombre del ejercicio es un enlace |
+
+**El problema.** El nombre del ejercicio enlaza a su referencia visual (§1 a
+§4), pero nada en el mensaje se lo dice al cliente. En Telegram un enlace
+dentro de texto en negrita no siempre se distingue a simple vista —
+`formatExerciseBlock` ya pone el número y el nombre en negrita por formato,
+así que el enlace no resalta por sí solo.
+
+**La solución.** Un aviso, una sola vez, en el índice — el primer mensaje
+que ve cualquier cliente (SPEC-031 regla 1), antes de que navegue a un día o
+a la vista completa:
+
+> 👆 Toca el nombre de un ejercicio para ver fotos de cómo hacerlo.
+
+Va en `formatIndexForClient`, al final del mensaje, después del renglón de
+días. No se repite en la vista completa ni en la de un día: el cliente ya lo
+vio al llegar, y repetirlo en cada mensaje sería ruido.
+
+Es cierto para cualquier ejercicio, tenga o no coincidencia en el
+diccionario (regla 2): el que no matchea cae a una búsqueda de YouTube, que
+también muestra cómo se hace — el aviso no promete fotos de RepDB en
+particular, solo que el nombre lleva a algo útil.
+
+**Criterio de aceptación**
+
+- **CA-6** — DADO cualquier rutina, CUANDO el cliente recibe el índice,
+  ENTONCES el mensaje incluye el aviso de que el nombre del ejercicio es
+  tocable.
+
+**Archivo que toca:** `_core/telegram/client-format.ts`
+(`formatIndexForClient`) y su test.
