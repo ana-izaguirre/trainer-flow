@@ -17,7 +17,7 @@ import type { Identity } from '../domain/identity.ts';
 import type { CheckinRepo } from '../ports/checkin-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { isComplete, mergeAnswer, needsTrainerAlert, type CheckinAnswer } from './answers.ts';
-import { formatTrainerAlert, GRACIAS } from './format.ts';
+import { formatCheckinAck, formatTrainerAlert, GRACIAS } from './format.ts';
 
 export interface ReplyDeps {
   readonly repo: CheckinRepo;
@@ -33,6 +33,28 @@ export type ReplyOutcome =
       readonly checkinId: string;
       readonly completed: boolean;
       readonly trainerAlerted: boolean;
+      /**
+       * SPEC-030 regla 9: el texto del acuse de `answerCallbackQuery`.
+       * `null` cuando vino de un mensaje de texto (la molestia escrita), que
+       * no tiene callback al que responder.
+       */
+      readonly ack: string | null;
+    };
+
+/**
+ * Lo que devuelve específicamente `handleCheckinAnswer`: un botón SIEMPRE
+ * tiene algo que decir (regla 9), así que aquí `ack` no es opcional. Sin este
+ * tipo aparte, quien llama tendría que comprobar un `null` que nunca llega —
+ * una rama que ningún test podría alcanzar, en un módulo con 100% obligatorio.
+ */
+export type ButtonReplyOutcome =
+  | { readonly kind: 'rejected' }
+  | {
+      readonly kind: 'saved';
+      readonly checkinId: string;
+      readonly completed: boolean;
+      readonly trainerAlerted: boolean;
+      readonly ack: string;
     };
 
 /**
@@ -48,7 +70,7 @@ export async function handleCheckinAnswer(
   answer: CheckinAnswer,
   actor: Identity,
   deps: ReplyDeps,
-): Promise<ReplyOutcome> {
+): Promise<ButtonReplyOutcome> {
   const checkin = await deps.repo.findCheckin(checkinId);
 
   // No existe, no es suyo, o ya lo cerró. La misma respuesta para los tres.
@@ -61,7 +83,10 @@ export async function handleCheckinAnswer(
     return { kind: 'rejected' };
   }
 
-  return guardar(checkin.checkinId, mergeAnswer(checkin.answers, answer), checkin, actor, deps);
+  const answers = mergeAnswer(checkin.answers, answer);
+  const guardado = await guardar(checkin.checkinId, answers, checkin, actor, deps);
+  // Regla 9: el acuse nombra lo que se acaba de guardar y, si falta algo, qué.
+  return { kind: 'saved', ...guardado, ack: formatCheckinAck(answer, answers) };
 }
 
 /**
@@ -91,17 +116,25 @@ export async function handleCheckinText(
   }
 
   const answers = mergeAnswer(checkin.answers, { field: 'discomfort', value: text });
-  return guardar(checkin.checkinId, answers, checkin, actor, deps);
+  const guardado = await guardar(checkin.checkinId, answers, checkin, actor, deps);
+  // `null`: un mensaje de texto no tiene callback al que responder.
+  return { kind: 'saved', ...guardado, ack: null };
 }
 
-/** Guardar, confirmar y avisar. Compartido por los dos caminos. */
+/** Lo que hay que guardar, confirmar y avisar. Compartido por los dos caminos. */
+interface Guardado {
+  readonly checkinId: string;
+  readonly completed: boolean;
+  readonly trainerAlerted: boolean;
+}
+
 async function guardar(
   checkinId: string,
   answers: ReturnType<typeof mergeAnswer>,
   checkin: { clientName: string; weekNumber: number; trainerChatId: number },
   actor: Identity,
   deps: ReplyDeps,
-): Promise<ReplyOutcome> {
+): Promise<Guardado> {
   const completed = isComplete(answers);
   await deps.repo.saveAnswers(checkinId, answers, completed);
 
@@ -120,5 +153,5 @@ async function guardar(
     await deps.sender.sendMessage(actor.telegramChatId, GRACIAS);
   }
 
-  return { kind: 'saved', checkinId, completed, trainerAlerted };
+  return { checkinId, completed, trainerAlerted };
 }

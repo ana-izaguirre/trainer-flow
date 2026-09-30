@@ -143,6 +143,9 @@ export async function requestChange(
     `✅ Listo\\. Le pasé a tu entrenador que quieres un cambio: ${escapeMarkdownV2(REASON_LABELS[reason])}\\.\n\n` +
       'Cuando prepare tu nueva versión, te llega aquí mismo\\. Mientras, sigue con tu rutina actual\\.\n\n' +
       '¿Quieres darle más detalle\\? Escríbelo en tu próximo mensaje\\.',
+    null,
+    // Regla 3: Telegram abre el teclado con la respuesta ya enlazada aquí.
+    true,
   );
 
   // El entrenador se entera ya, con el botón para empezar la v2.
@@ -246,6 +249,9 @@ async function estadoAbierto(
     `🕐 Ya le pediste un cambio a tu entrenador ${haceCuanto(abierta.createdAt, deps.now())}: ` +
       `${escapeMarkdownV2(REASON_LABELS[abierta.reason])}\\.\n\n` +
       'Está preparando tu nueva versión\\. Si quieres añadir algo, escríbelo en tu próximo mensaje\\.',
+    null,
+    // Regla 3, igual que arriba.
+    true,
   );
 
   return { kind: 'already_requested', requestId: abierta.requestId };

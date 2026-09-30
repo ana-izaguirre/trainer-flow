@@ -393,7 +393,7 @@ describe('SPEC-008 ampliación — una plantilla para cada número de días', ()
       const result = validateDraft(applyTemplate(sieteDias, constraints), constraints);
       if (!result.ok) throw new Error('la plantilla de 7 días no valida');
 
-      const texto = formatForClient(result.workout, { clientName: 'Ana', plan: null });
+      const texto = formatForClient(result.workout, { clientName: 'Ana', plan: null, versionNumber: 1 });
       expect(texto).not.toMatch(/descanso que necesita/i);
       expect(texto).not.toContain('⚠️');
     });

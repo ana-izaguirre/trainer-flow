@@ -29,7 +29,24 @@ export interface TelegramSender {
    * `keyboard` es opcional: un aviso que no pide ninguna decisión no lleva
    * botones, y un `inline_keyboard` vacío hace que Telegram devuelva 400.
    */
-  sendMessage(chatId: number, text: string, keyboard?: InlineKeyboard | null): Promise<void>;
-  /** Telegram deja el botón girando si no se responde pronto. */
-  answerCallback(callbackQueryId: string): Promise<void>;
+  /**
+   * `forceReply` es SPEC-030 regla 3: Telegram abre el teclado con la
+   * respuesta ya enlazada al mensaje. Nunca junto a `keyboard` —
+   * `reply_markup` solo admite un tipo a la vez, y un botón ya dice dónde
+   * tocar.
+   */
+  sendMessage(
+    chatId: number,
+    text: string,
+    keyboard?: InlineKeyboard | null,
+    forceReply?: boolean,
+  ): Promise<void>;
+  /**
+   * Telegram deja el botón girando si no se responde pronto.
+   *
+   * `text` es opcional: sin él, el botón solo deja de girar. Con él, sale
+   * como aviso emergente — hoy solo lo usa el acuse del check-in (SPEC-030
+   * regla 9). Texto plano: Telegram no interpreta Markdown ahí.
+   */
+  answerCallback(callbackQueryId: string, text?: string): Promise<void>;
 }

@@ -54,6 +54,7 @@ import {
   type EditorDeps,
   type EditorOutcome,
 } from '../creation/editor-session.ts';
+import { handleQuickCreate, type QuickCreateOutcome } from '../creation/quick-create.ts';
 import {
   handleCommand,
   showClient,
@@ -127,6 +128,8 @@ export type WebhookOutcome =
       readonly creation?: CreationOutcome;
       /** Qué pasó con un comando del editor. */
       readonly editor?: EditorOutcome;
+      /** SPEC-031: qué pasó con `/crear_rutina <cliente>` de un mensaje. */
+      readonly quickCreate?: QuickCreateOutcome;
       /** Qué pasó con una solicitud de cambio. */
       readonly change?: ChangeOutcome;
       /** SPEC-031: qué vista de la rutina se mostró al navegar. */
@@ -164,7 +167,7 @@ export interface WebhookDeps {
   readonly creation: CreationDeps & EditorDeps;
   /** Lo que el cliente puede pedir sobre su rutina (SPEC-010). */
   readonly changes: ChangeRequestDeps;
-  /** SPEC-027: `/actualizar` del cliente y 📝 de la ficha. */
+  /** SPEC-027: `/actualizar_datos` del cliente y 📝 de la ficha. */
   readonly updates: UpdateRequestDeps;
 }
 
@@ -200,10 +203,17 @@ export async function handleTelegramWebhook(
 
   const externalId = String(update.updateId);
 
+  // SPEC-030 regla 9 — la ÚNICA excepción a «se responde antes del trabajo»:
+  // su acuse lleva el texto de lo que se guardó, que solo se sabe después de
+  // procesarlo (más abajo, en el paso 6). Para cualquier otro botón, el
+  // orden de siempre no cambia ni un paso.
+  const esRespuestaDeCheckin =
+    update.kind === 'callback' && parseCheckinCallback(update.data) !== null;
+
   try {
     // Telegram deja el botón girando si se tarda, así que se responde antes
     // del trabajo (SPEC-004 regla 2).
-    if (update.kind === 'callback') {
+    if (update.kind === 'callback' && !esRespuestaDeCheckin) {
       await deps.sender.answerCallback(update.callbackQueryId);
     }
 
@@ -233,6 +243,10 @@ export async function handleTelegramWebhook(
     // ── 5. Identidad ─────────────────────────────────────────────────────
     const identity = await deps.repo.findIdentity(update.telegramUserId);
     if (identity === null) {
+      // El acuse del check-in quedó diferido arriba: sin esto, un botón de
+      // alguien sin identidad se queda girando — nunca llega al paso 6, que
+      // es donde normalmente se respondería con el texto del acuse.
+      if (esRespuestaDeCheckin) await deps.sender.answerCallback(update.callbackQueryId);
       await deps.sender.sendMessage(update.chatId, NEUTRAL_REPLY);
       await deps.repo.markProcessed(externalId);
       return { kind: 'unknown_user', telegramUserId: update.telegramUserId };
@@ -249,6 +263,7 @@ export async function handleTelegramWebhook(
     let command: CommandOutcome | undefined;
     let creation: CreationOutcome | undefined;
     let editor: EditorOutcome | undefined;
+    let quickCreate: QuickCreateOutcome | undefined;
     let change: ChangeOutcome | undefined;
     let navigation: NavOutcome | undefined;
     let intake: IntakeOutcome | undefined;
@@ -258,22 +273,28 @@ export async function handleTelegramWebhook(
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
     if (update.kind === 'command') {
+      // SPEC-031: solo `/crear_rutina` puede nombrar a alguien EN el mismo
+      // mensaje. Va antes del resto del editor: si el patrón no encaja
+      // (`not_applicable`), sigue exactamente el camino de siempre.
+      quickCreate = await intentarCrearRutinaRapida(update.command, update.args, identity, deps);
+
       // Los del editor van primero: son del entrenador y actúan sobre el
       // borrador en curso, no sobre la cartera.
-      editor = isEditorCommand(update.command)
-        ? await editarSiEsEntrenador(update.command, update.args, identity, deps)
-        : undefined;
+      editor =
+        quickCreate === undefined && isEditorCommand(update.command)
+          ? await editarSiEsEntrenador(update.command, update.args, identity, deps)
+          : undefined;
 
-      // SPEC-027: `/actualizar` es del CLIENTE y escribe (emite un token), así
+      // SPEC-027: `/actualizar_datos` es del CLIENTE y escribe (emite un token), así
       // que no va por el router de consultas, que es de solo lectura.
-      if (update.command === 'actualizar' && identity.role === 'client') {
+      if (update.command === 'actualizar_datos' && identity.role === 'client') {
         updateRequest = await requestOwnUpdate(identity, deps.updates);
-      } else if (update.command === 'cambio' && identity.role === 'client') {
+      } else if (update.command === 'cambio_rutina' && identity.role === 'client') {
         // SPEC-030 regla 6: el mismo camino que el botón «Pedir un cambio»,
         // sobre la versión vigente del cliente. También escribe (puede tocar
         // `asked_at`), así que tampoco va por el router de solo lectura.
         change = await pedirCambioPorComando(identity, deps);
-      } else if (editor === undefined) {
+      } else if (editor === undefined && quickCreate === undefined) {
         // SPEC-030 regla 7: si tiene un cambio pedido, se lo recuerda ANTES
         // de mandarle la rutina — que sigue siendo la vigente, sin ocultarse.
         if (update.command === 'rutina' && identity.role === 'client') {
@@ -340,11 +361,18 @@ export async function handleTelegramWebhook(
           deps.creation,
         );
       } else if (respuesta !== null) {
-        checkin = await handleCheckinAnswer(
+        const resultado = await handleCheckinAnswer(
           respuesta.checkinId,
           { field: respuesta.field, value: respuesta.value },
           identity,
           deps.checkins,
+        );
+        checkin = resultado;
+        // Regla 9: aquí, y no arriba, porque recién ahora se sabe qué decir.
+        // Un botón SIEMPRE tiene `ack` (string, no opcional): `ButtonReplyOutcome`.
+        await deps.sender.answerCallback(
+          update.callbackQueryId,
+          resultado.kind === 'saved' ? resultado.ack : undefined,
         );
       } else if (
         payload !== null &&
@@ -452,6 +480,7 @@ export async function handleTelegramWebhook(
       ...(command === undefined ? {} : { command }),
       ...(creation === undefined ? {} : { creation }),
       ...(editor === undefined ? {} : { editor }),
+      ...(quickCreate === undefined ? {} : { quickCreate }),
       ...(change === undefined ? {} : { change }),
       ...(navigation === undefined ? {} : { navigation }),
       ...(updateRequest === undefined ? {} : { update: updateRequest }),
@@ -464,6 +493,32 @@ export async function handleTelegramWebhook(
   }
 }
 
+
+/**
+ * SPEC-031 — `/crear_rutina <cliente>`, antes de que el editor lo trate
+ * como una edición sobre `currentDraft`.
+ *
+ * `undefined` es «esto no era mío»: ni el comando correcto, ni el
+ * entrenador, ni un patrón de nombre reconocible. En ese caso el update
+ * sigue exactamente el camino de siempre.
+ */
+async function intentarCrearRutinaRapida(
+  command: string,
+  args: string,
+  identity: { profileId: string; role: UserRole; telegramChatId: number },
+  deps: WebhookDeps,
+): Promise<QuickCreateOutcome | undefined> {
+  if (command !== 'crear_rutina' || identity.role !== 'trainer') return undefined;
+
+  const intento = await handleQuickCreate(args, identity.profileId, identity.telegramChatId, {
+    clients: deps.commands.repo,
+    creation: deps.creation.repo,
+    changes: deps.changes.repo,
+    sender: deps.sender,
+  });
+
+  return intento.kind === 'not_applicable' ? undefined : intento;
+}
 
 /**
  * Un comando del editor solo lo atiende el entrenador.
@@ -512,7 +567,7 @@ async function avisarSiHayCambioPendiente(identity: Identity, deps: WebhookDeps)
 }
 
 /**
- * SPEC-030 regla 6 — `/cambio`, escrito en vez de pulsado.
+ * SPEC-030 regla 6 — `/cambio_rutina`, escrito en vez de pulsado.
  *
  * Sin rutina enviada, no hay sobre qué pedir nada (mismo mensaje de
  * `/rutina`, SPEC-023). Con una, es exactamente `askReason`: si ya tiene una

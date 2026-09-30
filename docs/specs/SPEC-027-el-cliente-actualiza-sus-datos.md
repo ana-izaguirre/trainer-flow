@@ -14,7 +14,7 @@
 | Token: hash, 7 días, un solo uso, uno vivo por cliente | migración 0026 | ✅ 16 tests de integración, con dos envíos simultáneos |
 | Leer el token del formulario y quitarlo del payload | `_core/assessment/update-token.ts` | ✅ |
 | Qué cambió: cerrados antes → después, salud por nombre | `_core/assessment/changes.ts` | ✅ CA-4, CA-5, CA-10 |
-| `/actualizar` y 📝 Pedir actualización | `_core/assessment/update-request.ts` | ✅ CA-1, CA-9 |
+| `/actualizar_datos` y 📝 Pedir actualización | `_core/assessment/update-request.ts` | ✅ CA-1, CA-9 |
 | La ingesta con token, y el ⚠️ si no vale | `_core/tally/webhook.ts` | ✅ CA-2, CA-6, CA-7, CA-8, CA-11 |
 | CA-9 contra la base real | `tests/integration/security.test.ts` | ✅ |
 | De punta a punta, con el payload real de Tally | `tests/e2e/assessment-update.test.ts` | ✅ |
@@ -35,7 +35,7 @@
 - **En la ficha, 📝 ocupa la fila de 🔗**: vinculado, uno; sin vincular, el
   otro. Sin vincular no hay a quién mandarle el formulario.
 - **`TALLY_FORM_URL` es opcional.** Sin ella la función arranca igual y
-  `/actualizar` dice que no está disponible, en vez de tumbar el bot entero.
+  `/actualizar_datos` dice que no está disponible, en vez de tumbar el bot entero.
 - **El aviso va sin negritas**, a diferencia del de evaluación nueva: así el
   detector de MarkdownV2 de los tests lo revisa entero.
 
@@ -81,7 +81,7 @@ entrenador decide si hace falta una v2 y cómo prepararla (principio 1).
 ## 4. La propuesta: el formulario, con un enlace personal
 
 ```
-Cliente: /actualizar
+Cliente: /actualizar_datos
    ↓
 Bot: «Llena de nuevo tu evaluación con este enlace. Es solo tuyo
       y vence en 7 días. Tu rutina actual no cambia hasta que tu
@@ -123,7 +123,7 @@ nada.
 
 ### 4.bis Alternativa: cambios rápidos en Telegram
 
-`/actualizar` ofrecería botones para los campos cerrados: días (1–7),
+`/actualizar_datos` ofrecería botones para los campos cerrados: días (1–7),
 minutos, objetivo, nivel y equipamiento. El cliente toca y listo, sin
 formulario.
 
@@ -141,7 +141,7 @@ campos que más cambian, si el uso real lo pide.
 ## 5. Alcance
 
 **Incluye:**
-- `/actualizar` para el cliente, y su línea en la ayuda del cliente
+- `/actualizar_datos` para el cliente, y su línea en la ayuda del cliente
   (SPEC-023).
 - **📝 Pedir actualización** en la ficha del entrenador (D3), que manda el
   mismo mensaje al cliente.
@@ -157,7 +157,7 @@ campos que más cambian, si el uso real lo pide.
 
 ## 6. Reglas de negocio
 
-1. **Solo un cliente vinculado puede pedir su enlace.** `/actualizar` resuelve
+1. **Solo un cliente vinculado puede pedir su enlace.** `/actualizar_datos` resuelve
    la identidad por Telegram (SPEC-009). Un cliente sin vincular no puede
    escribir el comando, así que no hay caso que atender.
 2. **El enlace es personal.** Lleva un token atado a **ese** `client_id`. La
@@ -165,7 +165,7 @@ campos que más cambian, si el uso real lo pide.
    nombre escrito en el formulario.
 3. **El entrenador puede pedirla** desde la ficha (`/cliente <nombre>`), con
    el botón **📝 Pedir actualización**. El bot le manda al cliente el mismo
-   mensaje de `/actualizar`. Si el cliente no está vinculado, se le avisa al
+   mensaje de `/actualizar_datos`. Si el cliente no está vinculado, se le avisa al
    entrenador y no se manda nada (no hay a quién).
 4. **Un solo uso, 7 días.** Al consumirse o vencer, el token deja de valer.
    Pedir otro enlace invalida el anterior: solo hay uno vivo por cliente.
@@ -205,7 +205,7 @@ propia autorización. `DRAFT → SENT` sigue sin existir.
 | Situación | Efecto |
 |---|---|
 | Token vencido, usado o inventado | **Se procesa como un envío normal** (regla 10): cliente nuevo, y el aviso al entrenador lleva una línea *«⚠️ Llegó con un enlace de actualización que ya no vale. Puede ser un cliente que ya tienes.»* No se pierde el dato y no se fusiona nada a ciegas |
-| El cliente pide `/actualizar` dos veces | El segundo enlace invalida el primero (regla 4) |
+| El cliente pide `/actualizar_datos` dos veces | El segundo enlace invalida el primero (regla 4) |
 | 📝 Pedir actualización sobre un cliente sin vincular | Al entrenador: *«Carlos todavía no está vinculado al bot. Mándale primero su enlace (🔗).»* |
 | El formulario llega sin el campo oculto configurado en Tally | Es un envío normal. Por eso el paso manual de Ana (§12) es parte del DoD |
 | Falla guardar la evaluación nueva | Mismo manejo que SPEC-001: el evento queda guardado, se avisa al entrenador |
@@ -222,14 +222,14 @@ propia autorización. `DRAFT → SENT` sigue sin existir.
   firma válida no se lee nada.
 - **Un token de un cliente nunca escribe en otro:** el `client_id` sale del
   hash, no de ningún campo del formulario.
-- **Los dos caminos de `/actualizar` pasan por `authorization.ts`:** el
+- **Los dos caminos de `/actualizar_datos` pasan por `authorization.ts`:** el
   cliente solo pide el suyo, y el botón del entrenador comprueba que el
   cliente sea de su cartera (`canManageClient`).
 - **El aviso no expone datos de salud** (regla 8).
 
 ## 10. Criterios de aceptación
 
-- **CA-1** — DADO un cliente vinculado, CUANDO escribe `/actualizar`,
+- **CA-1** — DADO un cliente vinculado, CUANDO escribe `/actualizar_datos`,
   ENTONCES recibe un enlace de Tally con `?update=<token>`, y en la base queda
   el hash de ese token con vencimiento a 7 días.
 - **CA-2** — DADO un envío de Tally con un token válido, CUANDO llega,
@@ -244,7 +244,7 @@ propia autorización. `DRAFT → SENT` sigue sin existir.
   ENTONCES el aviso dice *«limitaciones»* y **no** incluye su texto.
 - **CA-6** — DADO un token vencido, usado o inventado, CUANDO llega el envío,
   ENTONCES se procesa como un cliente nuevo y el aviso lleva la línea de ⚠️.
-- **CA-7** — DADO dos `/actualizar` seguidos, CUANDO llega un envío con el
+- **CA-7** — DADO dos `/actualizar_datos` seguidos, CUANDO llega un envío con el
   primer token, ENTONCES se trata como vencido (CA-6).
 - **CA-8** — DADO un borrador de 3 días abierto, CUANDO llega una
   actualización a 2 días, ENTONCES el aviso lo menciona, y aprobar ese
@@ -283,26 +283,26 @@ Sin el paso 1, todo envío con enlace se procesaría como un cliente nuevo
 |---|---|
 | Unit | Generar el token: longitud, alfabeto base64url, dos seguidos distintos |
 | Unit | Qué cambió: campos cerrados con antes → después, salud solo por nombre, sin cambios (CA-4, CA-5, CA-10) |
-| Unit | `/actualizar` en el router del cliente, y su línea en la ayuda |
+| Unit | `/actualizar_datos` en el router del cliente, y su línea en la ayuda |
 | Unit | 📝 Pedir actualización: dueño, ajeno (CA-9), sin vincular |
 | Unit | La ingesta con token válido, vencido, usado e inventado (CA-2, CA-6, CA-7) |
 | Integration | La función SQL que consume el token: un solo uso bajo concurrencia, vencimiento, hash |
 | Integration | CA-2 y CA-3 contra la base real |
 | Integration | CA-9 en `security.test.ts` |
-| E2E | `/actualizar` → envío de Tally → aviso al entrenador → ✏️ Crear v2 → v2 validada con los días nuevos (CA-8) |
+| E2E | `/actualizar_datos` → envío de Tally → aviso al entrenador → ✏️ Crear v2 → v2 validada con los días nuevos (CA-8) |
 
 ## 14. Archivos que toca
 
 ```
 supabase/migrations/0026_assessment_update_tokens.sql   columnas + funciones
 supabase/functions/_core/assessment/update-token.ts     leer, redactar, armar el enlace
-supabase/functions/_core/assessment/update-request.ts   /actualizar y 📝
+supabase/functions/_core/assessment/update-request.ts   /actualizar_datos y 📝
 supabase/functions/_core/assessment/changes.ts          qué campos cambiaron
 supabase/functions/_core/ports/update-ports.ts          emitir el token
 supabase/functions/_core/telegram/notify.ts             los avisos
 supabase/functions/_core/telegram/keyboard.ts           actionsForState, compartida
 supabase/functions/_core/tally/webhook.ts               la rama con token
-supabase/functions/_core/commands/router.ts             /actualizar
+supabase/functions/_core/commands/router.ts             /actualizar_datos
 supabase/functions/_core/commands/format.ts             botón en la ficha, ayuda
 supabase/functions/_core/telegram/callback-data.ts      acción nueva
 supabase/functions/_core/telegram/webhook.ts            el enrutado

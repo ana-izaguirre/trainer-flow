@@ -3,7 +3,7 @@
  *
  * Dos caminos, un mismo mensaje al cliente:
  *
- *   /actualizar             lo escribe el CLIENTE: sabe cuándo le cambió algo
+ *   /actualizar_datos             lo escribe el CLIENTE: sabe cuándo le cambió algo
  *   📝 Pedir actualización  lo pulsa el ENTRENADOR, desde la ficha (regla 3)
  *
  * ┌─ LO QUE ESTO NO HACE ──────────────────────────────────────────────────┐
@@ -38,7 +38,7 @@ export type UpdateRequestOutcome =
   | { readonly kind: 'sent'; readonly clientId: string }
   | { readonly kind: 'not_linked'; readonly clientId: string }
   | { readonly kind: 'not_configured' }
-  /** El perfil que escribió `/actualizar` no es de ningún cliente. */
+  /** El perfil que escribió `/actualizar_datos` no es de ningún cliente. */
   | { readonly kind: 'no_client' }
   /** No existe, o no es suyo. Las dos suenan igual (SPEC-013 regla 2). */
   | { readonly kind: 'rejected' };
@@ -57,7 +57,7 @@ function mensajeAlCliente(formUrl: string, token: string): string {
   ].join('\n');
 }
 
-/** `/actualizar`, escrito por el propio cliente (regla 1). */
+/** `/actualizar_datos`, escrito por el propio cliente (regla 1). */
 export async function requestOwnUpdate(
   actor: Identity,
   deps: UpdateRequestDeps,

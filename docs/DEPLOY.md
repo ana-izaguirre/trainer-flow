@@ -79,7 +79,7 @@ bot en todo lo que sigue.
       defecto se usa un alias móvil justamente para que eso no pase solo.
 
 - [ ] **4b. Actualizar datos: el enlace del formulario** (SPEC-027).
-      Para que un cliente pueda cambiar sus datos con `/actualizar`, o que tú
+      Para que un cliente pueda cambiar sus datos con `/actualizar_datos`, o que tú
       se lo pidas con 📝 desde su ficha:
 
       1. En Tally, añade al formulario un **campo oculto** llamado exactamente
@@ -92,7 +92,7 @@ bot en todo lo que sigue.
 
       No es un secreto —es el mismo enlace que le mandas a cada cliente—,
       pero va por el mismo sitio. **Es opcional**: sin él, el bot funciona
-      igual y `/actualizar` responde que todavía no está disponible.
+      igual y `/actualizar_datos` responde que todavía no está disponible.
 
       > ⚠️ **Sin el campo oculto, un envío por el enlace de actualización se
       > procesa como un cliente nuevo**: Tally no devuelve el token, y el bot
@@ -125,6 +125,57 @@ bot en todo lo que sigue.
       `pending_update_count` alto o `last_error_message` con algo dentro
       significa que el bot no está atendiendo.
 
+- [ ] **6b. El menú de comandos de Telegram** (el botón `/` junto al mensaje).
+      Nunca se puso por código —no hay ningún `setMyCommands` en el
+      proyecto—, así que es manual, por cualquiera de las dos vías.
+
+      **Con el token, sin pasar por BotFather.** Telegram no distingue el
+      menú por rol en un chat 1 a 1 —el mismo bot atiende a los dos—, así
+      que se resuelve con dos llamadas: el menú **por defecto** (el que ve
+      cualquiera, clientes nuevos incluidos) lleva solo lo del cliente, y tu
+      propio chat lleva el del entrenador encima.
+
+      ```bash
+      # 1. El menú por defecto — solo cliente
+      curl "https://api.telegram.org/bot<TOKEN>/setMyCommands" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "scope": {"type": "default"},
+          "commands": [
+            {"command": "rutina", "description": "ver tu rutina actual"},
+            {"command": "cambio_rutina", "description": "pedir un cambio a tu rutina"},
+            {"command": "actualizar_datos", "description": "actualizar datos"},
+            {"command": "ayuda", "description": "qué puedes hacer"}
+          ]
+        }'
+
+      # 2. Tu menú — superpuesto por tu chat_id (el del paso 9, más abajo)
+      curl "https://api.telegram.org/bot<TOKEN>/setMyCommands" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "scope": {"type": "chat", "chat_id": <TU_CHAT_ID>},
+          "commands": [
+            {"command": "clientes", "description": "listar tus clientes"},
+            {"command": "cliente", "description": "ver la ficha de un cliente"},
+            {"command": "pendientes", "description": "rutinas y enlaces esperando"},
+            {"command": "checkins", "description": "check-ins sin responder"},
+            {"command": "crear_rutina", "description": "dictar una rutina completa"},
+            {"command": "ayuda", "description": "qué puedes hacer"}
+          ]
+        }'
+      ```
+
+      Verifica sin cambiar nada: `curl "https://api.telegram.org/bot<TOKEN>/getMyCommands"`
+      (con `-d 'scope={"type":"chat","chat_id":<TU_CHAT_ID>}'` para ver el tuyo).
+
+      **O a mano**, en **@BotFather → tu bot → Edit Bot → Edit Commands**, o
+      con `/setcommands` — ahí no hay `scope`, así que solo sirve para un
+      menú único (la lista combinada de los dos roles).
+
+      Cada comando ya responde «eso solo lo puede tu entrenador» si no le
+      toca (SPEC-007 regla 1), así que el peor caso de mezclar los dos
+      menús es un botón que no hace nada — nunca un acceso indebido.
+
 - [ ] **7. Tally — Integrations → Webhooks:**
       `https://<ref>.supabase.co/functions/v1/tally-webhook`
 
@@ -156,9 +207,9 @@ bot en todo lo que sigue.
       select jobname, schedule, active from cron.job where jobname = 'weekly-checkin';
       ```
 
-- [ ] **8b. Programar el barrido de generaciones atascadas** (SPEC-002 §11).
-      En el SQL Editor: pega `supabase/cron/sweep-generating.sql` y
-      ejecútalo, y después:
+- [ ] **8b. Programar el barrido de cada 5 minutos** (SPEC-002 §11 y
+      SPEC-030 regla 13). En el SQL Editor: pega
+      `supabase/cron/sweep-generating.sql` y ejecútalo, y después:
 
       ```sql
       select schedule_generation_sweep(
@@ -172,10 +223,11 @@ bot en todo lo que sigue.
       select jobname, schedule, active from cron.job where jobname = 'sweep-generating';
       ```
 
-      Sin este paso, una generación que muere a medias por un fallo de
-      plataforma se queda en `GENERATING` sin que nada la desatasque —el
-      resto del sistema funciona igual, esto es específicamente esa red de
-      seguridad.
+      **Un solo job, dos comprobaciones.** El nombre se quedó del primer uso
+      —generaciones de IA atascadas—, pero la misma llamada también revisa
+      los enlaces sin abrir a las 48 horas (SPEC-030 regla 13): no hace
+      falta programar nada aparte. Sin este paso, ninguna de las dos redes
+      de seguridad corre — el resto del sistema funciona igual.
 
       > **El deploy lo vigila.** Cada despliegue termina comprobando que
       > `weekly-checkin` y `sweep-generating` existan y estén activos. Si

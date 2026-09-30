@@ -29,6 +29,7 @@ import type { ChangeRequestRepo } from '../_core/ports/change-request-ports.ts';
 import type { ChangeReason } from '../_core/domain/change-request.ts';
 import type { IntakeRepo } from '../_core/ports/intake-ports.ts';
 import type { LinkResendRepo } from '../_core/ports/link-ports.ts';
+import type { LinkReminderRepo } from '../_core/ports/link-reminder-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
 import type { CheckinAnswers } from '../_core/checkin/answers.ts';
 import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
@@ -686,6 +687,7 @@ async function readDelivery(
     // versión se devuelve igual para poder avisar al entrenador (CA-3).
     clientChatId: toNumberOrNull(fila.client_chat_id),
     trainerChatId: Number(fila.trainer_chat_id),
+    versionNumber: Number(fila.version_number),
     // Los tres van juntos o no va ninguno: una rutina manual no tiene
     // formulario detrás (SPEC-005 regla 13).
     plan:
@@ -1135,6 +1137,32 @@ export function createLinkResendRepo(db: Db): LinkResendRepo {
         linked: fila.linked === true,
         linkToken: fila.link_token as string,
       };
+    },
+  };
+}
+
+/** SPEC-030 regla 13. Vive junto a `createLinkResendRepo`: mismo tema. */
+export function createLinkReminderRepo(db: Db): LinkReminderRepo {
+  return {
+    async awaitingReminder(minHours) {
+      const { data, error } = await db.rpc('versions_awaiting_link_reminder', {
+        p_min_hours: minHours,
+      });
+
+      if (error !== null) {
+        throw new Error(`No se pudieron leer los enlaces sin abrir: ${error.code}`);
+      }
+
+      return (data ?? []).map((fila) => ({
+        versionId: fila.version_id as string,
+        trainerChatId: Number(fila.trainer_chat_id),
+        clientName: fila.client_name as string,
+      }));
+    },
+
+    async markReminded(versionId) {
+      const { error } = await db.rpc('mark_link_reminded', { p_version_id: versionId });
+      if (error !== null) throw new Error(`No se pudo marcar el aviso: ${error.code}`);
     },
   };
 }

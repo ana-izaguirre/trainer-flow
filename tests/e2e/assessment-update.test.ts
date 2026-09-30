@@ -1,7 +1,7 @@
 /**
  * E2E — SPEC-027: el cliente actualiza sus datos, de punta a punta.
  *
- *   /actualizar → enlace con token → el formulario vuelve por el webhook de
+ *   /actualizar_datos → enlace con token → el formulario vuelve por el webhook de
  *   Tally → evaluación nueva para el MISMO cliente → aviso al entrenador →
  *   la próxima versión se valida contra los datos nuevos (CA-8)
  *
@@ -169,7 +169,7 @@ function envioConToken(token: string): string {
 }
 
 describe('E2E · SPEC-027 — el cliente actualiza sus datos', () => {
-  it('de /actualizar a una v2 que se valida contra los días nuevos', async () => {
+  it('de /actualizar_datos a una v2 que se valida contra los días nuevos', async () => {
     // ── Un cliente vinculado, con su v1 de 4 días ya ENVIADA ─────────────
     const trainerId = await createProfile(db, 'trainer');
     const clientId = await createClient(db, trainerId, 'Carlos Pérez');
@@ -190,7 +190,7 @@ describe('E2E · SPEC-027 — el cliente actualiza sus datos', () => {
       telegramChatId: Number(chats[0]!['telegram_chat_id']),
     };
 
-    // ── 1. /actualizar: el enlace, con un token de verdad ────────────────
+    // ── 1. /actualizar_datos: el enlace, con un token de verdad ────────────────
     const bot = capturar();
     const pedido = await requestOwnUpdate(cliente, {
       repo: {

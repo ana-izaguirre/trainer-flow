@@ -88,7 +88,11 @@ export async function handleNavigation(
 
   const texto =
     actor.role === 'client'
-      ? formatearParaCliente(vista, content, { clientName: version.clientName, plan: version.plan })
+      ? formatearParaCliente(vista, content, {
+          clientName: version.clientName,
+          plan: version.plan,
+          versionNumber: version.versionNumber,
+        })
       : formatearParaEntrenador(vista, content, {
           clientName: version.clientName,
           versionNumber: version.versionNumber,

@@ -73,7 +73,12 @@ function abierta(extra: Partial<OpenRequest> = {}): OpenRequest {
 interface Espia {
   readonly deps: ChangeRequestDeps;
   readonly pasos: string[];
-  readonly mensajes: { chatId: number; text: string; keyboard?: unknown }[];
+  readonly mensajes: {
+    chatId: number;
+    text: string;
+    keyboard?: unknown;
+    forceReply?: boolean;
+  }[];
 }
 
 function espia(
@@ -142,9 +147,14 @@ function espia(
     deps: {
       repo,
       sender: {
-        sendMessage: (chatId, text, keyboard) => {
+        sendMessage: (chatId, text, keyboard, forceReply) => {
           pasos.push(`sendMessage:${chatId}`);
-          mensajes.push({ chatId, text, ...(keyboard === undefined ? {} : { keyboard }) });
+          mensajes.push({
+            chatId,
+            text,
+            ...(keyboard === undefined ? {} : { keyboard }),
+            ...(forceReply === undefined ? {} : { forceReply }),
+          });
           return Promise.resolve();
         },
         answerCallback: () => Promise.resolve(),
@@ -252,6 +262,8 @@ describe('✏️ pedir un cambio', () => {
     expect(alEntrenador?.text).toContain('Carlos');
     expect(alEntrenador?.text).toContain('Muy difícil');
     expect(alEntrenador?.keyboard).toBeDefined();
+    // Es un aviso, no una pregunta: no lleva `force_reply`.
+    expect(alEntrenador?.forceReply).toBeUndefined();
   });
 
   it('al cliente se le invita a escribir el detalle', async () => {
@@ -259,7 +271,10 @@ describe('✏️ pedir un cambio', () => {
 
     await requestChange('other', VERSION_ID, CLIENTE, deps);
 
-    expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('detalle');
+    const alCliente = mensajes.find((m) => m.chatId === 500);
+    expect(alCliente?.text).toContain('detalle');
+    // SPEC-030 regla 3: Telegram enlaza el teclado a la respuesta.
+    expect(alCliente?.forceReply).toBe(true);
   });
 
   // -------------------------------------------------------------------------
@@ -272,9 +287,11 @@ describe('✏️ pedir un cambio', () => {
       const outcome = await askReason(VERSION_ID, CLIENTE, deps);
 
       expect(outcome).toEqual({ kind: 'already_requested', requestId: 'req-1' });
-      expect(mensajes[0]?.keyboard).toBeUndefined();
+      expect(mensajes[0]?.keyboard).toBeFalsy();
       expect(mensajes[0]?.text).toContain('Ya le pediste un cambio');
       expect(mensajes[0]?.text).toContain('Muy difícil');
+      // SPEC-030 regla 3: también invita a escribir, así que también enlaza.
+      expect(mensajes[0]?.forceReply).toBe(true);
       expect(pasos).toContain('touchAsk');
     });
 

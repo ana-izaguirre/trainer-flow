@@ -35,7 +35,7 @@ const RUTINA: Workout = {
 };
 
 const PLAN = { goal: 'Ganancia muscular', daysPerWeek: 4, sessionMinutes: 60 };
-const CONTEXTO = { clientName: 'Carlos', plan: PLAN };
+const CONTEXTO = { clientName: 'Carlos', plan: PLAN, versionNumber: 1 };
 
 // ---------------------------------------------------------------------------
 
@@ -134,7 +134,7 @@ describe('el formato no se rompe', () => {
 describe('una rutina sin evaluación detrás', () => {
   it('omite la línea de objetivo en vez de inventarla', () => {
     // Regla 13: una rutina manual o de plantilla no tiene formulario de Tally.
-    const texto = formatForClient(RUTINA, { clientName: 'Carlos', plan: null });
+    const texto = formatForClient(RUTINA, { clientName: 'Carlos', plan: null, versionNumber: 1 });
 
     expect(texto).toContain('Hola Carlos');
     expect(texto).not.toContain('🎯');
@@ -164,7 +164,7 @@ describe('formatIndexForClient', () => {
   });
 
   it('sin evaluación, omite 🎯 igual que la vista completa', () => {
-    const texto = formatIndexForClient(RUTINA, { clientName: 'Carlos', plan: null });
+    const texto = formatIndexForClient(RUTINA, { clientName: 'Carlos', plan: null, versionNumber: 1 });
     expect(texto).not.toContain('🎯');
   });
 
@@ -177,5 +177,40 @@ describe('formatIndexForClient', () => {
   it('escapa el nombre del cliente', () => {
     const texto = formatIndexForClient(RUTINA, { ...CONTEXTO, clientName: 'Ana-María' });
     expect(texto).toContain('Ana\\-María');
+  });
+});
+
+describe('SPEC-030 regla 10 · la v2 llega presentada como tal', () => {
+  it('CA-10 · la primera rutina dice que está lista', () => {
+    const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 1 });
+
+    expect(texto).toContain('tu rutina está lista');
+    expect(texto).not.toContain('actualizada');
+  });
+
+  it('CA-10 · una v2 dice que está actualizada, no que está «lista»', () => {
+    const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 2 });
+
+    expect(texto).toContain('tu rutina actualizada');
+    expect(texto).not.toContain('está lista');
+  });
+
+  it('una v3 (o más) también', () => {
+    const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 3 });
+
+    expect(texto).toContain('actualizada');
+  });
+
+  // El índice pasó a ser el primer mensaje con SPEC-031: si solo la vista
+  // completa avisara «actualizada», un cliente que nunca pide «Ver todo» no
+  // se enteraría de que es una revisión, y la regla 10 quedaría incumplida.
+  it('CA-10 también en el índice: es el primer mensaje que ve el cliente', () => {
+    const v1 = formatIndexForClient(RUTINA, { ...CONTEXTO, versionNumber: 1 });
+    expect(v1).toContain('tu rutina está lista');
+    expect(v1).not.toContain('actualizada');
+
+    const v2 = formatIndexForClient(RUTINA, { ...CONTEXTO, versionNumber: 2 });
+    expect(v2).toContain('tu rutina actualizada');
+    expect(v2).not.toContain('está lista');
   });
 });

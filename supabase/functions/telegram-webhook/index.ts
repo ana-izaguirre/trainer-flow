@@ -82,7 +82,7 @@ export interface HandlerDeps {
   readonly newToken: () => string;
   /**
    * SPEC-027 §12: el enlace público del formulario. Opcional A PROPÓSITO: sin
-   * él, el bot sigue funcionando y `/actualizar` explica que falta, en vez
+   * él, el bot sigue funcionando y `/actualizar_datos` explica que falta, en vez
    * de que la función entera no arranque.
    */
   readonly tallyFormUrl: string | null;

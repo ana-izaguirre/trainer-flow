@@ -191,6 +191,7 @@ async function enviar(
       formatIndexForClient(version.content, {
         clientName: version.clientName,
         plan: version.plan,
+        versionNumber: version.versionNumber,
       }),
       buildNavKeyboard(
         {
