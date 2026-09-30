@@ -994,7 +994,9 @@ export type Database = {
           client_profile_id: string
           content: Json
           days_per_week: number
+          goal: string
           has_limitations: boolean
+          session_minutes: number
           state: Database["public"]["Enums"]["version_state"]
           trainer_id: string
           version_id: string

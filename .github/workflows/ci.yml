@@ -145,8 +145,13 @@ jobs:
           node --experimental-strip-types --no-warnings \
             -e "import('./tests/helpers/db.ts').then((m) => m.resetTestDatabase())"
 
+          # `?sslmode=disable`: la CLI de supabase (desde 2.118.0) intenta TLS
+          # por defecto al conectar por --db-url. El postgres:17-alpine de
+          # arriba no lo soporta ("bare PostgreSQL, not Supabase") — sin esto,
+          # cualquier bump de la CLI que toque este default rompe el paso
+          # entero con un error que no tiene nada que ver con las migraciones.
           pnpm exec supabase gen types typescript --agent no --schema public \
-            --db-url "postgresql://postgres:postgres@localhost:5432/types_from_migrations" \
+            --db-url "postgresql://postgres:postgres@localhost:5432/types_from_migrations?sslmode=disable" \
             > "$RUNNER_TEMP/database.types.ts"
 
           # Against /dev/null when the file does not exist yet, so the log

@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Workout } from '../domain/workout.ts';
-import { formatForClient } from './client-format.ts';
+import { formatForClient, formatIndexForClient } from './client-format.ts';
 
 const RUTINA: Workout = {
   summary: 'Cuatro días de fuerza',
@@ -77,12 +77,12 @@ describe('lo que sí llega', () => {
     expect(texto).toContain('60');
   });
 
-  it('trae todos los días con sus ejercicios, numerados', () => {
+  it('trae todos los días con sus ejercicios, numerados y como enlace (SPEC-019)', () => {
     const texto = formatForClient(RUTINA, CONTEXTO);
 
-    expect(texto).toContain('1\\. Press banca');
-    expect(texto).toContain('2\\. Fondos');
-    expect(texto).toContain('1\\. Remo');
+    expect(texto).toContain('1\\. [Press banca]');
+    expect(texto).toContain('2\\. [Fondos]');
+    expect(texto).toContain('1\\. [Remo]');
     expect(texto).toContain('Empuje');
     expect(texto).toContain('Tirón');
   });
@@ -143,6 +143,43 @@ describe('una rutina sin evaluación detrás', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// SPEC-031 — la vista de índice: la cabecera de siempre, sin ejercicios.
+
+describe('formatIndexForClient', () => {
+  it('saluda y trae el objetivo, igual que la vista completa', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+
+    expect(texto).toContain('Hola Carlos');
+    expect(texto).toContain('Ganancia muscular');
+  });
+
+  it('trae un renglón por día, pero NINGÚN ejercicio', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+
+    expect(texto).toContain('📅 *Día 1 · Empuje*');
+    expect(texto).toContain('📅 *Día 2 · Tirón*');
+    expect(texto).not.toContain('Press banca');
+    expect(texto).not.toContain('Remo');
+  });
+
+  it('sin evaluación, omite 🎯 igual que la vista completa', () => {
+    const texto = formatIndexForClient(RUTINA, { clientName: 'Carlos', plan: null, versionNumber: 1 });
+    expect(texto).not.toContain('🎯');
+  });
+
+  it('nunca trae `warnings`, ni siquiera el símbolo', () => {
+    const texto = formatIndexForClient(RUTINA, CONTEXTO);
+    expect(texto).not.toContain('⚠️');
+    expect(texto).not.toContain('hombro');
+  });
+
+  it('escapa el nombre del cliente', () => {
+    const texto = formatIndexForClient(RUTINA, { ...CONTEXTO, clientName: 'Ana-María' });
+    expect(texto).toContain('Ana\\-María');
+  });
+});
+
 describe('SPEC-030 regla 10 · la v2 llega presentada como tal', () => {
   it('CA-10 · la primera rutina dice que está lista', () => {
     const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 1 });
@@ -162,5 +199,18 @@ describe('SPEC-030 regla 10 · la v2 llega presentada como tal', () => {
     const texto = formatForClient(RUTINA, { ...CONTEXTO, versionNumber: 3 });
 
     expect(texto).toContain('actualizada');
+  });
+
+  // El índice pasó a ser el primer mensaje con SPEC-031: si solo la vista
+  // completa avisara «actualizada», un cliente que nunca pide «Ver todo» no
+  // se enteraría de que es una revisión, y la regla 10 quedaría incumplida.
+  it('CA-10 también en el índice: es el primer mensaje que ve el cliente', () => {
+    const v1 = formatIndexForClient(RUTINA, { ...CONTEXTO, versionNumber: 1 });
+    expect(v1).toContain('tu rutina está lista');
+    expect(v1).not.toContain('actualizada');
+
+    const v2 = formatIndexForClient(RUTINA, { ...CONTEXTO, versionNumber: 2 });
+    expect(v2).toContain('tu rutina actualizada');
+    expect(v2).not.toContain('está lista');
   });
 });

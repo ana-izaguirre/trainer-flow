@@ -153,9 +153,12 @@ corre los tests:
 
 El *mutation score* es el porcentaje de mutantes que murieron.
 
-**Qué se muta.** Solo los tres módulos que `vitest.config.ts` ya exige al
-100% de cobertura: `authorization.ts`, `state-machine.ts` y
-`validate-draft.ts`.
+**Qué se muta.** Los tres módulos que `vitest.config.ts` ya exige al 100% de
+cobertura (`authorization.ts`, `state-machine.ts`, `validate-draft.ts`), dos
+de SPEC-031 (`callback-data.ts`: parsea el `callback_data` de cualquier
+botón, dato no confiable; `navigation.ts`: decide qué ve cada rol al navegar
+la rutina) y uno de SPEC-019 (`exercise-library.ts`: decide si un ejercicio
+enlaza a la librería real o a una búsqueda).
 
 ```bash
 pnpm test:mutation                 # ~1,5 min; reporte en reports/mutation/index.html
@@ -174,6 +177,9 @@ Actions. No en cada PR: ejecuta los tests cientos de veces.
 |---|---|---|---|
 | `authorization.ts` | **100%** | 100% (79/79) | Es la única capa que separa datos (ADR-010) |
 | `state-machine.ts` | **100%** | 100% (38/38) | Es lo que impide `DRAFT → SENT` |
+| `callback-data.ts` | **100%** | 100% (74/74) | Parsea `callback_data`, dato no confiable de cualquier botón |
+| `navigation.ts` | **100%** | 100% (63/63) | Decide qué ve cada rol al navegar la rutina (SPEC-031) |
+| `exercise-library.ts` | **100%** | 100% (66/66) | Decide si un ejercicio enlaza a RepDB o a una búsqueda (SPEC-019) |
 | `validate-draft.ts` | Se reporta | 83,9% (281/335) | Deuda conocida, abajo |
 
 Stryker solo admite umbrales globales; `scripts/mutation-policy.mjs` los
@@ -183,6 +189,19 @@ exige por archivo.
 cobertura y 5 mutantes sobrevivientes: se podían borrar las comprobaciones de
 rol o de `NULL` sin que fallara nada. Se cerraron con tres tests de
 denegación (`el rol cuenta, no solo el ID`), sin tocar el código.
+
+**Lo que encontró agregar `callback-data.ts` (SPEC-031).** Nunca había
+estado en el scope, así que salió deuda preexistente de la función original
+`parseCallbackData` (no del código nuevo): un mutante que quitaba el `^` del
+regex sobrevivía — nada probaba que el prefijo `act:`/`nav:` tuviera que
+estar al INICIO del `callback_data`, no en cualquier posición. Se cerró con
+un caso `xact:approve:<uuid>` en ambos parsers. El resto de los
+sobrevivientes de ese archivo (7) son mutantes equivalentes: `rawAction` y
+`versionId` (o `vista` y `versionId`) salen del MISMO `match` de un único
+regex, así que son `undefined` los dos a la vez o ninguno — documentados
+inline con `// Stryker disable next-line`, como ya se hace en
+`validate-draft.ts`. `navigation.ts` (código enteramente nuevo) salió limpio
+a la primera: 100%, cero sobrevivientes.
 
 **La deuda de `validate-draft.ts`** (54 sobrevivientes):
 

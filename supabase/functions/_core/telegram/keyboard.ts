@@ -13,7 +13,7 @@
  * Qué hace cada botón al pulsarse es SPEC-004. Esto solo los dibuja.
  */
 import type { VersionState } from '../domain/version.ts';
-import { buildCallbackData, type CallbackAction } from './callback-data.ts';
+import { buildCallbackData, buildNavCallback, type CallbackAction, type RoutineView } from './callback-data.ts';
 
 export interface InlineButton {
   readonly text: string;
@@ -141,4 +141,81 @@ export function buildKeyboard(
       })),
     ),
   };
+}
+
+/**
+ * SPEC-031 — la fila de navegación (índice / día anterior-siguiente / ver
+ * todo), según qué vista se está mostrando.
+ *
+ * Nunca vacía: el índice siempre trae al menos «Ver todo», un día siempre
+ * trae al menos «Índice», y la vista completa siempre trae «Índice».
+ */
+function navRow(view: RoutineView, totalDays: number, versionId: string): readonly InlineButton[] {
+  if (view.kind === 'full') {
+    return [{ text: '📋 Índice', callback_data: buildNavCallback({ kind: 'index' }, versionId) }];
+  }
+
+  if (view.kind === 'index') {
+    const botones: InlineButton[] = [
+      { text: '📖 Ver todo', callback_data: buildNavCallback({ kind: 'full' }, versionId) },
+    ];
+    if (totalDays > 0) {
+      botones.push({
+        text: '▶️ Día 1',
+        callback_data: buildNavCallback({ kind: 'day', dayNumber: 1 }, versionId),
+      });
+    }
+    return botones;
+  }
+
+  // Un día. `◀️` solo si hay uno antes, `▶️` solo si hay uno después — nunca
+  // se ofrece navegar a un día que no existe.
+  const botones: InlineButton[] = [];
+  if (view.dayNumber > 1) {
+    botones.push({
+      text: `◀️ Día ${view.dayNumber - 1}`,
+      callback_data: buildNavCallback({ kind: 'day', dayNumber: view.dayNumber - 1 }, versionId),
+    });
+  }
+  botones.push({ text: '📋 Índice', callback_data: buildNavCallback({ kind: 'index' }, versionId) });
+  if (view.dayNumber < totalDays) {
+    botones.push({
+      text: `Día ${view.dayNumber + 1} ▶️`,
+      callback_data: buildNavCallback({ kind: 'day', dayNumber: view.dayNumber + 1 }, versionId),
+    });
+  }
+  return botones;
+}
+
+export interface NavKeyboardContext {
+  readonly view: RoutineView;
+  /** Cuántos días tiene la rutina, para saber si hay «anterior»/«siguiente». */
+  readonly totalDays: number;
+  readonly versionId: string;
+}
+
+/**
+ * SPEC-031 regla 7 — navegación arriba, decisión abajo, SIEMPRE las dos:
+ * ningún estado o vista se queda sin la fila que le corresponde (mismo
+ * espíritu que `docs/STATE-MACHINE.md` — «Hueco 2», un estado sin botón de
+ * vuelta es tan bug como una transición mal escrita).
+ *
+ * A diferencia de `buildKeyboard`, nunca devuelve `null`: `navRow` siempre
+ * trae al menos un botón (Índice o Ver todo), así que la fila de navegación
+ * nunca está vacía y el `inline_keyboard: [[]]` que rechaza Telegram no
+ * puede darse aquí.
+ */
+export function buildNavKeyboard(
+  nav: NavKeyboardContext,
+  decisionActions: readonly CallbackAction[],
+): InlineKeyboard {
+  const navegacion = navRow(nav.view, nav.totalDays, nav.versionId);
+  const decision = decisionActions.map((action) => ({
+    text: ETIQUETAS[action],
+    callback_data: buildCallbackData(action, nav.versionId),
+  }));
+
+  const filas = [navegacion, decision].filter((fila) => fila.length > 0);
+
+  return { inline_keyboard: filas };
 }

@@ -11,6 +11,7 @@
  * líneas, el descanso se dice en palabras y nada del Markdown que el modelo
  * mete por costumbre (`**negrita**`, viñetas) llega al chat sin procesar.
  */
+import { exerciseUrl } from '../exercise-library.ts';
 import type { Exercise, Workout, WorkoutDay } from '../domain/workout.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import type { InlineKeyboard } from './keyboard.ts';
@@ -29,6 +30,16 @@ const MARKDOWN_V2_SPECIALS = /[\\_*[\]()~`>#+\-=|{}.!]/g;
  */
 export function escapeMarkdownV2(text: string): string {
   return text.replace(MARKDOWN_V2_SPECIALS, (char) => `\\${char}`);
+}
+
+/**
+ * Escapa una URL para la parte `(...)` de un enlace `[texto](url)`.
+ *
+ * Dentro de esa parte, MarkdownV2 exige escapar SOLO `\` y `)` — no la lista
+ * completa de `escapeMarkdownV2`. Escapar de más ahí rompería la URL misma.
+ */
+function escapeMarkdownV2LinkUrl(url: string): string {
+  return url.replace(/\\/g, '\\\\').replace(/\)/g, '\\)');
 }
 
 /**
@@ -179,15 +190,21 @@ function formatReps(reps: string): string {
 }
 
 /**
- * SPEC-029 §4 — un ejercicio, como un bloque de 2 o 3 líneas: nombre
- * numerado en negrita, series con su descanso, y la nota si la hay.
+ * SPEC-029 §4, SPEC-019 — un ejercicio, como un bloque de 2 o 3 líneas:
+ * nombre numerado en negrita y **tocable** (enlaza a su referencia visual),
+ * series con su descanso, y la nota si la hay.
  *
  * Compartido por la vista del entrenador y la del cliente: los dos numeran
  * igual, y la numeración del entrenador es la que usan `/quitar` y `/nota`.
+ *
+ * SPEC-019 regla 4 — la longitud no crece por imágenes: en MarkdownV2 el
+ * nombre ES el enlace, no un adjunto ni una línea de más.
  */
 export function formatExerciseBlock(exercise: Exercise, number: number): string {
+  const nombreLimpio = cleanFreeText(exercise.name);
+  const url = escapeMarkdownV2LinkUrl(exerciseUrl(nombreLimpio));
   const lineas = [
-    `*${number}\\. ${escapeMarkdownV2(cleanFreeText(exercise.name))}*`,
+    `*${number}\\. [${escapeMarkdownV2(nombreLimpio)}](${url})*`,
     `${exercise.sets} × ${formatReps(exercise.reps)} · descanso ${formatRestSeconds(exercise.restSeconds)}`,
   ];
 
@@ -206,6 +223,45 @@ export function formatDayHeader(day: WorkoutDay): string {
 export interface FormatContext {
   readonly clientName: string;
   readonly versionNumber: number;
+}
+
+/**
+ * SPEC-031 — un renglón por día, sin ejercicios: lo que arma el índice.
+ * Compartido por la vista del entrenador y la del cliente.
+ */
+export function formatDayIndex(workout: Workout): string {
+  return workout.days.map((day) => formatDayHeader(day)).join('\n');
+}
+
+/**
+ * SPEC-031 — un solo día: su cabecera y sus ejercicios, nada más. `null` si
+ * ese número de día no existe en la rutina — un `callback_data` de
+ * navegación es dato no confiable, igual que cualquier otro (regla 13).
+ */
+export function formatDayView(workout: Workout, dayNumber: number): string | null {
+  const day = workout.days.find((d) => d.dayNumber === dayNumber);
+  if (day === undefined) return null;
+
+  const bloques = [formatDayHeader(day)];
+  day.exercises.forEach((exercise, index) => {
+    bloques.push(formatExerciseBlock(exercise, index + 1));
+  });
+  return bloques.join('\n\n');
+}
+
+/**
+ * SPEC-031 regla 1 — la vista de índice del entrenador: título, resumen y un
+ * renglón por día. Es el primer mensaje que ve al entregarse o pedir
+ * `/rutina`; `formatWorkout` (abajo) queda para cuando pide «Ver todo».
+ */
+export function formatIndexForTrainer(workout: Workout, context: FormatContext): string {
+  const bloques: string[] = [
+    `🏋️ *Rutina para ${escapeMarkdownV2(context.clientName)}* · v${context.versionNumber}`,
+    escapeMarkdownV2(cleanFreeText(workout.summary)),
+    formatDayIndex(workout),
+  ];
+
+  return bloques.filter((bloque) => bloque.length > 0).join('\n\n');
 }
 
 /**
