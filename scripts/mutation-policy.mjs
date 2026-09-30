@@ -14,8 +14,11 @@
 //   navigation.ts    → decide qué ve cada rol al navegar la rutina
 //                      (SPEC-031); usa canViewVersion, no la reimplementa.
 //   exercise-library.ts → decide si un ejercicio enlaza a la librería real o
-//                      a una búsqueda (SPEC-019); un slug mal elegido llega
-//                      directo al cliente.
+//                      a una búsqueda (SPEC-019 §6, revisada): primero
+//                      contra las plantillas, después contra los 601 de
+//                      RepDB. Un slug mal elegido llega directo al cliente
+//                      — repdb-exercises.ts es solo el dato y no entra
+//                      aquí (ver su propio comentario de cabecera).
 //
 // validate-draft.ts se mutó desde antes (docs/TESTING.md), pero con deuda
 // abierta (mensajes de texto, ~20 guardas redundantes sin documentar aún):

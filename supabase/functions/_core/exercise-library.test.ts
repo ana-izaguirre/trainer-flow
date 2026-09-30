@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { exerciseUrl, TEMPLATE_EXERCISE_SLUGS } from './exercise-library.ts';
+import { REPDB_EXERCISE_SLUGS } from './repdb-exercises.ts';
 
 describe('exerciseUrl', () => {
   it('un ejercicio de la librería enlaza a su página de RepDB', () => {
@@ -64,5 +65,69 @@ describe('TEMPLATE_EXERCISE_SLUGS', () => {
     expect(TEMPLATE_EXERCISE_SLUGS['Remo con mancuerna']).not.toBe(
       TEMPLATE_EXERCISE_SLUGS['Remo inclinado con dos mancuernas'],
     );
+  });
+});
+
+// SPEC-019 §6 (revisada): en vez del enum+IA de la fase 2 original, el
+// mismo diccionario se amplía a los 601 ejercicios reales de RepDB — así
+// un ejercicio generado por IA también puede matchear, sin tocar el
+// dominio ni el prompt (ver la spec para la decisión completa).
+describe('REPDB_EXERCISE_SLUGS — fallback ampliado a los 601 reales', () => {
+  it('un ejercicio que solo está en RepDB (no en templates) enlaza a su página', () => {
+    expect(REPDB_EXERCISE_SLUGS['Rueda Abdominal']).toBe('ab-wheel-rollout');
+    expect(TEMPLATE_EXERCISE_SLUGS['Rueda Abdominal']).toBeUndefined();
+    expect(exerciseUrl('Rueda Abdominal')).toBe('https://exercise-dataset.com/exercise/ab-wheel-rollout/');
+  });
+
+  // El name_es de RepDB no sigue un único estilo de mayúsculas, y nada
+  // garantiza cómo capitaliza el nombre quien genera la rutina — por eso
+  // el match ignora mayúsculas/minúsculas (sigue siendo EXACTO en todo lo
+  // demás: ni fuzzy, ni "el más parecido").
+  it('matchea el ejercicio sin importar cómo esté capitalizado el nombre', () => {
+    expect(exerciseUrl('rueda abdominal')).toBe('https://exercise-dataset.com/exercise/ab-wheel-rollout/');
+    expect(exerciseUrl('RUEDA ABDOMINAL')).toBe('https://exercise-dataset.com/exercise/ab-wheel-rollout/');
+    expect(exerciseUrl('rUeDa AbDoMiNaL')).toBe('https://exercise-dataset.com/exercise/ab-wheel-rollout/');
+  });
+
+  it('el slug de cada uno de los 601 es exactamente el de REPDB_EXERCISE_SLUGS, no uno armado a mano', () => {
+    for (const [name, slug] of Object.entries(REPDB_EXERCISE_SLUGS)) {
+      expect(exerciseUrl(name)).toBe(`https://exercise-dataset.com/exercise/${slug}/`);
+    }
+  });
+
+  it('trae exactamente los 601 ejercicios reales de RepDB', () => {
+    expect(Object.keys(REPDB_EXERCISE_SLUGS)).toHaveLength(601);
+  });
+
+  it('ningún slug tiene espacios, mayúsculas ni caracteres fuera de a-z0-9-', () => {
+    for (const [name, slug] of Object.entries(REPDB_EXERCISE_SLUGS)) {
+      expect(slug, `${name} -> ${slug}`).toMatch(/^[a-z0-9-]+$/);
+    }
+  });
+
+  it('ningún nombre ni slug está vacío ni con espacios de más', () => {
+    for (const [name, slug] of Object.entries(REPDB_EXERCISE_SLUGS)) {
+      expect(name.trim()).toBe(name);
+      expect(name.length).toBeGreaterThan(0);
+      expect(slug.trim()).toBe(slug);
+    }
+  });
+
+  // Las 13 veces que un nombre de plantilla también existe en RepDB
+  // (case-insensitive), ambas fuentes concuerdan en el slug hoy — dato
+  // real, no supuesto. Si algún día dejaran de concordar, la entrada de
+  // templates sigue ganando (documentado en exercise-library.ts), pero
+  // este test avisa si esa concordancia se rompe.
+  it('donde templates y RepDB coinciden en el nombre, coinciden también en el slug', () => {
+    const templateNamesLower = new Map(
+      Object.keys(TEMPLATE_EXERCISE_SLUGS).map((name) => [name.toLowerCase(), name]),
+    );
+    const repdbByLower = new Map(Object.entries(REPDB_EXERCISE_SLUGS).map(([name, slug]) => [name.toLowerCase(), slug]));
+
+    const coincidencias = [...templateNamesLower.entries()].filter(([lower]) => repdbByLower.has(lower));
+    expect(coincidencias).toHaveLength(13);
+    for (const [lower, templateName] of coincidencias) {
+      expect(repdbByLower.get(lower)).toBe(TEMPLATE_EXERCISE_SLUGS[templateName]);
+    }
   });
 });

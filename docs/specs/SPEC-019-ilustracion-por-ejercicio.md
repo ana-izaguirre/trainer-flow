@@ -2,26 +2,26 @@
 
 | Campo | Valor |
 |---|---|
-| **Estado** | **IMPLEMENTADA (fase 1: plantillas)** — la fase 2 (IA, §6) queda pendiente |
+| **Estado** | **IMPLEMENTADA** — diccionario ampliado a los 601 ejercicios de RepDB (§6, revisada) |
 | **Depende de** | SPEC-005 |
 | **Sesiones** | S-50 |
 
-## Resultado (fase 1 — plantillas)
+## Resultado
 
 | Pieza | Dónde | Estado |
 |---|---|---|
-| Diccionario nombre → slug, verificado contra los 601 reales | `_core/exercise-library.ts` | ✅ CA-1, CA-3, 100% mutation |
+| Diccionario nombre de plantilla → slug, verificado contra los 601 reales | `_core/exercise-library.ts` (`TEMPLATE_EXERCISE_SLUGS`) | ✅ CA-1, CA-3, 100% mutation |
+| Diccionario ampliado: los 601 `name_es → slug` reales de RepDB, como respaldo | `_core/repdb-exercises.ts` (`REPDB_EXERCISE_SLUGS`) | ✅ CA-1, CA-3 — cubre también lo que nombra la IA, sin tocar el dominio ni el prompt |
 | Búsqueda armada con el nombre, sin inventar nada | `exercise-library.ts` (`searchUrl`) | ✅ CA-2 |
 | El nombre del ejercicio se vuelve el enlace, en las dos vistas | `telegram/format.ts` (`formatExerciseBlock`) | ✅ CA-1, CA-2 |
 | Variante sin match no cae a su base | `exercise-library.ts` (slugs distintos para «Remo con mancuerna» vs «Remo inclinado con dos mancuernas») | ✅ CA-5 |
 | La longitud sigue cabiendo en 1 mensaje | medido sobre las 10 plantillas reales | ✅ CA-4 — la más larga (`strength-recovery-7d`, 27 ejercicios) da 3868/4096 |
 
-**Fase 2 (IA) pendiente**, tal como pide §6: «conviene tener datos de si
-acierta [la plantilla] antes de confiarle el enlace que ve el cliente».
-Hoy un ejercicio generado por IA no tiene forma de matchear el diccionario
-(las claves son los nombres exactos de `templates.ts`), así que cae siempre
-a la búsqueda — comportamiento correcto por CA-2, solo que no aprovecha
-todavía los 601 slugs para lo que genera el modelo.
+**§6 quedó revisada** (ver abajo): la cobertura de lo que genera la IA no
+sale de un `enum` ni de una llamada nueva a Gemini, sino de ampliar el mismo
+diccionario a los 601 nombres reales de RepDB. Sigue siendo coincidencia
+EXACTA (regla 1) — la decisión completa, con lo que se evaluó y se
+descartó, queda en §6.
 
 ## 1. Objetivo
 
@@ -120,15 +120,40 @@ no a su base.
    exige ShareAlike — exige la atribución y nada de re-publicar el dataset
    (§8), que es justo lo que esta spec no hace: solo enlaza.
 
-## 6. El orden de implementación
+## 6. El orden de implementación (revisada)
 
-**Primero las plantillas.** Los ~60 nombres de ejercicio únicos de
+**Primero las plantillas.** Los ~48 nombres de ejercicio únicos de
 `templates.ts`, tabla hecha a mano una vez, cobertura completa, riesgo cero.
-Ya cubre toda rutina salida de plantilla.
+Ya cubre toda rutina salida de plantilla (`TEMPLATE_EXERCISE_SLUGS`).
 
-**Después la IA.** Se le dan los 601 slugs y se le obliga a elegir uno o
-`null`. Va segundo porque conviene tener datos de si acierta antes de
-confiarle el enlace que ve el cliente.
+**La idea original para la IA** era darle los 601 slugs como `enum` en el
+JSON Schema del prompt y obligarla a elegir uno o `null` — un campo
+`exerciseSlug` nuevo en `Exercise`. Se evaluó y se descartó:
+
+- **El dominio se ensucia.** `Exercise` aparece en ~45 sitios de 18
+  archivos (medido con `grep` sobre `restSeconds:`, su campo hermano),
+  incluyendo código de producción como `editor/commands.ts`. Un campo
+  nuevo, aunque opcional, se propaga a todos.
+- **Costo recurrente de tokens.** Un `enum` de 601 valores viaja en el
+  schema de cada llamada a Gemini, para siempre — no es un costo de una
+  vez.
+- **La ganancia marginal es chica.** Un ejercicio generado por IA casi
+  siempre nombra el movimiento en español de forma reconocible
+  («sentadilla con barra», «peso muerto rumano») — el mismo terreno que ya
+  cubre una coincidencia exacta contra un diccionario grande.
+
+**Lo que se hizo en cambio:** ampliar el mismo diccionario estático, sin
+tocar el dominio ni el prompt. `REPDB_EXERCISE_SLUGS` (`repdb-exercises.ts`)
+trae los 601 pares `name_es → slug` reales de RepDB, no solo los ~48 de
+plantillas. `exerciseUrl` consulta primero `TEMPLATE_EXERCISE_SLUGS` (los
+matices verificados a mano, como unilateral/bilateral en «Remo con
+mancuerna», que el `name_es` de RepDB no distingue) y, si no está ahí, cae
+a `REPDB_EXERCISE_SLUGS`.
+
+Sigue siendo coincidencia EXACTA (regla 1): el prompt no cambia, no hay
+llamada nueva a Gemini, y el modelo no sabe que este diccionario existe. Es
+comparación de strings, local y posterior a la generación — el mismo
+mecanismo de la fase 1, con más cobertura.
 
 ## 7. Criterios de aceptación
 

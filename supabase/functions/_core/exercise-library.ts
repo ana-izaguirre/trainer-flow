@@ -12,9 +12,15 @@
  * │ ejercicio base»).                                                       │
  * └────────────────────────────────────────────────────────────────────────┘
  *
- * Primero las plantillas (§6 de la spec): cobertura completa, riesgo cero.
- * La IA, con los 601 slugs y obligada a elegir uno o `null`, va después.
+ * Primero las plantillas (§6, revisada): cobertura completa, riesgo cero,
+ * con matices hechos a mano que RepDB no distingue por nombre (más abajo).
+ * Si ahí no está, se cae al diccionario ampliado de los 601 ejercicios
+ * reales de RepDB (`repdb-exercises.ts`) — así un ejercicio que nombra la
+ * IA también puede matchear, sin enum, sin campo nuevo en el dominio, sin
+ * llamada extra al proveedor: comparación de strings, local y posterior a
+ * la generación.
  */
+import { REPDB_EXERCISE_SLUGS } from './repdb-exercises.ts';
 
 const REPDB_BASE = 'https://exercise-dataset.com/exercise';
 
@@ -88,10 +94,31 @@ function searchUrl(name: string): string {
 }
 
 /**
+ * `REPDB_EXERCISE_SLUGS` por nombre en minúsculas: el `name_es` de RepDB
+ * no sigue un único estilo de mayúsculas (repdb-exercises.ts), y nada
+ * garantiza cómo capitaliza el nombre quien genera la rutina. Se
+ * construye una sola vez, al cargar el módulo — la búsqueda en
+ * `exerciseUrl` queda en O(1), no en un recorrido de las 601 entradas.
+ */
+const REPDB_SLUGS_BY_LOWER_NAME: ReadonlyMap<string, string> = new Map(
+  Object.entries(REPDB_EXERCISE_SLUGS).map(([name, slug]) => [name.toLowerCase(), slug]),
+);
+
+/**
  * Reglas 2 y 3 de SPEC-019: coincidencia exacta o búsqueda — nunca sin
  * referencia, nunca un slug inventado.
+ *
+ * Primero `TEMPLATE_EXERCISE_SLUGS`, exacto y sensible a mayúsculas: sus
+ * 48 entradas son una decisión hecha a mano (el unilateral/bilateral de
+ * «Remo con mancuerna» vs «Remo inclinado con dos mancuernas», por
+ * ejemplo) que debe ganar siempre, incluso si RepDB cambiara ese slug
+ * algún día. Si el nombre no está ahí, se cae al diccionario ampliado de
+ * RepDB, sin distinguir mayúsculas de minúsculas.
  */
 export function exerciseUrl(name: string): string {
-  const slug = TEMPLATE_EXERCISE_SLUGS[name];
+  const slug =
+    TEMPLATE_EXERCISE_SLUGS[name] !== undefined
+      ? TEMPLATE_EXERCISE_SLUGS[name]
+      : REPDB_SLUGS_BY_LOWER_NAME.get(name.toLowerCase());
   return slug === undefined ? searchUrl(name) : `${REPDB_BASE}/${slug}/`;
 }
