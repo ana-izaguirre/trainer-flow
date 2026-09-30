@@ -27,6 +27,14 @@ import {
   formatExerciseBlock,
 } from './format.ts';
 
+/**
+ * SPEC-019 §10 — nada más en el mensaje dice que el nombre del ejercicio es
+ * un enlace, y un enlace dentro de texto en negrita no siempre resalta.
+ * Va una sola vez, en el índice (el primer mensaje que ve el cliente): la
+ * vista completa y la de un día no lo repiten.
+ */
+const EXERCISE_LINK_HINT = '👆 Toca el nombre de un ejercicio para ver fotos de cómo hacerlo\\.';
+
 /** Lo que viene de la evaluación de Tally. Los tres o ninguno. */
 export interface PlanSummary {
   readonly goal: string;
@@ -114,6 +122,7 @@ export function formatIndexForClient(workout: Workout, context: ClientContext): 
 
   bloques.push(escapeMarkdownV2(cleanFreeText(workout.summary)));
   bloques.push(formatDayIndex(workout));
+  bloques.push(EXERCISE_LINK_HINT);
 
   return bloques.filter((bloque) => bloque.length > 0).join('\n\n');
 }
