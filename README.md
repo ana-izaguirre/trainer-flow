@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](docs/TESTING.md)
+[![Mutation](https://img.shields.io/badge/mutation-100%25_in_critical_modules-brightgreen)](docs/TESTING.md)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Deno](https://img.shields.io/badge/Deno-Edge%20Functions-70FFAF?logo=deno&logoColor=black)](supabase/functions/deno.json)
@@ -230,18 +231,30 @@ by hand), approves it, the client receives it and checks in.
 
 ---
 
-## Getting started
+## Quick start
+
+**No secret, no Telegram bot, no Gemini key needed to see the domain
+running** — that's what "the product already works without AI" means.
+
+```bash
+git clone https://github.com/ana-izaguirre/trainer-flow.git
+cd trainer-flow
+pnpm install
+
+pnpm test:run         # the whole domain, under Node. Zero setup, zero DB.
+pnpm deno:test        # adapters and handlers, under Deno.
+
+# Integration and E2E tests talk to real PostgreSQL — needs Docker:
+supabase start
+pnpm test:integration
+```
+
+Want to see it before reading code? [How it works](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) walks the whole path interactively, node by node; [a simulated run](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) shows the real messages a trainer and a client would see, end to end.
 
 | | |
 |---|---|
-| Deploying for the first time | [`docs/DEPLOY.md`](docs/DEPLOY.md) — a ten-step checklist |
+| Deploying for real | [`docs/DEPLOY.md`](docs/DEPLOY.md) — a ten-step checklist |
 | When something breaks | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — the database is the index, the logs are the detail |
 | How the pieces fit | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | The schema | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
 | Working method | [`CLAUDE.md`](CLAUDE.md) — spec first, code second |
-
-```bash
-pnpm install
-pnpm test:run     # domain, under Node
-pnpm deno:test    # adapters and handlers, under Deno
-```

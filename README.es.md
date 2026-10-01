@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/ana-izaguirre/trainer-flow/actions/workflows/ci.yml)
 [![Cobertura](https://img.shields.io/badge/cobertura-100%25-brightgreen)](docs/TESTING.md)
+[![Mutation](https://img.shields.io/badge/mutation-100%25_en_m%C3%B3dulos_cr%C3%ADticos-brightgreen)](docs/TESTING.md)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-estricto-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Deno](https://img.shields.io/badge/Deno-Edge%20Functions-70FFAF?logo=deno&logoColor=black)](supabase/functions/deno.json)
@@ -230,16 +231,29 @@ plantilla o a mano), la aprueba, el cliente la recibe y hace check-in.
 
 ## Por dónde empezar
 
+**No hace falta ningún secreto, ni bot de Telegram, ni clave de Gemini para
+ver el dominio funcionando** — eso es justo lo que significa "el producto ya
+funciona sin IA".
+
+```bash
+git clone https://github.com/ana-izaguirre/trainer-flow.git
+cd trainer-flow
+pnpm install
+
+pnpm test:run         # el dominio entero, bajo Node. Cero setup, cero base.
+pnpm deno:test        # adaptadores y handlers, bajo Deno.
+
+# Los tests de integración y E2E hablan con PostgreSQL real — hace falta Docker:
+supabase start
+pnpm test:integration
+```
+
+¿Querés verlo antes de leer código? [Cómo funciona](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) recorre el camino completo de forma interactiva, nodo por nodo; [un envío simulado](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) muestra los mensajes reales que verían un entrenador y su cliente, de punta a punta.
+
 | | |
 |---|---|
-| Desplegar por primera vez | [`docs/DEPLOY.md`](docs/DEPLOY.md) — un checklist de diez pasos |
+| Desplegar de verdad | [`docs/DEPLOY.md`](docs/DEPLOY.md) — un checklist de diez pasos |
 | Cuando algo falla | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — la base es el índice, los logs el detalle |
 | Cómo encajan las piezas | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | El esquema | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) |
 | Método de trabajo | [`CLAUDE.md`](CLAUDE.md) — primero la spec, después el código |
-
-```bash
-pnpm install
-pnpm test:run     # el dominio, bajo Node
-pnpm deno:test    # adaptadores y handlers, bajo Deno
-```
