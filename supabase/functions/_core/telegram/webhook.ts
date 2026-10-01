@@ -276,17 +276,21 @@ export async function handleTelegramWebhook(
     let updateRequest: UpdateRequestOutcome | undefined;
     let editInstruction: EditOutcome | undefined;
 
+    // SPEC-004 — cambiar de intención no es un error: cualquier interacción
+    // del entrenador que NO sea el propio texto suelto (un comando, o un
+    // botón) cancela la espera de edición en silencio. Si no cubriera los
+    // botones, abrir OTRA versión por botón —navegar, aprobar, rechazar—
+    // dejaría la espera vieja encendida, y el próximo texto suelto se
+    // interpretaría como instrucción para una versión que el entrenador ya
+    // no está mirando. `update.kind !== 'text'` es a propósito: el texto es
+    // justo lo que esta espera está esperando.
+    if (identity.role === 'trainer' && update.kind !== 'text') {
+      await deps.edit.repo.cancelAnyEditWait(identity.profileId);
+    }
+
     // Un comando ya con identidad resuelta. `/start <token>` no llega aquí:
     // se atendió en el paso 4, antes de que hubiera identidad.
     if (update.kind === 'command') {
-      // SPEC-004 — cambiar de intención no es un error: un comando en vez de
-      // la instrucción que se esperaba cancela la espera en silencio. Sin
-      // esto, el entrenador queda con una versión «esperando» indefinidamente
-      // hasta que por casualidad escriba texto sin `/` — el tipo de encierro
-      // que la spec pide evitar explícitamente.
-      if (identity.role === 'trainer') {
-        await deps.edit.repo.cancelAnyEditWait(identity.profileId);
-      }
       // SPEC-031: solo `/crear_rutina` puede nombrar a alguien EN el mismo
       // mensaje. Va antes del resto del editor: si el patrón no encaja
       // (`not_applicable`), sigue exactamente el camino de siempre.

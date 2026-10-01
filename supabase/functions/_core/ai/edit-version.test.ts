@@ -213,6 +213,9 @@ describe('sin margen de cuota', () => {
     expect(outcome.kind).toBe('rate_limited');
     expect(pasos).toEqual(['findAwaitingEdit', 'recentGenerations', 'cancelEditWait']);
     expect(mensajes[0]?.toLowerCase()).toContain('cuota');
+    // Mismo trato que cualquier otro fallo de edición (buildEditFailed): sin
+    // esto, el entrenador se queda sin los botones para seguir.
+    expect(mensajes[0]).toContain(':con-teclado');
   });
 
   it('no se toca el contenido', async () => {
