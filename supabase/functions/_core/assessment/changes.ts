@@ -17,7 +17,7 @@
  * │ libre tampoco: no se sabe qué escribió el cliente ahí.                 │
  * └────────────────────────────────────────────────────────────────────────┘
  */
-import type { Level } from '../domain/assessment.ts';
+import { LEVEL_LABELS, type Level } from '../domain/assessment.ts';
 import type { ParsedAssessment } from './validate-assessment.ts';
 
 /** Lo que se compara: la evaluación sin el nombre, que no cambia al cliente. */
@@ -27,12 +27,6 @@ export type AssessmentChange =
   | { readonly label: string; readonly before: string | null; readonly after: string | null }
   /** Sensible o texto libre: solo se nombra. */
   | { readonly label: string };
-
-const NIVEL: Readonly<Record<Level, string>> = {
-  beginner: 'Principiante',
-  intermediate: 'Intermedio',
-  advanced: 'Avanzado',
-};
 
 type Campo = keyof ComparableAssessment;
 
@@ -78,7 +72,7 @@ function comparable(value: unknown): string | null {
 
 function mostrar(campo: Campo, value: unknown): string | null {
   const texto = comparable(value);
-  return campo === 'level' && texto !== null ? (NIVEL[texto as Level] ?? texto) : texto;
+  return campo === 'level' && texto !== null ? (LEVEL_LABELS[texto as Level] ?? texto) : texto;
 }
 
 /** `previous` es `null` si el plan no tenía evaluación: todo cuenta como nuevo. */

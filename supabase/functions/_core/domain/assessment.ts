@@ -9,3 +9,10 @@
 export type Level = 'beginner' | 'intermediate' | 'advanced';
 
 export const LEVELS: readonly Level[] = ['beginner', 'intermediate', 'advanced'];
+
+/** El nivel, en palabras que el entrenador reconoce. */
+export const LEVEL_LABELS: Readonly<Record<Level, string>> = {
+  beginner: 'Principiante',
+  intermediate: 'Intermedio',
+  advanced: 'Avanzado',
+};

@@ -13,7 +13,9 @@ import type {
   PendingVersion,
   StaleCheckin,
 } from '../ports/query-ports.ts';
+import { FEELING_LABELS, type Feeling } from '../checkin/answers.ts';
 import { REASON_LABELS } from '../domain/change-request.ts';
+import { LEVEL_LABELS } from '../domain/assessment.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import { buildClientCallback } from '../telegram/client-callback.ts';
 import {
@@ -37,19 +39,6 @@ export interface CommandMessage {
   readonly text: string;
   readonly keyboard?: InlineKeyboard | null;
 }
-
-/** El nivel, en palabras que el entrenador reconoce. */
-const NIVEL: Readonly<Record<string, string>> = {
-  beginner: 'Principiante',
-  intermediate: 'Intermedio',
-  advanced: 'Avanzado',
-};
-
-const SENSACION: Readonly<Record<string, string>> = {
-  hard: '😫 Muy duro',
-  good: '💪 Bien',
-  easy: '😌 Fácil',
-};
 
 /** Qué le pasa a este cliente, en un vistazo. Lo urgente primero. */
 function estadoDeCliente(c: ClientSummary): string {
@@ -102,7 +91,7 @@ export function formatClientDetail(c: ClientDetail): string {
   const lineas = [`👤 *${escapeMarkdownV2(c.fullName)}*`];
 
   if (c.goal !== null) {
-    const nivel = c.level === null ? '' : ` · ${NIVEL[c.level] ?? c.level}`;
+    const nivel = c.level === null ? '' : ` · ${LEVEL_LABELS[c.level] ?? c.level}`;
     lineas.push(escapeMarkdownV2(`Objetivo: ${c.goal}${nivel}`));
   }
 
@@ -141,7 +130,8 @@ export function formatClientDetail(c: ClientDetail): string {
   if (c.lastCheckin !== null) {
     const k = c.lastCheckin;
     const sesiones = k.sessions === null ? 'sin contestar' : String(k.sessions);
-    const sensacion = k.feeling === null ? 'sin contestar' : (SENSACION[k.feeling] ?? k.feeling);
+    const sensacion =
+      k.feeling === null ? 'sin contestar' : (FEELING_LABELS[k.feeling as Feeling] ?? k.feeling);
     lineas.push(
       `📊 Último check\\-in: semana ${k.weekNumber} — ${escapeMarkdownV2(sesiones)} · ${sensacion}`,
     );

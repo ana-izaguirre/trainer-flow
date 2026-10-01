@@ -13,7 +13,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { canModifyVersion } from '../authorization.ts';
-import type { Level } from '../domain/assessment.ts';
+import { LEVEL_LABELS } from '../domain/assessment.ts';
 import type { Identity } from '../domain/identity.ts';
 import type { IntakeForVersion, IntakeRepo } from '../ports/intake-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
@@ -28,12 +28,6 @@ export type IntakeOutcome =
   | { readonly kind: 'shown'; readonly versionId: string }
   /** No existe, no es suya, o no hubo formulario. Los tres suenan igual. */
   | { readonly kind: 'rejected'; readonly reason: string };
-
-const NIVEL: Readonly<Record<Level, string>> = {
-  beginner: 'Principiante',
-  intermediate: 'Intermedio',
-  advanced: 'Avanzado',
-};
 
 /** `dd/mm/aaaa`, que es como se lee una fecha de admisión. */
 function fecha(d: Date): string {
@@ -56,7 +50,7 @@ export function formatIntake(intake: IntakeForVersion): string {
     `_Recibida el ${escapeMarkdownV2(fecha(intake.submittedAt))}_`,
     '',
     `🎯 *Objetivo:* ${escapeMarkdownV2(intake.goal)}`,
-    `📊 *Nivel:* ${NIVEL[intake.level]}`,
+    `📊 *Nivel:* ${LEVEL_LABELS[intake.level]}`,
     `📅 *Frecuencia:* ${intake.daysPerWeek} días · ${intake.sessionMinutes} min por sesión`,
     intake.equipmentDetail === null || intake.equipmentDetail.trim() === ''
       ? `🏋️ *Material:* ${escapeMarkdownV2(intake.equipment)}`

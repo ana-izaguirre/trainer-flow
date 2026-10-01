@@ -14,9 +14,10 @@
  * Qué pasa al pulsar cada botón es SPEC-004. Aquí solo se compone el mensaje.
  */
 import { formatChanges, type AssessmentChange } from '../assessment/changes.ts';
-import type { Level } from '../domain/assessment.ts';
+import { LEVEL_LABELS, type Level } from '../domain/assessment.ts';
 import type { VersionState } from '../domain/version.ts';
 import type { Workout } from '../domain/workout.ts';
+import { REINTENTABLES } from '../ai/provider-call.ts';
 import type { AIFailureReason } from '../ports/ai-provider.ts';
 import { escapeMarkdownV2, formatWorkout, type FormatContext } from './format.ts';
 import {
@@ -47,22 +48,6 @@ export interface AssessmentSummary {
   readonly limitationsDetail?: string | null;
 }
 
-/** Corto, para leer de un vistazo. El prompt usa otros, más explicativos. */
-const NIVEL: Readonly<Record<Level, string>> = {
-  beginner: 'Principiante',
-  intermediate: 'Intermedio',
-  advanced: 'Avanzado',
-};
-
-/**
- * Los motivos que se arreglan volviendo a intentarlo.
- *
- * Es la misma lista que la de los reintentos automáticos de
- * `_core/ai/generate-version.ts`: sin cuota o con una respuesta ilegible, un
- * botón de reintentar fallaría igual.
- */
-const REINTENTABLES: readonly AIFailureReason[] = ['API_ERROR', 'TIMEOUT'];
-
 export const MOTIVO: Readonly<Record<AIFailureReason, string>> = {
   RATE_LIMITED: 'La IA no tiene margen de cuota ahora mismo.',
   TIMEOUT: 'La IA tardó demasiado en responder.',
@@ -92,7 +77,7 @@ export function buildAssessmentArrived(
     `📋 *Nueva evaluación: ${escapeMarkdownV2(summary.clientName)}*`,
     '',
     `Objetivo: ${escapeMarkdownV2(summary.goal)}`,
-    `Nivel: ${NIVEL[summary.level]}`,
+    `Nivel: ${LEVEL_LABELS[summary.level]}`,
     `${summary.daysPerWeek} días · ${summary.sessionMinutes} min`,
     `Material: ${escapeMarkdownV2(summary.equipment)}`,
   ];

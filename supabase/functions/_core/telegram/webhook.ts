@@ -323,29 +323,25 @@ export async function handleTelegramWebhook(
     }
 
     if (update.kind === 'callback') {
-      // Los prefijos viajan por el mismo canal, así que se prueban en orden.
-      // `chk:`, `tpl:`, `chg:`, `cli:`, `nav:` y `act:` no pueden confundirse:
-      // son literales distintos.
-      const respuesta = parseCheckinCallback(update.data);
-      const plantilla = respuesta === null ? parseTemplateCallback(update.data) : null;
-      const motivo =
-        respuesta === null && plantilla === null ? parseChangeCallback(update.data) : null;
-      const ficha =
-        respuesta === null && plantilla === null && motivo === null
-          ? parseClientCallback(update.data)
-          : null;
-      const navegacion =
-        respuesta === null && plantilla === null && motivo === null && ficha === null
-          ? parseNavCallback(update.data)
-          : null;
-      const payload =
-        respuesta === null &&
-        plantilla === null &&
-        motivo === null &&
-        ficha === null &&
-        navegacion === null
-          ? parseCallbackData(update.data)
-          : null;
+      // Los prefijos viajan por el mismo canal, así que se prueban en orden:
+      // el primero que matchee gana, y el resto queda `null` sin intentarlo
+      // (SPEC-032 §3.5 — antes cada parser nuevo encadenaba una condición
+      // `=== null &&` a la comprobación siguiente). `chk:`, `tpl:`, `chg:`,
+      // `cli:`, `nav:` y `act:` no pueden confundirse: son literales distintos.
+      let resuelto = false;
+      const intentar = <T>(parser: () => T | null): T | null => {
+        if (resuelto) return null;
+        const resultado = parser();
+        if (resultado !== null) resuelto = true;
+        return resultado;
+      };
+
+      const respuesta = intentar(() => parseCheckinCallback(update.data));
+      const plantilla = intentar(() => parseTemplateCallback(update.data));
+      const motivo = intentar(() => parseChangeCallback(update.data));
+      const ficha = intentar(() => parseClientCallback(update.data));
+      const navegacion = intentar(() => parseNavCallback(update.data));
+      const payload = intentar(() => parseCallbackData(update.data));
 
       if (ficha !== null) {
         // SPEC-022 M4: uno de los botones de «Hay varios que encajan». Es

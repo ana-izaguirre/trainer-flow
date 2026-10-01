@@ -22,6 +22,7 @@ import type {
   VersionForGeneration,
 } from '../_core/ports/generation-ports.ts';
 import type { EditRepo } from '../_core/ports/edit-ports.ts';
+import type { AIRequest } from '../_core/ports/ai-provider.ts';
 import type { Level } from '../_core/domain/assessment.ts';
 import type { VersionState } from '../_core/domain/version.ts';
 import type { Workout } from '../_core/domain/workout.ts';
@@ -473,6 +474,63 @@ export function createGenerationRepo(db: Db, requestId: string): GenerationRepo 
 }
 
 /**
+ * Las columnas que `version_for_generation` y `version_awaiting_edit`
+ * devuelven IGUAL, para armar un `AIRequest` (SPEC-002 / SPEC-004). `unknown`
+ * en cada campo a propósito: las dos funciones SQL generan un tipo de fila
+ * distinto, y lo único que esta firma pide es que la columna exista — el
+ * cast real va adentro, igual que antes de compartirse.
+ */
+interface FilaConDatosDeAIRequest {
+  readonly goal: unknown;
+  readonly level: unknown;
+  readonly days_per_week: unknown;
+  readonly session_minutes: unknown;
+  readonly equipment: unknown;
+  readonly equipment_detail: unknown;
+  readonly limitations: unknown;
+  readonly gender: unknown;
+  readonly age: unknown;
+  readonly weight_kg: unknown;
+  readonly height_cm: unknown;
+  readonly quit_reasons: unknown;
+  readonly menopause_stage: unknown;
+  readonly last_weighed: unknown;
+  readonly chronic_conditions: unknown;
+  readonly medications: unknown;
+  readonly lifestyle: unknown;
+  readonly notes: unknown;
+}
+
+/**
+ * El mapeo de fila SQL a `AIRequest`, compartido entre generar y editar
+ * (antes vivía duplicado en los dos sitios — ver SPEC-032 §3.1). `instruction`
+ * queda afuera: generar manda `null`, editar manda el texto del entrenador,
+ * y cada llamador lo decide al construir el objeto final.
+ */
+function filaToAIRequest(fila: FilaConDatosDeAIRequest): Omit<AIRequest, 'instruction'> {
+  return {
+    goal: fila.goal as string,
+    level: fila.level as Level,
+    daysPerWeek: fila.days_per_week as number,
+    sessionMinutes: fila.session_minutes as number,
+    equipment: fila.equipment as string,
+    equipmentDetail: (fila.equipment_detail as string | null) ?? null,
+    limitations: (fila.limitations as string | null) ?? null,
+    gender: (fila.gender as string | null) ?? null,
+    age: fila.age === null ? null : Number(fila.age),
+    weightKg: fila.weight_kg === null ? null : Number(fila.weight_kg),
+    heightCm: fila.height_cm === null ? null : Number(fila.height_cm),
+    quitReasons: (fila.quit_reasons as string | null) ?? null,
+    menopauseStage: (fila.menopause_stage as string | null) ?? null,
+    lastWeighed: (fila.last_weighed as string | null) ?? null,
+    chronicConditions: (fila.chronic_conditions as string | null) ?? null,
+    medications: (fila.medications as string | null) ?? null,
+    lifestyle: (fila.lifestyle as string | null) ?? null,
+    notes: (fila.notes as string | null) ?? null,
+  };
+}
+
+/**
  * Reúne versión, evaluación y entrenador en una consulta.
  *
  * El `join` de cinco tablas vive en `version_for_generation` (migración 0007):
@@ -490,37 +548,14 @@ async function findVersionForGeneration(
   if (data === null) return null;
 
   const fila = data;
-  const limitations = (fila.limitations as string | null) ?? null;
 
   return {
     versionId: fila.version_id as string,
     state: fila.state as VersionState,
     clientName: fila.client_name as string,
     versionNumber: Number(fila.version_number),
-    request: {
-      goal: fila.goal as string,
-      level: fila.level as Level,
-      daysPerWeek: fila.days_per_week as number,
-      sessionMinutes: fila.session_minutes as number,
-      equipment: fila.equipment as string,
-      limitations,
-      // Generar desde cero, no editar. La edición llega en el bloque 7.
-      instruction: null,
-      // SPEC-016. `chronicConditions` no está aquí porque `AIRequest` no lo
-      // tiene, y `version_for_generation` tampoco lo devuelve.
-      gender: (fila.gender as string | null) ?? null,
-      age: fila.age === null ? null : Number(fila.age),
-      weightKg: fila.weight_kg === null ? null : Number(fila.weight_kg),
-      heightCm: fila.height_cm === null ? null : Number(fila.height_cm),
-      quitReasons: (fila.quit_reasons as string | null) ?? null,
-      menopauseStage: (fila.menopause_stage as string | null) ?? null,
-      lastWeighed: (fila.last_weighed as string | null) ?? null,
-      chronicConditions: (fila.chronic_conditions as string | null) ?? null,
-      medications: (fila.medications as string | null) ?? null,
-      equipmentDetail: (fila.equipment_detail as string | null) ?? null,
-      lifestyle: (fila.lifestyle as string | null) ?? null,
-      notes: (fila.notes as string | null) ?? null,
-    },
+    // Generar desde cero, no editar: la edición llega en el bloque 7.
+    request: { ...filaToAIRequest(fila), instruction: null },
     constraints: {
       daysPerWeek: fila.days_per_week as number,
       hasLimitations: fila.has_limitations as boolean,
@@ -804,9 +839,9 @@ export function createActionRepo(db: Db, requestId: string): ActionRepo {
  * Implementa el puerto `EditRepo`.
  *
  * `findAwaitingEdit` es el mismo patrón que `findVersionForGeneration`
- * (SPEC-002): mismas columnas, mismo `AIRequest` armado a mano. La única
- * diferencia real es la función SQL que RPC-ea (`version_awaiting_edit` en
- * vez de `version_for_generation`).
+ * (SPEC-002): mismas columnas, mismo `AIRequest` armado por `filaToAIRequest`.
+ * La única diferencia real es la función SQL que RPC-ea
+ * (`version_awaiting_edit` en vez de `version_for_generation`).
  */
 export function createEditRepo(db: Db, requestId: string): EditRepo {
   return {
@@ -819,36 +854,15 @@ export function createEditRepo(db: Db, requestId: string): EditRepo {
       if (data === null) return null;
 
       const fila = data;
-      const limitations = (fila.limitations as string | null) ?? null;
 
       return {
         versionId: fila.version_id as string,
         editCount: Number(fila.edit_count),
         clientName: fila.client_name as string,
         versionNumber: Number(fila.version_number),
-        request: {
-          goal: fila.goal as string,
-          level: fila.level as Level,
-          daysPerWeek: fila.days_per_week as number,
-          sessionMinutes: fila.session_minutes as number,
-          equipment: fila.equipment as string,
-          limitations,
-          // La instrucción la completa `applyEditInstruction` con el texto
-          // recibido: aquí todavía no se sabe.
-          instruction: null,
-          gender: (fila.gender as string | null) ?? null,
-          age: fila.age === null ? null : Number(fila.age),
-          weightKg: fila.weight_kg === null ? null : Number(fila.weight_kg),
-          heightCm: fila.height_cm === null ? null : Number(fila.height_cm),
-          quitReasons: (fila.quit_reasons as string | null) ?? null,
-          menopauseStage: (fila.menopause_stage as string | null) ?? null,
-          lastWeighed: (fila.last_weighed as string | null) ?? null,
-          chronicConditions: (fila.chronic_conditions as string | null) ?? null,
-          medications: (fila.medications as string | null) ?? null,
-          equipmentDetail: (fila.equipment_detail as string | null) ?? null,
-          lifestyle: (fila.lifestyle as string | null) ?? null,
-          notes: (fila.notes as string | null) ?? null,
-        },
+        // La instrucción la completa `applyEditInstruction` con el texto
+        // recibido: aquí todavía no se sabe.
+        request: { ...filaToAIRequest(fila), instruction: null },
         constraints: {
           daysPerWeek: fila.days_per_week as number,
           hasLimitations: fila.has_limitations as boolean,
