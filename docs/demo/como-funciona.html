@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cómo funciona TrainerFlow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  /* Layout: línea de tiempo horizontal de nodos (vertical en móvil);
+     clickear un nodo abre su detalle en el panel lateral/inferior. */
+  :root {
+    --bg: #f4f6f4;
+    --surface: #ffffff;
+    --ink: #16241c;
+    --ink-dim: #5b6b61;
+    --line: #dde5df;
+    --accent: #1f8a5c;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3f3e9;
+    --warn: #c8742f;
+    --font-display: 'Sora', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1713;
+      --surface: #16201a;
+      --ink: #e8f3ec;
+      --ink-dim: #93a69c;
+      --line: #273328;
+      --accent: #35c285;
+      --accent-ink: #06130c;
+      --accent-soft: #15291e;
+      --warn: #e2995f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1713; --surface: #16201a; --ink: #e8f3ec; --ink-dim: #93a69c;
+    --line: #273328; --accent: #35c285; --accent-ink: #06130c; --accent-soft: #15291e; --warn: #e2995f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    padding: 20px 16px 36px;
+    max-width: 1040px;
+    margin: 0 auto;
+  }
+  h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+
+  header.top { margin-bottom: 20px; max-width: 680px; }
+  header.top h1 { font-size: clamp(1.3rem, 1rem + 1.4vw, 1.8rem); letter-spacing: -0.01em; }
+  header.top p { margin: 6px 0 0; color: var(--ink-dim); font-size: 0.92rem; line-height: 1.55; }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 0.78rem; color: var(--ink-dim); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  .flow {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(148px, 1fr);
+    gap: 6px;
+    align-items: stretch;
+    overflow-x: auto;
+    padding: 4px 2px 14px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 680px) {
+    .flow { grid-auto-flow: row; grid-auto-columns: unset; overflow-x: visible; }
+  }
+
+  .node {
+    background: var(--surface);
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 10px;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--font-body);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+    min-width: 0;
+  }
+  .node:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .node.active { border-color: var(--accent); background: var(--accent-soft); }
+  .node .emoji { font-size: 1.2rem; }
+  .node .label { font-size: 0.8rem; font-weight: 700; line-height: 1.25; }
+  .node .sub { font-size: 0.68rem; color: var(--ink-dim); }
+  .node.branch { border-style: dashed; }
+
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-dim);
+    font-size: 1rem;
+  }
+  @media (max-width: 680px) { .arrow { transform: rotate(90deg); padding: 2px 0; } }
+
+  .detail {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    min-height: 180px;
+  }
+  .detail h2 { font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+  .detail .file {
+    display: inline-block;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 3px 8px;
+  }
+  .detail p { font-size: 0.88rem; line-height: 1.6; color: var(--ink); margin: 12px 0 0; }
+  .detail p.dim { color: var(--ink-dim); font-size: 0.82rem; }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; font-size: 0.86rem; line-height: 1.6; }
+
+  footer.note {
+    margin-top: 22px;
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    line-height: 1.5;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Cómo funciona TrainerFlow</h1>
+  <p>El camino completo de una rutina, de principio a fin. Tocá cualquier paso para ver qué hace y qué garantiza — está escrito contra el código real, no es un esquema aparte que se puede desactualizar en silencio.</p>
+  <div class="legend">
+    <span><i style="background:var(--accent)"></i> siempre pasa por aquí</span>
+    <span><i style="background:transparent;border:1.5px dashed var(--ink-dim)"></i> una de tres, a elección del entrenador</span>
+  </div>
+</header>
+
+<div class="flow" id="flow"></div>
+<div class="detail" id="detail"></div>
+
+<footer class="note">
+  Este diagrama es una vista interactiva de <code>docs/ARCHITECTURE.md</code> y <code>docs/STATE-MACHINE.md</code>. Si el código cambia, este archivo se actualiza a mano — no se genera solo, así que no sustituye a la spec: la complementa para explorar rápido.
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var NODES = [
+    {
+      id: 'form',
+      emoji: '🧍',
+      label: 'El cliente llena el formulario',
+      sub: 'Tally · 2-3 min',
+      file: 'tally-webhook/index.ts',
+      title: '🧍 El formulario de admisión',
+      body: 'Un formulario corto en Tally: objetivo, días disponibles, equipamiento, si tiene alguna limitación. El webhook lo recibe, lo guarda y responde 200 antes de hacer nada más — Tally reintenta si no contesta rápido.',
+      points: [
+        'Idempotencia por UNIQUE(source, external_id): el mismo evento dos veces produce un solo efecto.',
+        'Crea cliente, evaluación y plan en una sola transacción.',
+      ],
+    },
+    {
+      id: 'notify',
+      emoji: '🔔',
+      label: 'El entrenador se entera',
+      sub: 'Telegram',
+      file: 'telegram/notify.ts',
+      title: '🔔 Aviso de evaluación nueva',
+      body: '«📋 Nueva evaluación: [nombre]» con el resumen y cuatro botones: Ver evaluación, Generar con IA, Plantilla, A mano. Ninguno se dispara solo — el primer movimiento sobre una rutina siempre es del entrenador.',
+      points: [
+        'El detalle de una limitación (p. ej. "rodilla operada") no va en este aviso: se ve recién al abrir la rutina.',
+      ],
+    },
+    {
+      id: 'ai',
+      emoji: '🤖',
+      label: 'Generar con IA',
+      sub: 'Gemini, tras AIProvider',
+      file: 'ai/generate-version.ts',
+      title: '🤖 La IA propone un borrador',
+      body: 'Gemini recibe el prompt armado desde los datos reales del cliente y devuelve JSON. Si falla —sin cuota, timeout, respuesta inválida— la versión vuelve a NEW y el entrenador sigue por plantilla o a mano: la IA nunca es punto único de fallo.',
+      points: [
+        'La palabra "gemini" no existe en _core/ — el dominio solo conoce la interfaz AIProvider.',
+        'Un fallo se reintenta una vez solo si vale la pena (API_ERROR, TIMEOUT); una cuota agotada no se reintenta.',
+      ],
+      branch: true,
+    },
+    {
+      id: 'template',
+      emoji: '📋',
+      label: 'Desde una plantilla',
+      sub: '10 plantillas, ordenadas',
+      file: 'templates.ts',
+      title: '📋 Plantilla',
+      body: 'El selector ordena las 10 plantillas según días, nivel y equipamiento del cliente — nunca filtra, así que siempre hay al menos una candidata, sin importar la combinación de criterios.',
+      points: ['Cero consultas a la base: son datos estáticos.'],
+      branch: true,
+    },
+    {
+      id: 'manual',
+      emoji: '✍️',
+      label: 'A mano',
+      sub: 'El editor del entrenador',
+      file: 'creation/editor-session.ts',
+      title: '✍️ Escrita a mano',
+      body: 'El entrenador dicta la rutina día por día, línea por línea, desde el chat. Pasa por exactamente la misma validación que una generada por IA — ninguna de las tres fuentes es más confiable que otra por default.',
+      points: [],
+      branch: true,
+    },
+    {
+      id: 'validate',
+      emoji: '🧪',
+      label: 'Se valida',
+      sub: 'Manual o IA: lo mismo',
+      file: 'domain/validate-draft.ts',
+      title: '🧪 La frontera del dominio',
+      body: 'Sin importar el origen, el borrador pasa por validateDraft antes de convertirse en una versión real: límites de sets, reps, cantidad de días, que las limitaciones declaradas se hayan tenido en cuenta. Nada entra al dominio sin pasar por aquí.',
+      points: ['Cobertura 100% obligatoria — es la frontera con datos no confiables (la IA incluida).'],
+    },
+    {
+      id: 'draft',
+      emoji: '📝',
+      label: 'El entrenador la revisa',
+      sub: 'Estado DRAFT',
+      file: 'telegram/format.ts',
+      title: '📝 Listo para revisar',
+      body: 'La rutina completa, formateada para Telegram, con tres botones: Editar, Aprobar, Rechazar. El entrenador puede pedirle a la IA que la edite conversacionalmente ("quita la sentadilla del día 3"), sin que eso cambie el principio: sigue siendo él quien aprueba.',
+      points: ['DRAFT → SENT no existe en la máquina de estados. No es una regla de negocio, es que la transición no está en la tabla.'],
+    },
+    {
+      id: 'approve',
+      emoji: '✅',
+      label: 'Aprueba',
+      sub: 'Única acción humana que cuenta',
+      file: 'domain/state-machine.ts',
+      title: '✅ La aprobación',
+      body: 'El único evento que mueve DRAFT → APPROVED. Es la bisagra de todo el sistema: ni la IA, ni una plantilla, ni un timeout pueden disparar esta transición — solo el toque de un botón del entrenador.',
+      points: ['Probado con un test que recorre las 54 combinaciones de estado×evento posibles: solo esta llega a APPROVED.'],
+    },
+    {
+      id: 'deliver',
+      emoji: '📬',
+      label: 'El cliente la recibe',
+      sub: 'Entrega + SENT',
+      file: 'telegram/delivery.ts',
+      title: '📬 Entrega',
+      body: 'APPROVED → SENT, y el cliente recibe el mensaje de bienvenida con el índice de su rutina (día por día) y botones de navegación. Una vez SENT, la versión es un hecho histórico: nunca se sobrescribe.',
+      points: ['Un cambio produce version + 1; la anterior queda intacta para siempre.'],
+    },
+    {
+      id: 'checkin',
+      emoji: '📊',
+      label: 'Check-in semanal',
+      sub: 'pg_cron · lunes',
+      file: 'weekly-checkin/index.ts',
+      title: '📊 El ciclo continúa',
+      body: 'Cada lunes, quien tiene una rutina SENT recibe tres preguntas cortas. Una molestia se avisa al entrenador al instante, no al final de la semana.',
+      points: ['Correr el cron dos veces el mismo día no duplica nada.'],
+    },
+  ];
+
+  var flow = document.getElementById('flow');
+  var detail = document.getElementById('detail');
+  var current = null;
+
+  NODES.forEach(function (node, idx) {
+    if (idx > 0 && !(node.branch && NODES[idx - 1].branch)) {
+      var arrow = document.createElement('div');
+      arrow.className = 'arrow';
+      arrow.textContent = '→';
+      flow.appendChild(arrow);
+    }
+
+    var el = document.createElement('button');
+    el.className = 'node' + (node.branch ? ' branch' : '');
+    el.innerHTML =
+      '<span class="emoji">' + node.emoji + '</span>' +
+      '<span class="label">' + node.label + '</span>' +
+      '<span class="sub">' + node.sub + '</span>';
+    el.addEventListener('click', function () { select(node, el); });
+    flow.appendChild(el);
+    node._el = el;
+  });
+
+  function select(node, el) {
+    if (current && current._el) current._el.classList.remove('active');
+    current = node;
+    el.classList.add('active');
+
+    detail.innerHTML =
+      '<h2>' + node.title + '</h2>' +
+      '<span class="file">' + node.file + '</span>' +
+      '<p>' + node.body + '</p>' +
+      (node.points.length
+        ? '<ul>' + node.points.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul>'
+        : '');
+  }
+
+  select(NODES[0], NODES[0]._el);
+})();
+</script>
+</body>
+</html>

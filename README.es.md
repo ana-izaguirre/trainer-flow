@@ -231,24 +231,17 @@ plantilla o a mano), la aprueba, el cliente la recibe y hace check-in.
 
 ## Por dónde empezar
 
-**No hace falta ningún secreto, ni bot de Telegram, ni clave de Gemini para
-ver el dominio funcionando** — eso es justo lo que significa "el producto ya
-funciona sin IA".
+No hace falta ningún secreto — el dominio corre solo (eso significa "funciona sin IA").
 
 ```bash
-git clone https://github.com/ana-izaguirre/trainer-flow.git
-cd trainer-flow
+git clone https://github.com/ana-izaguirre/trainer-flow.git && cd trainer-flow
 pnpm install
-
-pnpm test:run         # el dominio entero, bajo Node. Cero setup, cero base.
-pnpm deno:test        # adaptadores y handlers, bajo Deno.
-
-# Los tests de integración y E2E hablan con PostgreSQL real — hace falta Docker:
-supabase start
-pnpm test:integration
+pnpm test:run                              # dominio, bajo Node — sin setup
+pnpm deno:test                             # adaptadores, bajo Deno
+supabase start && pnpm test:integration    # hace falta Docker
 ```
 
-¿Querés verlo antes de leer código? [Cómo funciona](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) recorre el camino completo de forma interactiva, nodo por nodo; [un envío simulado](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) muestra los mensajes reales que verían un entrenador y su cliente, de punta a punta.
+Verlo sin leer código: [cómo funciona](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) (interactivo, nodo por nodo) · [un envío simulado](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) (los mensajes reales, animados). Fuente de los dos: [`docs/demo/`](docs/demo/).
 
 | | |
 |---|---|
