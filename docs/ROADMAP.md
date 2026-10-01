@@ -168,7 +168,6 @@ Tienen spec escrita y esperan turno.
 | **SPEC-025** | **Videos del cliente para corregir técnica** | La que más diferencia y de las más baratas: Telegram guarda el video, se guarda el `file_id`. Pero no se decide bien sin ver cómo usan el bot |
 | **SPEC-017** | Plantillas editables desde la base | Hoy se cambian con un despliegue. Primero conviene ver **cuánto** las cambia |
 | **SPEC-018** | Sus preferencias en cada prompt | Es lo que hace que las rutinas se parezcan a **las suyas** |
-| **SPEC-019** | Ilustración por ejercicio | Ver abajo. **111 de 302 son bodyweight**: la categoría mejor cubierta |
 
 > **«Progresión» son TRES cosas, y conviene no confundirlas:**
 >
@@ -182,54 +181,47 @@ Tienen spec escrita y esperan turno.
 > que entrena las 4 sesiones, se siente bien, y lleva tres meses sin moverse
 > hacia su objetivo.
 
-> **SPEC-025 por delante de SPEC-019, y no es empate.** Las ilustraciones
-> ayudan al cliente a ejecutar; el video deja al entrenador **entrenar**. La
-> rutina la genera cualquiera; corregir una sentadilla mirando un video es él.
-
-### SPEC-019 — la decisión que ya está tomada
-
-La librería [workout-guide](https://github.com/bryllim/workout-guide) trae
-302 ejercicios ilustrados (PNG y SVG, CC BY-SA 4.0) con metadatos.
-
-**Que la IA genere links de YouTube está descartado.** El coste en tokens es
-irrelevante —unos 180 por rutina— pero el modelo **se inventa los
-identificadores de vídeo**: produce URLs con buena pinta que son 404 o, peor,
-un vídeo real que no corresponde. Comprobarlo obligaría al entrenador a abrir
-doce links por rutina.
-
-El diseño acordado, en dos capas:
-
-```
-¿El ejercicio está en la librería?
-   SÍ  → ilustración real
-   NO  → link de BÚSQUEDA en YouTube (armado con el nombre, no generado)
-```
-
-Así ningún cliente se queda sin referencia, y no hay nada que inventar. A la
-IA se le dan los 302 slugs y se le obliga a elegir uno o `null`, y el slug se
-valida contra la lista: uno inventado no llega nunca al cliente.
-
-**¿Y no se puede verificar un link de YouTube?** Que EXISTA, sí: el endpoint
-`youtube.com/oembed` devuelve 404 si el vídeo no está y 200 con su título si
-está. Doce peticiones por rutina, un segundo.
-
-Pero eso solo atrapa los muertos. **Un ID válido que apunta a un vídeo de
-cocina pasa la verificación perfectamente**, y lo único que queda es el
-título, que no dice si la técnica está bien enseñada ni si está en español.
-Verificar convierte «doce links rotos» en «ocho que abren y cuatro que
-faltan», y entre esos ocho algunos apuntan a lo que no es.
-
-Los otros dos caminos no necesitan verificación porque no hay nada que
-inventar. Ese es el punto: el problema no es que verificar sea caro, es que
-desaparece si el modelo no genera identificadores.
-
-**Se empieza por las plantillas**: 38 ejercicios, mapeo hecho a mano una vez,
-cobertura completa y riesgo cero. Lo que genera la IA va después, cuando haya
-datos de si acierta eligiendo.
+> **SPEC-025 sigue siendo la prioridad pendiente de este bloque.** Las
+> ilustraciones de SPEC-019 (abajo, ya implementada) ayudan al cliente a
+> ejecutar; el video deja al entrenador **entrenar**. La rutina la genera
+> cualquiera; corregir una sentadilla mirando un video es él.
 
 ---
 
-## Dos decisiones tomadas, para no volver sobre ellas
+## Tres decisiones tomadas, para no volver sobre ellas
+
+### SPEC-019 enlaza a RepDB, no a workout-guide — y ya está implementada
+
+La decisión original de esta sección nombraba la librería
+[workout-guide](https://github.com/bryllim/workout-guide) (302 ejercicios).
+Se cambió por [RepDB](https://github.com/yuhonas/free-exercise-db) (601
+ejercicios reales) antes de implementar, y la spec (`docs/specs/SPEC-019`) ya
+refleja esto — lo que quedaba atrás era este resumen.
+
+**Que la IA genere links de YouTube sigue descartado.** El modelo se inventa
+identificadores de vídeo: URLs con buena pinta que son 404 o, peor, un vídeo
+real que no corresponde.
+
+El diseño implementado, en dos capas — y sin que la IA sepa de slugs:
+
+```
+¿El ejercicio nombrado está en el diccionario (plantillas, después RepDB)?
+   SÍ  → ilustración real (comparación de strings, local, DESPUÉS de generar)
+   NO  → link de BÚSQUEDA en YouTube (armado con el nombre, no generado)
+```
+
+La diferencia con el diseño original: no es "la IA elige un slug de una lista
+cerrada o `null`" — eso seguía dándole al modelo una forma de inventar. Es
+`_core/exercise-library.ts` comparando el nombre que el modelo ya escribió
+contra el diccionario, sin que la IA sepa que el diccionario existe. Así
+ningún cliente se queda sin referencia, y no hay nada que el modelo pueda
+inventar mal.
+
+**Empezó por las plantillas**: 48 ejercicios, mapeo hecho a mano, cobertura
+completa y riesgo cero (`TEMPLATE_EXERCISE_SLUGS`). Lo que nombra la IA cae
+al diccionario ampliado de los 601 de RepDB — con menos acierto que las
+plantillas, porque el prompt no orienta hacia nombres reconocibles (ver
+SPEC-032 §4, resuelto en S-52).
 
 ### El dashboard es V2, y de solo lectura
 

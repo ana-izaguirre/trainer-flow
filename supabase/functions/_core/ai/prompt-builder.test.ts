@@ -93,6 +93,27 @@ describe('la instrucción de edición', () => {
   });
 });
 
+describe('el nombre del ejercicio', () => {
+  // Sin esto, el modelo nombra libremente y la app casi siempre cae al
+  // fallback de búsqueda de YouTube (exercise-library.ts) en vez de
+  // enlazar una ilustración real — a diferencia de las plantillas, que
+  // usan 48 nombres curados a mano con match exacto garantizado.
+  it('pide usar el nombre común en español cuando existe uno estándar', () => {
+    const prompt = buildPrompt(peticion()).toLowerCase();
+    expect(prompt).toContain('nombre más común en español');
+  });
+
+  it('da ejemplos concretos del estilo esperado, no una lista cerrada para elegir', () => {
+    const prompt = buildPrompt(peticion());
+    expect(prompt).toContain('Sentadilla con barra');
+    expect(prompt).toContain('Press de banca');
+    // No es una lista cerrada (eso ya se descartó para los links de
+    // YouTube, ROADMAP SPEC-019): son ejemplos de estilo, no una
+    // instrucción de elegir uno de estos exactamente.
+    expect(prompt.toLowerCase()).not.toContain('elige uno de estos');
+  });
+});
+
 describe('la forma que se pide', () => {
   it('nombra los campos del dominio, no otros', () => {
     const prompt = buildPrompt(peticion());

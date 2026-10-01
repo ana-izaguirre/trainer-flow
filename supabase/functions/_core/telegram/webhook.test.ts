@@ -1438,6 +1438,28 @@ describe('SPEC-004 — la instrucción de edición, cuando el entrenador escribe
     expect(edit.pasos[0]).toBe('cancelAnyEditWait:p-trainer');
   });
 
+  it('un CALLBACK (botón) del entrenador también cancela cualquier espera pendiente', async () => {
+    // Sin esto: el entrenador abre OTRA rutina por botón (navegar, aprobar,
+    // rechazar…) mientras una versión distinta seguía esperando instrucción,
+    // y el próximo texto suelto se interpretaría como edición de la que ya
+    // no está mirando.
+    const edit = fakeEdit();
+    const boton = {
+      update_id: 2,
+      callback_query: {
+        id: 'cb-1',
+        from: FROM,
+        message: { message_id: 9, chat: { id: 500 } },
+        data: 'nav:idx:3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+      },
+    };
+
+    const { result } = ejecutar(boton, { edit });
+
+    await result;
+    expect(edit.pasos[0]).toBe('cancelAnyEditWait:p-trainer');
+  });
+
   it('un comando o texto del CLIENTE nunca toca la espera de edición del entrenador', async () => {
     const repo = fakeRepo({ findIdentity: async () => CLIENTE });
     const checkins = fakeCheckins({ dueño: 'p-cliente', abierto: false });

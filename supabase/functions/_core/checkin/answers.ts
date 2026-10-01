@@ -20,6 +20,13 @@ const MAX_DISCOMFORT = 500;
 
 export type Feeling = 'hard' | 'good' | 'easy';
 
+/** Cómo se dice cada sensación, al preguntar y al contarla. */
+export const FEELING_LABELS: Readonly<Record<Feeling, string>> = {
+  hard: '😫 Muy duro',
+  good: '💪 Bien',
+  easy: '😌 Fácil',
+};
+
 export interface CheckinAnswers {
   /** `4` significa «4 o más». `null` mientras no conteste. */
   readonly sessions: number | null;

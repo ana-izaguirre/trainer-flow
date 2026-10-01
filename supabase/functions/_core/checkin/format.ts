@@ -14,6 +14,7 @@ import { escapeMarkdownV2 } from '../telegram/format.ts';
 import type { InlineKeyboard } from '../telegram/keyboard.ts';
 import {
   buildCheckinCallback,
+  FEELING_LABELS,
   type CheckinAnswer,
   type CheckinAnswers,
   type CheckinField,
@@ -24,13 +25,6 @@ export interface CheckinMessage {
   readonly text: string;
   readonly keyboard: InlineKeyboard;
 }
-
-/** Cómo se dice cada sensación, al preguntar y al contarla. */
-const SENSACION: Readonly<Record<Feeling, string>> = {
-  hard: '😫 Muy duro',
-  good: '💪 Bien',
-  easy: '😌 Fácil',
-};
 
 /** `4` es «4 o más»: por encima de eso la cifra exacta no cambia nada. */
 const SESIONES = ['0', '1', '2', '3', '4+'] as const;
@@ -82,7 +76,7 @@ function buildCheckinKeyboard(checkinId: string): InlineKeyboard {
         callback_data: buildCheckinCallback('sessions', String(indice), checkinId),
       })),
       (['hard', 'good', 'easy'] as const).map((feeling) => ({
-        text: SENSACION[feeling],
+        text: FEELING_LABELS[feeling],
         callback_data: buildCheckinCallback('feeling', feeling, checkinId),
       })),
       [
@@ -121,7 +115,7 @@ export function formatCheckinAck(answer: CheckinAnswer, answers: CheckinAnswers)
 
 /** Solo la respuesta que se acaba de dar, no las tres. */
 function etiquetaRespuesta(answer: CheckinAnswer): string {
-  if (answer.field === 'feeling') return SENSACION[answer.value as Feeling];
+  if (answer.field === 'feeling') return FEELING_LABELS[answer.value as Feeling];
   // El botón de `discomfort` solo manda `'none'` (SPEC-006): el texto libre
   // de una molestia llega como mensaje, nunca como este callback.
   if (answer.field === 'discomfort') return 'sin molestias';
@@ -151,7 +145,7 @@ export function formatCheckinSummary(
   return [
     `📊 *${escapeMarkdownV2(clientName)}* — semana ${weekNumber}`,
     `Sesiones: ${escapeMarkdownV2(sesiones)}`,
-    `Sensación: ${answers.feeling === null ? 'sin contestar' : SENSACION[answers.feeling]}`,
+    `Sensación: ${answers.feeling === null ? 'sin contestar' : FEELING_LABELS[answers.feeling]}`,
     `Molestias: ${molestiaEnPalabras(answers.discomfort)}`,
   ].join('\n');
 }

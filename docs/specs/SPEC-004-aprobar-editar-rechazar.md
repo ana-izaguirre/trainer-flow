@@ -232,7 +232,7 @@ DRAFT ──┬── EDIT ────► DRAFT  (in-place, no cambia estado)
 
 | Nivel | Caso |
 |---|---|
-| Unit | Máquina de estados: **las 10 transiciones válidas y todas las inválidas** |
+| Unit | Máquina de estados: **las 11 transiciones válidas y todas las inválidas** |
 | Unit | `REJECTED` y `SENT` son terminales |
 | Unit | `parseCallbackData` con datos válidos y malformados |
 | Unit | `canEdit` devuelve false en la sexta edición |

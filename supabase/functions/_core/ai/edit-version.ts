@@ -85,10 +85,13 @@ export async function applyEditInstruction(
 
   if (!cuota.allowed) {
     // A diferencia de vacía/larga, reescribir no arregla esto: se cancela.
+    // Mismo aviso que cualquier otro fallo de edición — con teclado: sin él,
+    // el entrenador se queda sin botones para seguir sobre esta versión.
     await deps.repo.cancelEditWait(pendiente.versionId);
-    await deps.sender.sendMessage(
+    await enviar(
+      deps,
       pendiente.trainerChatId,
-      'La IA no tiene margen de cuota ahora mismo\\. Puedes pulsar ✏️ Editar más tarde\\.',
+      buildEditFailed('RATE_LIMITED', pendiente.clientName, pendiente.versionId),
     );
     return { kind: 'rate_limited', retryAfterMinutes: cuota.retryAfterMinutes };
   }

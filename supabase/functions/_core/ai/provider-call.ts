@@ -12,8 +12,13 @@ import type { AIFailureReason, AIProvider, AIRequest, AIResult } from '../ports/
  *
  * `RATE_LIMITED` no: reintentar sobre una cuota agotada la agota más.
  * `INVALID_OUTPUT` tampoco: la misma petición devolvería la misma basura.
+ *
+ * Exportada porque `telegram/notify.ts` necesita la MISMA lista para decidir
+ * si el botón «Reintentar» tiene sentido (SPEC-032 §3.3): si la política de
+ * reintento cambiara aquí y no allá, el botón prometería algo que el sistema
+ * ya no hace.
  */
-const REINTENTABLES: readonly AIFailureReason[] = ['API_ERROR', 'TIMEOUT'];
+export const REINTENTABLES: readonly AIFailureReason[] = ['API_ERROR', 'TIMEOUT'];
 
 export async function callWithRetry(
   provider: AIProvider,
