@@ -4,7 +4,7 @@
 |---|---|
 | **Estado** | **ABIERTA** — vive mientras el proyecto tenga deuda pendiente, no se "implementa" de una vez |
 | **Depende de** | — |
-| **Sesiones** | S-51 (auditoría que originó la primera tanda) |
+| **Sesiones** | S-51 (auditoría que originó la primera tanda), S-52 (cerró §3.1-3.5 de la primera tanda) |
 
 ## 1. Objetivo
 
@@ -36,78 +36,34 @@ fija para que no vuelva a dispersarse.
 
 ## 3. Hallazgos abiertos
 
-### 3.1 Duplicación del mapeo SQL→`AIRequest` en `_shared/db.ts`
+### 3.1 Dos specs con el mismo número — alcance real, mayor de lo que parecía
 
 | | |
 |---|---|
-| **Severidad** | Alta — hay datos de salud de por medio |
-| **Dónde** | `findVersionForGeneration` (líneas ~500-523) y `createEditRepo().findAwaitingEdit` (líneas ~829-851) |
-| **Qué pasa** | Los mismos 19 campos, con las mismas conversiones `?? null` / `Number(...)`, escritos dos veces. `AIRequest` ya creció una vez (SPEC-016); un campo nuevo que se agregue en un lado y se olvide en el otro deja el flujo de edición operando con datos de salud incompletos, sin que nada lo marque. |
-| **Propuesta** | Extraer `filaToAIRequest(fila, limitations)` en `_shared/db.ts` y llamarla desde ambos sitios. |
-
-### 3.2 Comentario falso en `_shared/db.ts`
-
-| | |
-|---|---|
-| **Severidad** | Media — no rompe nada, pero engaña a quien lea el código |
-| **Dónde** | `_shared/db.ts:509-510` |
-| **Qué pasa** | Dice que `chronicConditions` no está cableado porque `AIRequest` no lo tiene; ocho líneas más abajo, el mismo objeto sí lo asigna, y `AIRequest` (`_core/ports/ai-provider.ts:59`) sí lo declara. Resto de un refactor anterior a SPEC-016 que nadie borró. |
-| **Propuesta** | Eliminar el comentario. |
-
-### 3.3 `REINTENTABLES` duplicado
-
-| | |
-|---|---|
-| **Severidad** | Media |
-| **Dónde** | `_core/ai/provider-call.ts:16` y `_core/telegram/notify.ts:64` |
-| **Qué pasa** | Mismo array (`['API_ERROR', 'TIMEOUT']`), mismo propósito — qué fallo merece el botón "Reintentar". El comentario en `notify.ts` ya reconoce "es la misma lista" pero no la importa. Si la política de reintento cambia en un lugar y no en el otro, el botón deja de corresponder con lo que el sistema realmente reintenta. |
-| **Propuesta** | Exportar `REINTENTABLES` desde `provider-call.ts` e importarla en `notify.ts`. |
-
-### 3.4 Tablas de traducción copiadas
-
-| | |
-|---|---|
-| **Severidad** | Baja-media |
-| **Dónde** | `NIVEL` (Level→español) idéntica en `telegram/notify.ts:51-55`, `commands/format.ts:42-46`, `assessment/intake.ts:32-36` y `assessment/changes.ts:31-35`. `SENSACION` (Feeling→emoji) idéntica en `checkin/format.ts:29-33` y `commands/format.ts:48-52`. |
-| **Qué pasa** | Es lógica de traducción, no solo texto repetido: corregir una etiqueta exige acordarse de los 4 (o 2) sitios. |
-| **Propuesta** | Exportar `LEVEL_LABELS` desde `domain/assessment.ts` y `FEELING_LABELS` desde `checkin/answers.ts` — donde ya viven los tipos `Level`/`Feeling` — e importarlas en los demás. |
-
-### 3.5 El parseo de `callback_data` crece linealmente
-
-| | |
-|---|---|
-| **Severidad** | Baja hoy, crece con cada prefijo nuevo |
-| **Dónde** | `_core/telegram/webhook.ts:325-344` |
-| **Qué pasa** | Cada prefijo nuevo (`chk:`, `tpl:`, `chg:`, `cli:`, `nav:`, `act:`) agrega una condición `=== null &&` a la comprobación siguiente; la de `payload` ya encadena cinco. No es incorrecto, pero un séptimo prefijo que no replique el patrón exacto no falla en compilación — falla en runtime, con dos parsers corriendo cuando no debieran. |
-| **Propuesta** | Reemplazar por un array de parsers recorrido con `for...of` que se detiene en el primer resultado no nulo. |
-
-### 3.6 Dos specs con el mismo número
-
-| | |
-|---|---|
-| **Severidad** | Baja — es documentación, no código, pero confunde al buscar |
+| **Severidad** | Baja funcionalmente (es documentación, nada de esto cambia comportamiento), pero el VOLUMEN la saca de "arreglo de 10 minutos" |
 | **Dónde** | `docs/specs/SPEC-031-navegacion-de-la-rutina.md` y `docs/specs/SPEC-031-crear-rutina-de-un-mensaje.md` |
-| **Qué pasa** | Ambas implementadas, ambas con el número 031. Hay referencias cruzadas a "SPEC-031" desde `SPEC-030`, `SPEC-019`, `SPEC-022` y `docs/TESTING.md` que no se revisaron todavía para saber cuál de las dos nombran. |
-| **Propuesta** | Renumerar una (la de "crear_rutina de un mensaje" es la candidata, por ser la más reciente de las dos) a un número libre, y actualizar cada referencia cruzada confirmando a cuál apunta antes de cambiarla. |
+| **Qué pasa** | Un primer repaso (S-51) encontró 4 referencias cruzadas en docs. Un `grep` real sobre todo el repo (S-52) encontró **más de 40**: comentarios de cabecera y en línea, repartidos en `webhook.ts`, `navigation.ts`, `callback-data.ts`, `client-format.ts`, `delivery.ts`, `format.ts`, `keyboard.ts`, `editor/bulk.ts`, `editor/commands.ts`, `creation/quick-create.ts`, `creation/flows.ts`, `commands/router.ts`, `commands/format.ts`, `_shared/db.ts`, `ports/action-ports.ts`, dos migraciones SQL, y una docena de archivos de test — **las DOS specs se citan por igual en el mismo archivo**, a veces a pocas líneas de distancia (`webhook.ts` las mezcla cinco veces). |
+| **Por qué queda pendiente, y no se resuelve en S-52** | Desambiguar 40+ comentarios exige leer cada uno en su contexto — no hay atajo de texto que distinga "SPEC-031 de navegación" de "SPEC-031 de crear_rutina" sin juicio humano caso por caso. Un error de clasificación en un comentario de código de producción no lo detecta ningún test: queda ahí, silenciosamente mal, hasta que alguien lo lea confundido. El volumen real cambia la decisión frente a lo que se pensaba en S-51: no es un arreglo de 10 minutos, es su propio trabajo. |
+| **Propuesta** | Cuando se aborde: renumerar `crear-rutina-de-un-mensaje` (la que tiene menos referencias EXTERNAS claras — dentro de su propio código, da igual el número que lleve) a un número libre, revisando cada una de las 40+ referencias una por una, archivo por archivo, no con un buscar-y-reemplazar. |
 
-### 3.7 `ROADMAP.md` describe una versión vieja de SPEC-019
+## 4. Resuelto en S-52
 
-| | |
-|---|---|
-| **Severidad** | Media — es la única fuente de progreso del proyecto (su propia regla) y hoy desinforma |
-| **Dónde** | `docs/ROADMAP.md`, sección "SPEC-019 — la decisión que ya está tomada" (líneas ~189-228) y la fila de SPEC-019 en la tabla "Después del MVP" (línea ~171) |
-| **Qué pasa** | Describe la librería `workout-guide` (302 ejercicios) y el diseño de "la IA elige un slug de una lista o `null`". La decisión real, ya implementada, usa RepDB (601 ejercicios) con diccionario ampliado y fallback a búsqueda — sin que la IA elija de una lista cerrada. La spec SPEC-019 en `docs/specs/` ya está actualizada; es solo el ROADMAP el que quedó atrás. |
-| **Propuesta** | Reescribir esa sección con la decisión de RepDB, y mover la fila de SPEC-019 de "Después del MVP" (pendiente) a donde corresponda algo ya implementado. |
+Por constancia, no para que se vuelva a leer con atención (eso vive en el
+commit `docs(spec-032): deduplica...` y en SPEC-032 tal como quedó antes de
+este corte): la duplicación del mapeo SQL→`AIRequest` en `_shared/db.ts`
+(con su comentario falso sobre `chronicConditions`), `REINTENTABLES`
+duplicado entre `provider-call.ts` y `notify.ts`, las tablas `NIVEL`/
+`SENSACION` copiadas en hasta cuatro archivos, el parseo de `callback_data`
+que crecía con cada prefijo nuevo, el prompt de Gemini sin orientación de
+nomenclatura reconocible (esa última no era deuda técnica estricta — ver
+§5 — pero se resolvió de paso, al tocar `_core/ai/` por lo mismo), y la
+sección de `ROADMAP.md` que describía la versión vieja de SPEC-019
+(workout-guide/302 en vez de RepDB/601, ya corregida ahí).
 
-## 4. Lo que NO es deuda técnica, aunque salió de la misma auditoría
+## 5. Lo que NO es deuda técnica, aunque salga de una auditoría
 
 - **Guiar al entrenador con una referencia de ejercicios al editar a mano**:
   es una mejora de producto, no una corrección. Si se decide construir, es
   spec propia.
-- El prompt a Gemini no orienta hacia nombres de ejercicio reconocibles por
-  el diccionario de RepDB, así que cae al fallback de búsqueda más seguido
-  que las plantillas. Tampoco es un bug — el fallback ya es un resultado
-  aceptable (SPEC-019 §lo dice explícitamente: "ningún cliente se queda sin
-  referencia") — pero es una mejora barata: agregar 3-4 nombres de ejemplo al
-  prompt, en el estilo que el diccionario reconoce. Queda anotado aquí para
-  no perderlo, pero es una mejora, no deuda.
+- **Alta de un entrenador sin SQL manual**: tampoco es deuda — es una
+  funcionalidad que falta, no algo roto. Propuesta en SPEC-035.
