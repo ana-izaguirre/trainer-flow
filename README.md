@@ -233,23 +233,17 @@ by hand), approves it, the client receives it and checks in.
 
 ## Quick start
 
-**No secret, no Telegram bot, no Gemini key needed to see the domain
-running** — that's what "the product already works without AI" means.
+No secret needed — the domain runs standalone (that's what "works without AI" means).
 
 ```bash
-git clone https://github.com/ana-izaguirre/trainer-flow.git
-cd trainer-flow
+git clone https://github.com/ana-izaguirre/trainer-flow.git && cd trainer-flow
 pnpm install
-
-pnpm test:run         # the whole domain, under Node. Zero setup, zero DB.
-pnpm deno:test        # adapters and handlers, under Deno.
-
-# Integration and E2E tests talk to real PostgreSQL — needs Docker:
-supabase start
-pnpm test:integration
+pnpm test:run                              # domain, under Node — no setup
+pnpm deno:test                             # adapters, under Deno
+supabase start && pnpm test:integration    # needs Docker
 ```
 
-Want to see it before reading code? [How it works](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) walks the whole path interactively, node by node; [a simulated run](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) shows the real messages a trainer and a client would see, end to end.
+See it without reading code: [how it works](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) (interactive, node by node) · [a simulated run](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) (the real messages, animated). Source for both: [`docs/demo/`](docs/demo/).
 
 | | |
 |---|---|
