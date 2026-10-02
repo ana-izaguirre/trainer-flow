@@ -370,4 +370,42 @@ describe('la fecha de nacimiento (SPEC-016)', () => {
     expect(fecha('1992-02-29')).toBe('1992-02-29');
     expect(fecha('1993-02-29')).toBeNull();
   });
+
+  // El mismo rango que el CHECK real de la base (migración 0021): entre hace
+  // 120 y hace 10 años. Una fecha válida en el calendario pero fuera de este
+  // rango pasaba antes, y el INSERT reventaba en la base sin que nadie se
+  // enterara (webhook.ts la trataba como error transitorio, no como dato
+  // inválido) — exactamente el bug que esto evita.
+  // En UTC, igual que la implementación: así no depende de la zona horaria
+  // de quien corre los tests, sobre todo en los límites exactos.
+  function haceAnios(anios: number, ajusteDias = 0): string {
+    const hoy = new Date();
+    const calculada = new Date(
+      Date.UTC(hoy.getUTCFullYear() - anios, hoy.getUTCMonth(), hoy.getUTCDate() + ajusteDias),
+    );
+    return calculada.toISOString().slice(0, 10);
+  }
+
+  it('rechaza una fecha en el futuro', () => {
+    expect(fecha(haceAnios(-1))).toBeNull();
+  });
+
+  it('rechaza a alguien con menos de 10 años', () => {
+    expect(fecha(haceAnios(5))).toBeNull();
+    expect(fecha(haceAnios(10, 1))).toBeNull(); // un día más joven que el límite
+  });
+
+  it('rechaza una fecha de hace más de 120 años', () => {
+    expect(fecha(haceAnios(121))).toBeNull();
+    expect(fecha(haceAnios(130))).toBeNull();
+  });
+
+  it('acepta los dos extremos del rango, igual que el CHECK de la base', () => {
+    expect(fecha(haceAnios(10))).toBe(haceAnios(10));
+    expect(fecha(haceAnios(120))).toBe(haceAnios(120));
+  });
+
+  it('acepta una fecha típica dentro del rango', () => {
+    expect(fecha(haceAnios(30))).toBe(haceAnios(30));
+  });
 });

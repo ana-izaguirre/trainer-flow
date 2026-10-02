@@ -79,6 +79,8 @@ export const ASSESSMENT_LIMITS = {
   age: { min: 10, max: 120 },
   weightKg: { min: 20, max: 400 },
   heightCm: { min: 80, max: 250 },
+  /** El mismo rango que el CHECK de `assessments` (migración 0021). */
+  birthDateYears: { min: 10, max: 120 },
 } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -193,6 +195,26 @@ function readOptionalNumber(
 }
 
 /**
+ * Una fecha válida en el calendario no es una fecha plausible como
+ * nacimiento. Mismo rango que el CHECK real de `assessments` (migración
+ * 0021: entre hace 120 y hace 10 años) — si divergen, la base rechaza datos
+ * que aquí pasaron, y antes de esto ese rechazo no avisaba a nadie: caía
+ * como error transitorio en vez de como evaluación inválida.
+ */
+function isBirthDatePlausible(iso: string): boolean {
+  const { min, max } = ASSESSMENT_LIMITS.birthDateYears;
+  const hoy = new Date();
+  const limiteReciente = new Date(Date.UTC(hoy.getUTCFullYear() - min, hoy.getUTCMonth(), hoy.getUTCDate()))
+    .toISOString()
+    .slice(0, 10);
+  const limiteAntiguo = new Date(Date.UTC(hoy.getUTCFullYear() - max, hoy.getUTCMonth(), hoy.getUTCDate()))
+    .toISOString()
+    .slice(0, 10);
+
+  return iso >= limiteAntiguo && iso <= limiteReciente;
+}
+
+/**
  * Una fecha en `AAAA-MM-DD`, que es lo que manda un campo de fecha de Tally.
  *
  * No se convierte a `Date`: viaja como texto hasta la base, que es quien tiene
@@ -209,6 +231,8 @@ function readIsoDate(value: unknown): string | null {
   const fecha = new Date(`${limpio}T00:00:00Z`);
   if (Number.isNaN(fecha.getTime())) return null;
   if (fecha.toISOString().slice(0, 10) !== limpio) return null;
+
+  if (!isBirthDatePlausible(limpio)) return null;
 
   return limpio;
 }
