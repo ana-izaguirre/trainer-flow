@@ -30,9 +30,23 @@ falle al arrancar diciendo cuál falta.
 | `SWEEP_CRON_SECRET` | Que solo el cron dispare el barrido de `GENERATING` atascadas | **Tú lo inventas** (igual que los otros dos) |
 | `SUPABASE_URL` | Acceso de las Edge Functions | **Supabase, automático** |
 | `SUPABASE_SERVICE_ROLE_KEY` | Igual | **Supabase, automático** |
+| `PANEL_JWT_SECRET` | Firma la sesión del panel web (SPEC-033 §3.3) | **Tú lo inventas** (igual que los otros tres) |
 
-Los dos últimos **no se configuran**: Supabase los inyecta en toda Edge
+Los dos de Supabase **no se configuran**: Supabase los inyecta en toda Edge
 Function. Ponerlos a mano no hace daño, pero tampoco hace nada.
+
+### El panel web (`web/`) — mismo criterio, otro sitio
+
+`web/` no es una Edge Function: corre aparte (Next.js, hosting propio) y lee
+sus variables de `web/.env.local` (gitignored) en local, y de las variables
+de entorno del hosting en producción — nunca `supabase secrets set`, que es
+solo para las Edge Functions.
+
+Reusa dos secretos que el bot ya tiene (`TELEGRAM_BOT_TOKEN`,
+`SUPABASE_SERVICE_ROLE_KEY` — mismos valores, no una copia nueva) y suma
+`PANEL_JWT_SECRET`, exclusivo del panel. `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`
+no es secreto — por eso lleva el prefijo que Next.js expone al navegador — y
+sí tiene plantilla en `web/.env.example`.
 
 ### Los tres que te inventas tú
 
