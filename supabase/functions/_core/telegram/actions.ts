@@ -218,7 +218,7 @@ export async function handleAction(
   // transiciones nuevas: la v2 nace en `NEW`.
   await deps.sender.sendMessage(
     actor.telegramChatId,
-    `❌ Rutina rechazada\\. Pulsa ✏️ Crear v2 para empezar otra\n` +
+    `❌ Rutina rechazada\\. Pulsa ✏️ Crear otra versión para empezar otra\n` +
       `para ${escapeMarkdownV2(version.clientName)}\\.`,
     buildKeyboard(['revise'], request.versionId),
   );
