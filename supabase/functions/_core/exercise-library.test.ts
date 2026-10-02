@@ -131,3 +131,49 @@ describe('REPDB_EXERCISE_SLUGS — fallback ampliado a los 601 reales', () => {
     }
   });
 });
+
+// Reportado por Ana en testing real con Carlos: «Puente de Glúteos»,
+// «Flexiones» y «Zancadas» caían a YouTube pese a estar en el diccionario
+// tal cual — porque TEMPLATE_EXERCISE_SLUGS exige mayúsculas exactas, y el
+// fallback a RepDB no quita tildes. Ninguno de los dos es un fuzzy match:
+// siguen exigiendo las mismas palabras, solo toleran cómo se escribieron.
+describe('normalización de mayúsculas y tildes (reportado en testing real)', () => {
+  it('TEMPLATE_EXERCISE_SLUGS ya no exige mayúsculas exactas', () => {
+    expect(exerciseUrl('flexiones')).toBe('https://exercise-dataset.com/exercise/push-up/');
+    expect(exerciseUrl('FLEXIONES')).toBe('https://exercise-dataset.com/exercise/push-up/');
+    expect(exerciseUrl('zancadas')).toBe('https://exercise-dataset.com/exercise/lunge/');
+  });
+
+  it('una tilde de más o de menos ya no rompe el match', () => {
+    // «Sentadilla Búlgara» (RepDB) escrito sin tilde en «bulgara».
+    expect(exerciseUrl('Sentadilla bulgara')).toBe(
+      'https://exercise-dataset.com/exercise/bulgarian-split-squat/',
+    );
+    // «Puente de Glúteos» (TEMPLATE_EXERCISE_SLUGS) escrito sin tilde.
+    expect(exerciseUrl('Puente de Gluteos')).toBe('https://exercise-dataset.com/exercise/glute-bridge/');
+  });
+
+  it('sigue sin inventar entre variantes distintas — la normalización no las funde', () => {
+    expect(exerciseUrl('remo con mancuerna')).toBe(
+      'https://exercise-dataset.com/exercise/single-arm-db-row/',
+    );
+    expect(exerciseUrl('remo inclinado con dos mancuernas')).toBe(
+      'https://exercise-dataset.com/exercise/bent-over-db-row/',
+    );
+  });
+});
+
+describe('alias genéricos para nombres sin calificador (reportado en testing real)', () => {
+  it('«Sentadilla» sola va a la sentadilla estándar, igual que «Sentadilla con barra»', () => {
+    expect(exerciseUrl('Sentadilla')).toBe('https://exercise-dataset.com/exercise/squat/');
+  });
+
+  it('«Elevaciones de gemelos» es el mismo músculo que «Elevación de talones»', () => {
+    expect(exerciseUrl('Elevaciones de gemelos')).toBe(
+      'https://exercise-dataset.com/exercise/standing-calf-raise/',
+    );
+    expect(TEMPLATE_EXERCISE_SLUGS['Elevaciones de gemelos']).toBe(
+      TEMPLATE_EXERCISE_SLUGS['Elevación de talones'],
+    );
+  });
+});

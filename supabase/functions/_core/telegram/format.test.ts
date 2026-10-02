@@ -171,7 +171,9 @@ describe('formatExerciseBlock', () => {
   });
 
   it('uno que no está en la librería enlaza a una búsqueda, no se queda sin referencia', () => {
-    const texto = formatExerciseBlock(base, 1);
+    // No «Sentadilla»: desde el fix del diccionario de ejercicios, esa es un
+    // alias real (exercise-library.ts). Este nombre no existe en ningún lado.
+    const texto = formatExerciseBlock({ ...base, name: 'Movilidad de cadera' }, 1);
     expect(texto).toContain('youtube.com/results');
   });
 
