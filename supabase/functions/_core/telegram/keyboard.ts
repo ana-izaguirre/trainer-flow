@@ -34,7 +34,10 @@ const ETIQUETAS: Readonly<Record<CallbackAction, string>> = {
   manual: '✍️ A mano',
   accept: '👍 Me sirve',
   change: '✏️ Pedir un cambio',
-  revise: '✏️ Crear v2',
+  // Sin número: un cliente puede pedir varios cambios seguidos, y un texto
+  // fijo («Crear v2») quedaba desincronizado con la versión real apenas
+  // había una segunda revisión (reportado por Ana en testing real).
+  revise: '✏️ Crear otra versión',
   intake: '📄 Ver evaluación',
   link: '🔗 Reenviar enlace',
   reassess: '📝 Pedir actualización',

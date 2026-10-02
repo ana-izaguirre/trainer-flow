@@ -238,13 +238,13 @@ describe('rechazar', () => {
 
   // SPEC-022 M3. «Puedes empezar otra» no decía cómo, y volver a escribir
   // /crear_rutina tampoco servía: la rechazada ya no es un borrador.
-  it('CA-M3 · el mensaje lleva ✏️ Crear v2 sobre la versión rechazada', async () => {
+  it('CA-M3 · el mensaje lleva ✏️ Crear otra versión sobre la versión rechazada', async () => {
     const { deps, mensajes, botones } = espia();
 
     await handleAction(pulsar('reject'), TRAINER, deps);
 
     expect(botones.at(-1)).toEqual(['act:revise:v1']);
-    expect(mensajes.at(-1)).toContain('Crear v2');
+    expect(mensajes.at(-1)).toContain('Crear otra versión');
     // El nombre con guion: el espía ya revienta si no va escapado (CA-M6).
     expect(mensajes.at(-1)).toContain('Ana\\-María Ruiz');
   });
