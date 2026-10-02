@@ -581,6 +581,8 @@ export type Database = {
       approved_version_for_client: {
         Args: { p_client_id: string }
         Returns: {
+          age: number
+          birth_date: string
           client_chat_id: number
           client_name: string
           content: Json
@@ -910,6 +912,8 @@ export type Database = {
       sent_version_for_profile: {
         Args: { p_profile_id: string }
         Returns: {
+          age: number
+          birth_date: string
           client_chat_id: number
           client_name: string
           content: Json
@@ -1067,6 +1071,8 @@ export type Database = {
       version_for_delivery: {
         Args: { p_version_id: string }
         Returns: {
+          age: number
+          birth_date: string
           client_chat_id: number
           client_name: string
           content: Json

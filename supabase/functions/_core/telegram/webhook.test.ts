@@ -448,6 +448,7 @@ function fakeDelivery(opciones: { cliente?: unknown; entregable?: boolean } = {}
         trainerChatId: 10,
         plan: null,
         versionNumber: 1,
+        clientIsMinor: false,
       });
     },
     transition: (_v, from, to) => {
@@ -1867,6 +1868,7 @@ describe('SPEC-030 · /cambio_rutina, escrito en vez de pulsado', () => {
           trainerChatId: 10,
           plan: null,
           versionNumber: 1,
+          clientIsMinor: false,
         }),
     });
     const changes = fakeChanges();

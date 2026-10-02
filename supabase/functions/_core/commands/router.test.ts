@@ -434,6 +434,7 @@ describe('SPEC-023 · lo que SÍ puede hacer un cliente', () => {
     trainerChatId: 10,
     plan: null,
     versionNumber: 1,
+    clientIsMinor: false,
   };
 
   it('/rutina le devuelve la suya, como ÍNDICE (SPEC-031)', async () => {

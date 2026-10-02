@@ -24,6 +24,7 @@ const RESUMEN = {
   sessionMinutes: 60,
   equipment: 'Mancuernas',
   hasLimitations: false,
+  isMinor: false,
 } as const;
 
 const RUTINA = {
@@ -105,6 +106,23 @@ describe('llegó una evaluación', () => {
       ENLACE,
     );
     expect(text).toContain('\\(');
+  });
+
+  // SPEC-037 — CA-1, CA-2, CA-7.
+  it('CA-1 · un cliente menor lleva el aviso de consentimiento', () => {
+    const { text } = buildAssessmentArrived({ ...RESUMEN, isMinor: true }, VERSION, ENLACE);
+    expect(text).toContain('menor de edad');
+  });
+
+  it('CA-2 · sin ser menor, no hay ningún aviso de consentimiento', () => {
+    const { text } = buildAssessmentArrived(RESUMEN, VERSION, ENLACE);
+    expect(text).not.toContain('menor de edad');
+  });
+
+  it('CA-7 · el aviso no expone la edad exacta ni la fecha de nacimiento', () => {
+    const { text } = buildAssessmentArrived({ ...RESUMEN, isMinor: true }, VERSION, ENLACE);
+    expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(text).not.toMatch(/\b1[0-7]\b años/);
   });
 });
 
