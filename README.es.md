@@ -22,51 +22,12 @@ decisión final.
 
 ## Qué hace
 
-```mermaid
-flowchart TD
-    Form["🧍 El cliente rellena<br/>un formulario de 2–3 min"] --> Tally[["Tally"]]
-    Tally -->|webhook| Ingest["tally-webhook"]
-    Ingest --> DB[("PostgreSQL")]
-    Ingest -.->|"🔔 evaluación nueva"| T1
+![El cliente llena un formulario, el entrenador crea la rutina con IA, plantilla o a mano, la revisa como borrador en Telegram, la aprueba, y solo entonces el cliente la recibe.](docs/diagrams/flujo.svg)
 
-    DB -->|"🔔 lo decide el entrenador"| Source{"¿qué fuente?"}
-
-    subgraph sources ["las tres producen el mismo tipo"]
-        direction LR
-        Source -->|IA| Gen["generate-version"]
-        Source -->|plantilla| Tpl["templates.ts"]
-        Source -->|a mano| Man["el editor"]
-    end
-
-    Gen -.->|"la única pieza reemplazable"| Gemini[["Gemini"]]
-
-    sources --> Draft["DRAFT · el entrenador la lee<br/>en Telegram, con botones"]
-    Draft --> T1["🧑‍🏫 ENTRENADOR"]
-
-    T1 ==>|"✋ aprueba"| Sent["SENT"]
-    T1 -->|"rechaza o edita"| Draft
-
-    Sent --> Deliver["🧍 al cliente le llega la rutina,<br/>ya adaptada"]
-
-    Cron(["⏰ pg_cron · lunes"]) --> Weekly["weekly-checkin"]
-    Deliver --> Weekly
-    Weekly -->|"3 preguntas"| Answer["🧍 el cliente contesta"]
-    Answer -->|"⚠️ molestia → al momento"| T1
-
-    style T1 fill:#8A63D2,color:#fff,stroke:#5B3FA8
-    style Sent fill:#3ECF8E,color:#000,stroke:#2A9E6B
-    style Gemini stroke-dasharray: 5 5
-    style Form fill:#E8F8F0,color:#000
-    style Deliver fill:#E8F8F0,color:#000
-    style Answer fill:#E8F8F0,color:#000
-    style sources fill:#F7F5FC,stroke:#C9BEE8
-```
-
-**La interfaz es Telegram.** No hay dashboard ni app. El entrenador ya lo tiene
-abierto.
-
-La línea de puntos hacia Gemini es el punto: es la única pieza reemplazable.
-Todos los demás caminos funcionan sin ella.
+**La interfaz es Telegram.** No hay dashboard ni app — el entrenador ya lo
+tiene abierto. Gemini es la única pieza reemplazable: todos los demás caminos
+funcionan sin ella, y el check-in semanal (no está en el dibujo) escala
+directo al entrenador ante cualquier molestia.
 
 ---
 
@@ -77,48 +38,13 @@ Todos los demás caminos funcionan sin ella.
 Una rutina mal adaptada puede lesionar a alguien. Por eso la revisión humana no
 es una convención, es estructura:
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> NEW
-
-    NEW --> GENERATING: GENERATE
-    NEW --> DRAFT: LOAD_TEMPLATE
-    NEW --> DRAFT: CREATE_MANUAL
-
-    GENERATING --> DRAFT: GENERATION_SUCCEEDED
-    GENERATING --> NEW: GENERATION_FAILED
-
-    DRAFT --> DRAFT: EDIT
-    DRAFT --> APPROVED: APPROVE ✋
-    APPROVED --> SENT: SEND
-
-    NEW --> REJECTED: REJECT
-    DRAFT --> REJECTED: REJECT
-    APPROVED --> REJECTED: REJECT
-
-    SENT --> [*]
-    REJECTED --> [*]
-
-    note right of DRAFT
-        No hay arista DRAFT a SENT.
-        No es "no la llamamos".
-        No está en la tabla.
-    end note
-
-    note right of APPROVED
-        Aquí solo se llega por APPROVE.
-        Y solo lo dispara el entrenador.
-    end note
-```
-
 - **La transición `DRAFT → SENT` no existe.** El único camino a `SENT` sale de
-  `APPROVED`, y ahí solo se llega con una acción del entrenador.
-- Ningún cambio de estado ocurre fuera de la máquina de estados.
-- Cobertura del 100% sobre ella, incluidas las transiciones inválidas.
-
-`GENERATION_FAILED` vuelve a `NEW`, no a un estado muerto: el entrenador sigue
-por plantilla o a mano, sobre la misma versión.
+  `APPROVED`, y ahí solo se llega con una acción del entrenador — ni la IA,
+  ni un cron, ni un reintento.
+- Ningún cambio de estado ocurre fuera de la máquina de estados, y tiene
+  cobertura del 100%, incluidas las transiciones inválidas.
+- `GENERATION_FAILED` vuelve a `NEW`, no a un estado muerto: el entrenador
+  sigue por plantilla o a mano, sobre la misma versión.
 
 ### 2. La IA es una capacidad, no la dueña del dominio
 
@@ -141,22 +67,7 @@ La palabra "Gemini" no aparece en `_core/`. El dominio solo conoce la interfaz
 
 ### Las capas, y qué puede importar cada una
 
-```mermaid
-flowchart TB
-    fns["<b>🌐 Edge Functions</b> · Deno<br/>telegram-webhook · tally-webhook<br/>generate-version · weekly-checkin<br/><i>solo pegamento HTTP</i>"]
-
-    shared["<b>🔌 _shared/</b> · adaptadores<br/>db.ts · telegram/ · ai/gemini-provider.ts<br/><i>aquí viven Deno, npm y fetch</i>"]
-
-    core["<b>🧠 _core/</b> · TypeScript puro<br/>domain/ · authorization.ts · ports/<br/><i>sin Deno, sin npm, sin fetch, sin I/O</i>"]
-
-    fns ==>|"construye los adaptadores<br/>y llama al dominio"| shared
-    shared ==>|"implementa los puertos"| core
-    core x--x|"<b>❌ NUNCA</b><br/>oxlint rompe la build"| shared
-
-    style core fill:#EDE7F9,stroke:#8A63D2,stroke-width:3px,color:#000
-    style shared fill:#E4F7EE,stroke:#3ECF8E,stroke-width:2px,color:#000
-    style fns fill:#F4F4F6,stroke:#B8B8C4,stroke-width:2px,color:#000
-```
+![Las Edge Functions en Deno llaman a los adaptadores en _shared, que implementan los puertos de _core. Lo inverso — que _core llame a _shared — está prohibido.](docs/diagrams/capas.svg)
 
 `_core/` no usa `Deno.*`, ni `process.*`, ni `fetch`, ni imports `npm:`, ni nada
 de `_shared`. **El linter lo hace cumplir** — no es una recomendación
@@ -240,8 +151,6 @@ pnpm test:run                              # dominio, bajo Node — sin setup
 pnpm deno:test                             # adaptadores, bajo Deno
 supabase start && pnpm test:integration    # hace falta Docker
 ```
-
-Verlo sin leer código: [cómo funciona](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) (interactivo, nodo por nodo) · [un envío simulado](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) (los mensajes reales, animados). Fuente de los dos: [`docs/demo/`](docs/demo/).
 
 | | |
 |---|---|

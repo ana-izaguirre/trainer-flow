@@ -22,52 +22,12 @@ away from them.
 
 ## What it does
 
-```mermaid
-flowchart TD
-    Form["🧍 The client fills in<br/>a 2–3 min form"] --> Tally[["Tally"]]
-    Tally -->|webhook| Ingest["tally-webhook"]
-    Ingest --> DB[("PostgreSQL")]
-    Ingest -.->|"🔔 a new assessment"| T1
+![The client fills in a form, the trainer builds the plan with AI, a template or by hand, reviews it as a draft in Telegram, approves it, and only then does the client receive it.](docs/diagrams/flow.svg)
 
-    DB -->|"🔔 the trainer decides"| Source{"which source?"}
-
-    subgraph sources ["the three produce the same type"]
-        direction LR
-        Source -->|AI| Gen["generate-version"]
-        Source -->|template| Tpl["templates.ts"]
-        Source -->|by hand| Man["the editor"]
-    end
-
-    Gen -.->|"the only replaceable part"| Gemini[["Gemini"]]
-
-    sources --> Draft["DRAFT · the trainer reads it<br/>in Telegram, with buttons"]
-    Draft --> T1["🧑‍🏫 TRAINER"]
-
-    T1 ==>|"✋ approves"| Sent["SENT"]
-    T1 -->|"rejects or edits"| Draft
-
-    Sent --> Deliver["🧍 the client gets the plan,<br/>already adapted"]
-
-    Cron(["⏰ pg_cron · Mondays"]) --> Weekly["weekly-checkin"]
-    Deliver --> Weekly
-    Weekly -->|"3 questions"| Answer["🧍 the client answers"]
-    Answer -->|"⚠️ discomfort → right away"| T1
-
-    style T1 fill:#8A63D2,color:#fff,stroke:#5B3FA8
-    style Sent fill:#3ECF8E,color:#000,stroke:#2A9E6B
-    style Gemini stroke-dasharray: 5 5
-    style Form fill:#E8F8F0,color:#000
-    style Deliver fill:#E8F8F0,color:#000
-    style Answer fill:#E8F8F0,color:#000
-
-    style sources fill:#F7F5FC,stroke:#C9BEE8
-```
-
-**The interface is Telegram.** No dashboard, no app. The trainer already has it
-open.
-
-The dashed line to Gemini is the point: it's the only replaceable part. Every
-other path works without it.
+**The interface is Telegram.** No dashboard, no app — the trainer already has
+it open. Gemini is the only replaceable part: every other path works without
+it, and the weekly check-in (not pictured) escalates straight to the trainer
+on any discomfort.
 
 ---
 
@@ -78,48 +38,13 @@ other path works without it.
 A badly adapted workout can injure someone. So human review isn't a convention
 here — it's structure:
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> NEW
-
-    NEW --> GENERATING: GENERATE
-    NEW --> DRAFT: LOAD_TEMPLATE
-    NEW --> DRAFT: CREATE_MANUAL
-
-    GENERATING --> DRAFT: GENERATION_SUCCEEDED
-    GENERATING --> NEW: GENERATION_FAILED
-
-    DRAFT --> DRAFT: EDIT
-    DRAFT --> APPROVED: APPROVE ✋
-    APPROVED --> SENT: SEND
-
-    NEW --> REJECTED: REJECT
-    DRAFT --> REJECTED: REJECT
-    APPROVED --> REJECTED: REJECT
-
-    SENT --> [*]
-    REJECTED --> [*]
-
-    note right of DRAFT
-        There is no DRAFT to SENT edge.
-        Not "we never call it".
-        It is not in the table.
-    end note
-
-    note right of APPROVED
-        Only APPROVE gets you here.
-        Only a trainer's tap fires it.
-    end note
-```
-
 - **The `DRAFT → SENT` transition does not exist.** The only road to `SENT`
-  starts at `APPROVED`, and the only way there is a trainer's action.
-- No state change happens outside the state machine.
-- 100% coverage on it, invalid transitions included.
-
-`GENERATION_FAILED` goes back to `NEW`, not to a dead end: the trainer carries
-on with a template or writes it by hand, on the same version.
+  starts at `APPROVED`, and the only way there is a trainer's action — not
+  AI, not a cron job, not a retry.
+- No state change happens outside the state machine, and it has 100% test
+  coverage, invalid transitions included.
+- `GENERATION_FAILED` goes back to `NEW`, not to a dead end: the trainer
+  carries on with a template or writes it by hand, on the same version.
 
 ### 2. The AI is a capability, not the owner of the domain
 
@@ -142,22 +67,7 @@ The word "Gemini" does not appear in `_core/`. The domain only knows the
 
 ### The layers, and what each one may import
 
-```mermaid
-flowchart TB
-    fns["<b>🌐 Edge Functions</b> · Deno<br/>telegram-webhook · tally-webhook<br/>generate-version · weekly-checkin<br/><i>HTTP glue only</i>"]
-
-    shared["<b>🔌 _shared/</b> · adapters<br/>db.ts · telegram/ · ai/gemini-provider.ts<br/><i>Deno, npm, fetch live here</i>"]
-
-    core["<b>🧠 _core/</b> · pure TypeScript<br/>domain/ · authorization.ts · ports/<br/><i>no Deno, no npm, no fetch, no I/O</i>"]
-
-    fns ==>|"builds the adapters<br/>and calls the domain"| shared
-    shared ==>|"implements the ports"| core
-    core x--x|"<b>❌ NEVER</b><br/>oxlint fails the build"| shared
-
-    style core fill:#EDE7F9,stroke:#8A63D2,stroke-width:3px,color:#000
-    style shared fill:#E4F7EE,stroke:#3ECF8E,stroke-width:2px,color:#000
-    style fns fill:#F4F4F6,stroke:#B8B8C4,stroke-width:2px,color:#000
-```
+![Edge Functions on Deno call the adapters in _shared, which implement the ports of _core. The reverse — _core calling _shared — is forbidden.](docs/diagrams/layers.svg)
 
 `_core/` uses no `Deno.*`, no `process.*`, no `fetch`, no `npm:` imports and
 nothing from `_shared`. **The linter enforces it** — it isn't a guideline
@@ -242,8 +152,6 @@ pnpm test:run                              # domain, under Node — no setup
 pnpm deno:test                             # adapters, under Deno
 supabase start && pnpm test:integration    # needs Docker
 ```
-
-See it without reading code: [how it works](https://claude.ai/artifact/RUisfxpBo99f557w6nMD7L) (interactive, node by node) · [a simulated run](https://claude.ai/artifact/TrQbJcnGkcrmhLfTnbFbEL) (the real messages, animated). Source for both: [`docs/demo/`](docs/demo/).
 
 | | |
 |---|---|
