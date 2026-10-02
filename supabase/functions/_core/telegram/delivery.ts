@@ -134,6 +134,10 @@ export async function linkClient(
       `👋 Hola ${escapeMarkdownV2(client.fullName)}, ya estás conectado con tu entrenador\\.`,
       '',
       'Aquí vas a recibir tu rutina y un check\\-in corto cada lunes\\.',
+      // SPEC-019 ya pone el nombre como link tocable: lo que faltaba era
+      // decirlo. Va acá, no en /ayuda, porque este mensaje lo ve el 100%
+      // de los clientes una sola vez, antes de su primera rutina.
+      'Toca el nombre de cada ejercicio: te lleva a una referencia de cómo hacerlo\\.',
       'Escribe /ayuda cuando quieras ver qué puedes hacer\\.',
     ].join('\n'),
   );

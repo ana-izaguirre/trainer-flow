@@ -172,6 +172,19 @@ describe('vincular', () => {
     expect(pasos.some((p) => p.startsWith('transition'))).toBe(false);
   });
 
+  // Reportado por Ana en testing real: el link del nombre de cada ejercicio
+  // ya se ve y funciona, pero nada le dice al cliente que existe. Este
+  // mensaje lo recibe el 100% de los clientes, una sola vez, antes de ver
+  // su primera rutina — a diferencia de /ayuda, que es opt-in.
+  it('la bienvenida avisa que el nombre del ejercicio es tocable', async () => {
+    const { deps, mensajes } = espia();
+
+    await linkClient('un-token', USUARIO, deps);
+
+    const bienvenida = mensajes.find((m) => m.chatId === 500);
+    expect(bienvenida?.text).toContain('Toca el nombre de cada ejercicio');
+  });
+
   it('si lo que espera NO está aprobado, no se entrega', async () => {
     // `findApprovedVersion` es del repo: un bug ahí no puede acabar mandándole
     // un borrador sin revisar al cliente. La guarda vuelve a preguntar.
