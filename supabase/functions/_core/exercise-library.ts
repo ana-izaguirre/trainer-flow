@@ -20,6 +20,7 @@
  * llamada extra al proveedor: comparación de strings, local y posterior a
  * la generación.
  */
+import { normalize } from './commands/match.ts';
 import { REPDB_EXERCISE_SLUGS } from './repdb-exercises.ts';
 
 const REPDB_BASE = 'https://exercise-dataset.com/exercise';
@@ -42,6 +43,10 @@ export const TEMPLATE_EXERCISE_SLUGS: Readonly<Record<string, string>> = {
   'Curl martillo': 'hammer-curl',
   'Dominadas lastradas': 'weighted-pull-up',
   'Elevación de talones': 'standing-calf-raise',
+  // Mismo músculo que «Elevación de talones», nombre regional distinto —
+  // reportado en testing real (Ana, octubre 2026): la IA lo generó así y
+  // cayó a YouTube porque no había ninguna entrada para «gemelos».
+  'Elevaciones de gemelos': 'standing-calf-raise',
   'Elevaciones laterales': 'lateral-raise',
   Escaladores: 'mountain-climbers',
   'Extensión de cuádriceps': 'leg-extension',
@@ -72,6 +77,9 @@ export const TEMPLATE_EXERCISE_SLUGS: Readonly<Record<string, string>> = {
   'Remo en polea baja': 'seated-cable-row',
   'Remo en punta': 't-bar-row',
   'Remo inclinado con dos mancuernas': 'bent-over-db-row',
+  // Sin calificador: la sentadilla estándar, mismo slug que «con barra» —
+  // reportado en testing real, la IA a veces la nombra así de corto.
+  Sentadilla: 'squat',
   'Sentadilla búlgara': 'bulgarian-split-squat',
   'Sentadilla búlgara con mancuernas': 'bulgarian-split-squat',
   'Sentadilla con banda': 'banded-squat',
@@ -94,9 +102,16 @@ function searchUrl(name: string): string {
 }
 
 /**
- * Busca en `REPDB_EXERCISE_SLUGS` sin distinguir mayúsculas de minúsculas:
- * el `name_es` de RepDB no sigue un único estilo (repdb-exercises.ts), y
- * nada garantiza cómo capitaliza el nombre quien genera la rutina.
+ * Busca en un diccionario name_es→slug ignorando mayúsculas y tildes: ni el
+ * `name_es` de RepDB sigue un único estilo (repdb-exercises.ts), ni nada
+ * garantiza con qué tilde o capitalización escribe el nombre quien genera
+ * la rutina — un acento de más o de menos no es un ejercicio distinto.
+ *
+ * Sigue siendo coincidencia EXACTA de palabras (reglas 2 y 3 de SPEC-019):
+ * esto no es un fuzzy match ni acerca nombres parecidos, solo ignora cómo
+ * se escribió el mismo nombre. «Remo con mancuerna» sigue sin encontrar a
+ * «Remo inclinado con dos mancuernas»: son palabras distintas, no una
+ * variante de acentuación de las mismas.
  *
  * El índice se arma en cada llamada, no una vez al cargar el módulo: son
  * como mucho unas pocas decenas de ejercicios por rutina generada, nada
@@ -104,25 +119,24 @@ function searchUrl(name: string): string {
  * fuera de lo que Stryker puede probar (mutation testing de estáticos:
  * docs/TESTING.md), que es justo el motivo por el que no se hizo así.
  */
-function repdbSlugFor(name: string): string | undefined {
-  const byLowerName = new Map(
-    Object.entries(REPDB_EXERCISE_SLUGS).map(([repdbName, slug]) => [repdbName.toLowerCase(), slug]),
+function slugFor(dictionary: Readonly<Record<string, string>>, name: string): string | undefined {
+  const byNormalizedName = new Map(
+    Object.entries(dictionary).map(([entryName, slug]) => [normalize(entryName), slug]),
   );
-  return byLowerName.get(name.toLowerCase());
+  return byNormalizedName.get(normalize(name));
 }
 
 /**
  * Reglas 2 y 3 de SPEC-019: coincidencia exacta o búsqueda — nunca sin
  * referencia, nunca un slug inventado.
  *
- * Primero `TEMPLATE_EXERCISE_SLUGS`, exacto y sensible a mayúsculas: sus
- * 48 entradas son una decisión hecha a mano (el unilateral/bilateral de
- * «Remo con mancuerna» vs «Remo inclinado con dos mancuernas», por
- * ejemplo) que debe ganar siempre, incluso si RepDB cambiara ese slug
- * algún día. Si el nombre no está ahí, se cae al diccionario ampliado de
- * RepDB, sin distinguir mayúsculas de minúsculas.
+ * Primero `TEMPLATE_EXERCISE_SLUGS`: sus 48 entradas son una decisión
+ * hecha a mano (el unilateral/bilateral de «Remo con mancuerna» vs «Remo
+ * inclinado con dos mancuernas», por ejemplo) que debe ganar siempre,
+ * incluso si RepDB cambiara ese slug algún día. Si el nombre no está ahí,
+ * se cae al diccionario ampliado de RepDB.
  */
 export function exerciseUrl(name: string): string {
-  const slug = TEMPLATE_EXERCISE_SLUGS[name] !== undefined ? TEMPLATE_EXERCISE_SLUGS[name] : repdbSlugFor(name);
+  const slug = slugFor(TEMPLATE_EXERCISE_SLUGS, name) ?? slugFor(REPDB_EXERCISE_SLUGS, name);
   return slug === undefined ? searchUrl(name) : `${REPDB_BASE}/${slug}/`;
 }

@@ -25,8 +25,11 @@ export type MatchResult<T extends Named> =
 /**
  * Sin acentos y en minúsculas: el entrenador escribe «perez» desde el móvil
  * y encontrar a «Pérez» no debería depender de que se acuerde de la tilde.
+ *
+ * Exportada porque `exercise-library.ts` necesita la misma normalización
+ * para nombres de ejercicio — mismo criterio de texto en español, dos sitios.
  */
-function normalize(text: string): string {
+export function normalize(text: string): string {
   return text
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
