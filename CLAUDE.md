@@ -160,6 +160,15 @@ Antes de dar una feature por terminada:
   todo entra por PR con CI en verde.
 - Un commit por spec, o por paso claro dentro de una spec
 - Mensaje: `feat(spec-008): plantillas y creación manual`
+- **Un PR por feature — nunca dos features no relacionadas en el mismo PR,
+  aunque las dos hayan caído en la rama de la misma sesión.** Un PR mezclado
+  es más lento de revisar, y si el CI falla no queda claro cuál de las dos
+  cosas lo rompió — como pasó: un PR de README + panel web falló "Types and
+  lint" por tres errores reales del panel, y el README (que no tenía
+  ninguno) quedó bloqueado con él. Si la rama de la sesión ya lleva una
+  feature y aparece otra que no depende de ella, la segunda va a una rama
+  nueva (`git checkout -b <nombre> origin/main`) con su propio PR — nunca
+  apilada como commit extra sobre la primera.
 
 ## Qué NO construir en V1
 
