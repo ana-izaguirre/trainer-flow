@@ -177,6 +177,19 @@ describe('lo que no se puede', () => {
     expect(mensajes[0]).toContain('borrador');
   });
 
+  // Reportado por Ana en testing real: Carlos leyó este mensaje y no se dio
+  // cuenta de que `/crear_rutina <cliente>` (SPEC-031) no necesita ningún
+  // borrador previo — el mensaje solo explicaba el camino largo (ficha +
+  // plantilla/manual), nunca la forma rápida que es la razón de ser del
+  // comando.
+  it('sin borrador, el mensaje menciona /crear_rutina <cliente> como opción rápida', async () => {
+    const { deps, mensajes } = espia({ draft: null });
+
+    await handleEditorCommand('crear_rutina', '', TRAINER, CHAT, deps);
+
+    expect(mensajes[0]).toContain('/crear_rutina <nombre del cliente>');
+  });
+
   // SPEC-022 M2. «Pulsa 📋 o ✍️ en el aviso de un cliente» mandaba a buscar
   // un mensaje enterrado en el chat. `/cliente` lleva esos botones.
   it('CA-M2 · sin borrador abierto nombra /cliente, el camino que existe', async () => {
@@ -185,7 +198,9 @@ describe('lo que no se puede', () => {
     await handleEditorCommand('crear_rutina', 'Día 1: A\nPress 4x8', TRAINER, CHAT, deps);
 
     expect(mensajes[0]).toContain('/cliente');
-    expect(mensajes[0]).toContain('/crear\\_rutina');
+    // Ahora vive dentro de un bloque de código (como ya hacía COMO_DICTAR):
+    // ahí el guion bajo no se escapa, es la forma correcta de MarkdownV2.
+    expect(mensajes[0]).toContain('/crear_rutina');
     expect(tieneCaracterSinEscapar(mensajes[0]!)).toBe(false);
   });
 
