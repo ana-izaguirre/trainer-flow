@@ -24,12 +24,7 @@
     "test:e2e": "vitest run --config vitest.integration.config.ts tests/e2e",
     "test:mutation": "stryker run",
     "dev:tunnel": "bash scripts/dev-tunnel.sh",
-    "deno:test": "deno test --allow-env --config supabase/functions/deno.json supabase/functions",
-    "web:dev": "pnpm --filter web dev",
-    "web:build": "pnpm --filter web build",
-    "web:lint": "pnpm --filter web lint",
-    "web:typecheck": "pnpm --filter web exec tsc --noEmit",
-    "web:test:e2e": "pnpm --filter web test:e2e"
+    "deno:test": "deno test --allow-env --config supabase/functions/deno.json supabase/functions"
   },
   "packageManager": "pnpm@10.33.0",
   "devDependencies": {
