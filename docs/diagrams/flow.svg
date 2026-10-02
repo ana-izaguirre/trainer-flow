@@ -1,0 +1,62 @@
+<svg viewBox="0 0 1075 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The client fills in a form, the trainer builds the plan with AI, a template or by hand, reviews it as a draft in Telegram, approves it, and only then does the client receive it. Gemini is the only optional piece of the path.">
+  <rect x="0" y="0" width="1075" height="260" fill="#ffffff"/>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a8a94"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5B3FA8"/>
+    </marker>
+  </defs>
+
+  <!-- Box 1 — Client fills in the form -->
+  <rect x="10" y="50" width="195" height="90" rx="12" fill="#E8F8F0" stroke="#3ECF8E" stroke-width="2"/>
+  <text x="108" y="82" text-anchor="middle" font-family="sans-serif" font-size="20">🧍</text>
+  <text x="108" y="106" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#16543c">Client fills in</text>
+  <text x="108" y="122" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#16543c">the form</text>
+  <text x="108" y="138" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#2f6b4f">2–3 min, via Tally</text>
+
+  <line x1="205" y1="95" x2="223" y2="95" stroke="#8a8a94" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Box 2 — Trainer picks how to build it -->
+  <rect x="225" y="50" width="195" height="90" rx="12" fill="#F7F5FC" stroke="#8A63D2" stroke-width="2"/>
+  <text x="323" y="82" text-anchor="middle" font-family="sans-serif" font-size="20">🧑‍🏫</text>
+  <text x="323" y="106" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#3d2a66">Trainer picks</text>
+  <text x="323" y="122" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#3d2a66">how to build it</text>
+  <text x="323" y="138" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#5B3FA8">AI · template · by hand</text>
+
+  <!-- Gemini, hanging, dashed: the one replaceable piece -->
+  <line x1="323" y1="140" x2="323" y2="168" stroke="#8A63D2" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <rect x="243" y="170" width="160" height="46" rx="10" fill="#ffffff" stroke="#8A63D2" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="323" y="190" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="600" fill="#5B3FA8">Gemini</text>
+  <text x="323" y="205" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#5B3FA8">if it fails, it still works</text>
+
+  <line x1="420" y1="95" x2="438" y2="95" stroke="#8a8a94" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Box 3 — DRAFT in Telegram -->
+  <rect x="440" y="50" width="195" height="90" rx="12" fill="#F4F4F6" stroke="#B8B8C4" stroke-width="2"/>
+  <text x="538" y="82" text-anchor="middle" font-family="sans-serif" font-size="20">📋</text>
+  <text x="538" y="106" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#3a3a42">DRAFT</text>
+  <text x="538" y="122" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#55555f">reviewed in Telegram,</text>
+  <text x="538" y="136" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#55555f">with buttons</text>
+
+  <line x1="635" y1="95" x2="653" y2="95" stroke="#5B3FA8" stroke-width="3" marker-end="url(#arrowPurple)"/>
+  <text x="644" y="82" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#5B3FA8">only path</text>
+
+  <!-- Box 4 — Approves (highlighted) -->
+  <rect x="655" y="50" width="195" height="90" rx="12" fill="#8A63D2" stroke="#5B3FA8" stroke-width="2"/>
+  <text x="753" y="82" text-anchor="middle" font-family="sans-serif" font-size="20">✋</text>
+  <text x="753" y="106" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="700" fill="#ffffff">Trainer approves</text>
+  <text x="753" y="122" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#EDE7F9">DRAFT → SENT</text>
+  <text x="753" y="136" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#EDE7F9">there is no other road</text>
+
+  <line x1="850" y1="95" x2="868" y2="95" stroke="#8a8a94" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Box 5 — Client receives -->
+  <rect x="870" y="50" width="195" height="90" rx="12" fill="#E8F8F0" stroke="#3ECF8E" stroke-width="2"/>
+  <text x="968" y="82" text-anchor="middle" font-family="sans-serif" font-size="20">🧍</text>
+  <text x="968" y="106" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#16543c">Client gets it,</text>
+  <text x="968" y="122" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="600" fill="#16543c">already adapted</text>
+  <text x="968" y="138" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#2f6b4f">and checks in every week</text>
+</svg>
