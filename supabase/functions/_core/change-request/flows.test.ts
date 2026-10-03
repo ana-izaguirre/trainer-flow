@@ -53,6 +53,12 @@ function version(extra: Partial<VersionForRequest> = {}): VersionForRequest {
     versionNumber: 1,
     trainerChatId: 10,
     client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
+    // Por defecto, nadie empezó una revisión todavía: la vigente es esta
+    // misma v1, en SENT. Los tests que simulan una v2 ya en marcha pisan
+    // estos tres campos.
+    currentVersionId: VERSION_ID,
+    currentVersionState: 'SENT',
+    currentVersionNumber: 1,
     ...extra,
   };
 }
@@ -85,17 +91,25 @@ function espia(
   opciones: {
     version?: VersionForRequest | null;
     comentarioFalla?: boolean;
-    solicitud?: null;
     abierta?: OpenRequest | null;
     created?: boolean;
+    perdioCarrera?: boolean;
+    /** Lo que devuelve la SEGUNDA llamada a `findVersion` en adelante —
+     * la relectura tras perder la carrera. Sin esto, se repite la primera. */
+    versionTrasCarrera?: VersionForRequest | null;
   } = {},
 ): Espia {
   const pasos: string[] = [];
   const mensajes: { chatId: number; text: string; keyboard?: unknown }[] = [];
+  let llamadasFindVersion = 0;
 
   const repo: ChangeRequestRepo = {
     findVersion: () => {
       pasos.push('findVersion');
+      llamadasFindVersion += 1;
+      if (llamadasFindVersion > 1 && opciones.versionTrasCarrera !== undefined) {
+        return Promise.resolve(opciones.versionTrasCarrera);
+      }
       return Promise.resolve(opciones.version === undefined ? version() : opciones.version);
     },
     request: (_v, _c, reason) => {
@@ -119,23 +133,27 @@ function espia(
       );
     },
     findRequest: () =>
-      opciones.solicitud === null
-        ? Promise.resolve(null)
-        : Promise.resolve({
-            requestId: 'req-1',
-            versionId: VERSION_ID,
-            planId: 'plan-1',
-            versionNumber: 1,
-            state: 'OPEN' as const,
-            reason: 'too_hard' as const,
-            comment: 'No termino la semana 1',
-            clientName: 'Carlos Pérez',
-                trainerId: 'p-trainer',
-                sentDaysAgo: 9,
-          }),
+      Promise.resolve({
+        requestId: 'req-1',
+        versionId: VERSION_ID,
+        planId: 'plan-1',
+        versionNumber: 1,
+        state: 'OPEN' as const,
+        reason: 'too_hard' as const,
+        comment: 'No termino la semana 1',
+        clientName: 'Carlos Pérez',
+        trainerId: 'p-trainer',
+        sentDaysAgo: 9,
+      }),
     createRevision: (planId) => {
       pasos.push(`createRevision:${planId}`);
       return Promise.resolve('9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b');
+    },
+    createRevisionIfCurrent: (planId, _trainerId, expected) => {
+      pasos.push(`createRevisionIfCurrent:${planId}:${expected}`);
+      return Promise.resolve(
+        opciones.perdioCarrera ?? false ? null : '9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+      );
     },
     recordAccepted: () => {
       pasos.push('recordAccepted');
@@ -350,16 +368,19 @@ describe('✏️ pedir un cambio', () => {
 });
 
 describe('el comentario', () => {
-  it('se guarda y se le reenvía al entrenador', async () => {
+  it('se guarda, SIN reenviar nada al entrenador', async () => {
+    // El aviso original ya tiene el botón para empezar la v2: repetirlo por
+    // cada mensaje del cliente era una notificación sin límite sobre el
+    // mismo botón. Al cliente se le confirma que quedó guardado, no que se
+    // "envió" — ya no hay un reenvío en tiempo real que prometer.
     const { deps, pasos, mensajes } = espia();
 
     const outcome = await addComment('req-1', 'c1', 'No termino la semana 1', CLIENTE, deps);
 
     expect(outcome).toMatchObject({ kind: 'commented', truncated: false });
     expect(pasos).toContain('addComment');
-    expect(mensajes.find((m) => m.chatId === 10)?.text).toContain('No termino');
-    // SPEC-030 regla 4: el acuse dice que se envió, no solo «apuntado».
-    expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('Enviado');
+    expect(mensajes.some((m) => m.chatId === 10)).toBe(false);
+    expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('Guardado');
   });
 
   it('SPEC-030 · si se pasó de 500 caracteres, el acuse lo dice', async () => {
@@ -383,6 +404,7 @@ describe('el comentario', () => {
           sentDaysAgo: 1,
         }),
       createRevision: () => Promise.resolve('v2'),
+      createRevisionIfCurrent: () => Promise.resolve('v2'),
       recordAccepted: () => Promise.resolve(),
     };
     const mensajes: { chatId: number; text: string }[] = [];
@@ -404,13 +426,6 @@ describe('el comentario', () => {
     expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('límite');
   });
 
-  it('si la solicitud desaparece entre guardar y leer, no revienta', async () => {
-    const { deps, mensajes } = espia({ solicitud: null });
-
-    expect(await addComment('req-1', 'c1', 'hola', CLIENTE, deps)).toEqual({ kind: 'denied' });
-    expect(mensajes).toEqual([]);
-  });
-
   it('sobre una solicitud que ya no es suya, no se guarda', async () => {
     const { deps, mensajes } = espia({ comentarioFalla: true });
 
@@ -427,7 +442,9 @@ describe('✏️ crear v2', () => {
     const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'revision_started' });
-    expect(pasos).toContain('createRevision:plan-1');
+    // El plan y el id esperado (la propia v1: nadie creó nada todavía) van
+    // bajo el mismo lock que calcula el número de versión.
+    expect(pasos).toContain(`createRevisionIfCurrent:plan-1:${VERSION_ID}`);
     expect(mensajes.at(-1)?.keyboard).toBeDefined();
   });
 
@@ -462,5 +479,91 @@ describe('✏️ crear v2', () => {
 
     expect(await startRevision(VERSION_ID, ENTRENADOR, deps)).toEqual({ kind: 'denied' });
     expect(pasos.some((p) => p.startsWith('createRevision'))).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Bug real de testing: cada comentario del cliente reenvía un aviso con su
+  // propio botón «Crear otra versión», los tres apuntando a la misma v1.
+  // Tocar más de uno no debe crear una v3 por encima de la v2 ya en marcha.
+
+  describe('ya hay una revisión en marcha', () => {
+    const V2_ID = '9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+    it.each(['NEW', 'GENERATING', 'DRAFT', 'APPROVED'] as const)(
+      'no crea otra si la vigente está en %s',
+      async (estado) => {
+        const { deps, pasos, mensajes } = espia({
+          version: version({ currentVersionId: V2_ID, currentVersionState: estado, currentVersionNumber: 2 }),
+        });
+
+        const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+        // El id que vuelve es el de la v2 EN MARCHA, no el de la v1 original
+        // sobre la que se tocó el botón viejo — si no, nada apuntaría a cuál
+        // es la que de verdad hay que revisar.
+        expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: V2_ID });
+        expect(pasos.some((p) => p.startsWith('createRevision'))).toBe(false);
+        expect(mensajes[0]?.text).toContain('v2');
+      },
+    );
+
+    it.each(['SENT', 'REJECTED'] as const)(
+      'SÍ crea la siguiente si la vigente ya está resuelta (%s)',
+      async (estado) => {
+        const { deps, pasos } = espia({
+          version: version({ currentVersionState: estado, currentVersionNumber: 1 }),
+        });
+
+        const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+        expect(outcome).toMatchObject({ kind: 'revision_started' });
+        expect(pasos).toContain(`createRevisionIfCurrent:plan-1:${VERSION_ID}`);
+      },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // La comprobación de arriba y el INSERT son dos pasos separados: esto
+  // prueba el caso en que otro callback, casi al mismo instante, ya creó su
+  // revisión bajo el mismo lock — la ventana que `isTerminal` solo no cierra.
+
+  describe('la carrera: dos callbacks casi simultáneos', () => {
+    const V2_GANADORA = '1a2b3c4d-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+    it('si el INSERT pierde la carrera, informa con los datos FRESCOS de quien ganó', async () => {
+      // El `version` con el que arrancó esta llamada quedó desactualizado en
+      // el instante en que el otro callback creó la suya: su
+      // `currentVersionId` sigue siendo el de la v1 de entrada, no el de la
+      // v2 que de verdad existe ahora. Devolver ESE id sería mentir sobre
+      // cuál es la revisión en marcha.
+      const { deps, pasos, mensajes } = espia({
+        perdioCarrera: true,
+        versionTrasCarrera: version({
+          currentVersionId: V2_GANADORA,
+          currentVersionState: 'DRAFT',
+          currentVersionNumber: 2,
+        }),
+      });
+
+      const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+      // `revision_in_progress`, no `revision_started`: no hay una versión
+      // nueva que preparar, la ganó el otro callback. Y el id es el de ESA
+      // v2, releído después de perder la carrera — no el de la v1 original.
+      expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: V2_GANADORA });
+      expect(pasos).toContain(`createRevisionIfCurrent:plan-1:${VERSION_ID}`);
+      expect(pasos.filter((p) => p === 'findVersion')).toHaveLength(2);
+      expect(mensajes.at(-1)?.keyboard).toBeUndefined();
+      expect(mensajes.at(-1)?.text).toContain('v2');
+    });
+
+    it('si al releer ya no se encuentra la versión, no inventa un id', async () => {
+      const { deps, mensajes } = espia({ perdioCarrera: true, versionTrasCarrera: null });
+
+      const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+      expect(outcome).toEqual({ kind: 'denied' });
+      expect(mensajes.at(-1)?.text).toContain('No puedo');
+    });
   });
 });

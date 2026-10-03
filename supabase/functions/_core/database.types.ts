@@ -720,6 +720,7 @@ export type Database = {
         Args: {
           p_content?: Json
           p_created_by: string
+          p_expected_current_version_id?: string
           p_plan_id: string
           p_request_id?: string
           p_source: Database["public"]["Enums"]["version_source"]
@@ -1120,6 +1121,9 @@ export type Database = {
           client_id: string
           client_name: string
           client_profile_id: string
+          current_version_id: string
+          current_version_number: number
+          current_version_state: Database["public"]["Enums"]["version_state"]
           plan_id: string
           state: Database["public"]["Enums"]["version_state"]
           trainer_chat_id: number

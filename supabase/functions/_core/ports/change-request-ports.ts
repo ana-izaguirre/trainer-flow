@@ -9,7 +9,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { ChangeReason } from '../domain/change-request.ts';
-import type { VersionRef } from '../domain/version.ts';
+import type { VersionRef, VersionState } from '../domain/version.ts';
 
 /** La versión sobre la que se pide el cambio, con su pertenencia. */
 export interface VersionForRequest extends VersionRef {
@@ -18,6 +18,17 @@ export interface VersionForRequest extends VersionRef {
   readonly clientName: string;
   readonly versionNumber: number;
   readonly trainerChatId: number;
+  /**
+   * El id, estado y número de la versión VIGENTE del plan ahora mismo —
+   * `workout_plans.current_version_id`, no esta `versionId`.
+   *
+   * Son el mismo valor que `versionId`/`state`/`versionNumber` mientras
+   * nadie empezó una revisión todavía. Dejan de serlo en cuanto
+   * `startRevision` crea la v2: a partir de ahí, apuntan a ESA, no a esta.
+   */
+  readonly currentVersionId: string;
+  readonly currentVersionState: VersionState;
+  readonly currentVersionNumber: number;
 }
 
 /** La solicitud, tal y como la ve el entrenador. */
@@ -92,6 +103,26 @@ export interface ChangeRequestRepo {
    * mismos tres caminos de SPEC-008, sin ninguno especial por ser revisión.
    */
   createRevision(planId: string, trainerId: string): Promise<string>;
+
+  /**
+   * Lo mismo que `createRevision`, pero bajo el MISMO lock del plan que
+   * calcula el número de versión (SPEC-000 §3) se vuelve a comprobar que
+   * la vigente sigue siendo `expectedCurrentVersionId`. `null` si no:
+   * alguien más ya creó una mientras esta llamada esperaba el lock, y no
+   * se crea una segunda.
+   *
+   * Es una guarda de CONCURRENCIA, no una regla de negocio — el mismo
+   * principio que `p_expected_state` en `apply_version_transition`: sin
+   * ella, `isTerminal` de `startRevision` comprueba el estado y el INSERT
+   * ocurre después, separados; dos callbacks casi simultáneos (dos avisos
+   * distintos, o Telegram reintentando el mismo) podrían leer los dos
+   * "todavía terminal" antes de que cualquiera cree la suya.
+   */
+  createRevisionIfCurrent(
+    planId: string,
+    trainerId: string,
+    expectedCurrentVersionId: string,
+  ): Promise<string | null>;
 
   /** Registra el «me sirve». No cambia estado: `SENT` ya es terminal. */
   recordAccepted(versionId: string, clientId: string): Promise<void>;

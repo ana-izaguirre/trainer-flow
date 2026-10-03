@@ -134,6 +134,7 @@ function espia(identity: Identity | null = null): Espia {
     addComment: () => Promise.resolve({ saved: false, truncated: false }),
     findRequest: () => Promise.resolve(null),
     createRevision: () => Promise.resolve('v-2'),
+    createRevisionIfCurrent: () => Promise.resolve('v-2'),
     recordAccepted: () => Promise.resolve(),
   };
 

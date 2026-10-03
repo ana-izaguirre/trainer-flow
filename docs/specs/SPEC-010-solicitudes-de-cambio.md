@@ -15,6 +15,17 @@
 | El enrutado, con cuatro prefijos por el mismo canal | ✅ 9 tests |
 | Las consultas y el UNIQUE parcial | ✅ 20 tests de integración |
 | **E2E-4** — el ciclo completo contra PostgreSQL real | ✅ `tests/e2e/change-request.test.ts` |
+| Regla 13 — empezar la revisión, también una sola vez | ✅ migración 0034, `startRevision` |
+
+### Regla 13 — bug real de testing, encontrado por Ana
+
+Cada comentario que el cliente escribe después de pedir un cambio
+(`addComment`) le reenvía al entrenador un aviso NUEVO, y ese aviso lleva su
+propio botón «✏️ Crear otra versión» — igual que el aviso original. Los tres
+apuntan a la MISMA v1. `startRevision` no comprobaba nada antes de crear la
+revisión, así que tocar el botón en más de uno de esos avisos creaba una v3
+por encima de la v2 que ya estaba en marcha, sin que el entrenador lo
+pidiera. Es lo que Ana vio en testing como «sale arribita versión 3».
 
 ## 1. Objetivo
 
@@ -115,6 +126,15 @@ una revisión: es el mismo que para la primera rutina.
 12. **La solicitud se resuelve al ENVIAR la v2, no al crearla.** Si se
     resolviera al crearla, una revisión abandonada dejaría al cliente sin
     respuesta y sin solicitud abierta que lo recordara.
+13. **Empezar la revisión es, igual que pedir el cambio (regla 6), una sola
+    vez mientras la anterior no se resuelva.** Si el plan ya tiene una
+    versión posterior sin enviar ni rechazar (`NEW`, `GENERATING`, `DRAFT` o
+    `APPROVED`), tocar «Crear otra versión» de nuevo no crea una v3: avisa en
+    qué estado está la que ya existe. A diferencia de la regla 6 —que lo
+    garantiza con un índice único—, aquí basta comparar contra
+    `workout_plans.current_version_id`: solo el entrenador crea revisiones,
+    así que no hay dos pulsaciones simultáneas de dos personas distintas que
+    una comprobación previa pudiera dejar pasar.
 
 ## 5. Estados
 
@@ -141,6 +161,7 @@ v2: DRAFT → APPROVED → SENT
 | Solicitud sobre una versión que no es `SENT` | Denegada |
 | Solicitud sobre la versión de otro cliente | Denegada, mensaje neutro |
 | Segunda solicitud sobre la misma versión | Actualiza la abierta, no duplica |
+| «Crear otra versión» con una ya en marcha (regla 13) | No crea otra; avisa el estado de la que existe |
 | Comentario > 500 caracteres | Truncado con aviso |
 | El entrenador no atiende en 7 días | Recordatorio, una sola vez |
 | Gemini falla al crear v2 | v2 vuelve a `NEW`; plantilla o manual |

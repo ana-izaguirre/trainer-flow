@@ -29,7 +29,9 @@ import {
   REASON_LABELS,
   type ChangeReason,
 } from '../domain/change-request.ts';
-import type { ChangeRequestRepo, OpenRequest } from '../ports/change-request-ports.ts';
+import { isTerminal } from '../domain/state-machine.ts';
+import { SIGUIENTE_PASO } from '../creation/flows.ts';
+import type { ChangeRequestRepo, OpenRequest, VersionForRequest } from '../ports/change-request-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import { buildKeyboard, type InlineKeyboard } from '../telegram/keyboard.ts';
@@ -50,7 +52,9 @@ export type ChangeOutcome =
   | { readonly kind: 'already_requested'; readonly requestId: string }
   | { readonly kind: 'accepted'; readonly versionId: string }
   | { readonly kind: 'commented'; readonly requestId: string; readonly truncated: boolean }
-  | { readonly kind: 'revision_started'; readonly versionId: string };
+  | { readonly kind: 'revision_started'; readonly versionId: string }
+  /** Ya hay una v2+ sin resolver: no se crea otra (ver `startRevision`). */
+  | { readonly kind: 'revision_in_progress'; readonly versionId: string };
 
 /**
  * Lo mismo para una versión ajena que para una que no existe o no está
@@ -151,7 +155,7 @@ export async function requestChange(
   // El entrenador se entera ya, con el botón para empezar la v2.
   await deps.sender.sendMessage(
     version.trainerChatId,
-    avisoAlEntrenador(version.clientName, version.versionNumber, reason, null),
+    avisoAlEntrenador(version.clientName, version.versionNumber, reason),
     buildKeyboard(['revise'], versionId),
   );
 
@@ -160,7 +164,16 @@ export async function requestChange(
 
 /**
  * El detalle que escribe después. Se le AÑADE al comentario que ya hubiera
- * —no lo reemplaza— y se le reenvía al entrenador tal cual (regla 4).
+ * —no lo reemplaza— (regla 4).
+ *
+ * ┌─ YA NO LE REENVÍA UN AVISO AL ENTRENADOR ──────────────────────────────┐
+ * │ El aviso original (`requestChange`) ya tiene el botón para empezar la  │
+ * │ v2. Repetirlo por cada mensaje del cliente era una notificación nueva  │
+ * │ sin límite sobre el mismo botón, mientras el cambio sigue en curso: no │
+ * │ hay nada nuevo que decidir por escribir más. El comentario queda       │
+ * │ guardado, y lo ve cuando decide atender la solicitud, no mensaje a     │
+ * │ mensaje.                                                               │
+ * └──────────────────────────────────────────────────────────────────────┘
  */
 export async function addComment(
   requestId: string,
@@ -172,29 +185,12 @@ export async function addComment(
   const guardado = await deps.repo.addComment(requestId, clientId, comment);
   if (!guardado.saved) return { kind: 'denied' };
 
-  const solicitud = await deps.repo.findRequest(requestId);
-  if (solicitud === null) return { kind: 'denied' };
-
   await deps.sender.sendMessage(
     actor.telegramChatId,
     guardado.truncated
-      ? '📨 Enviado a tu entrenador\\. Guardé hasta el límite: el resto no entró\\.'
-      : '📨 Enviado a tu entrenador\\. Te aviso aquí cuando tenga tu nueva rutina\\.',
+      ? '📝 Guardado\\. Guardé hasta el límite: el resto no entró\\.'
+      : '📝 Guardado\\. Tu entrenador lo verá cuando revise tu pedido\\.',
   );
-
-  const version = await deps.repo.findVersion(solicitud.versionId);
-  if (version !== null) {
-    await deps.sender.sendMessage(
-      version.trainerChatId,
-      avisoAlEntrenador(
-        solicitud.clientName,
-        solicitud.versionNumber,
-        solicitud.reason,
-        solicitud.comment,
-      ),
-      buildKeyboard(['revise'], solicitud.versionId),
-    );
-  }
 
   return { kind: 'commented', requestId, truncated: guardado.truncated };
 }
@@ -206,6 +202,26 @@ export async function addComment(
  * SPEC-008: no hay un camino especial por ser una revisión.
  *
  * **La solicitud sigue abierta** hasta que la v2 se envíe (regla 12).
+ *
+ * ┌─ POR QUÉ COMPRUEBA LA VIGENTE, NO SOLO ESTA ──────────────────────────┐
+ * │ Cada comentario que el cliente escribe (`addComment`) le reenvía al   │
+ * │ entrenador un aviso nuevo, y los tres —el original y los de cada      │
+ * │ comentario— llevan su propio botón apuntando a esta MISMA v1. Sin     │
+ * │ esta comprobación, tocar el botón en más de un aviso crea una v3 por  │
+ * │ encima de la v2 que ya está en marcha, sin que el entrenador lo pida  │
+ * │ (regla 3: la v2 nace de UNA decisión, no de varias por accidente).    │
+ * └──────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─ Y POR QUÉ LA CREACIÓN VUELVE A COMPROBARLO, BAJO EL LOCK ─────────────┐
+ * │ La comprobación de arriba y el INSERT son dos pasos separados: dos     │
+ * │ callbacks casi simultáneos —dos avisos distintos, o Telegram           │
+ * │ reintentando el mismo— podrían leer los dos "todavía terminal" antes   │
+ * │ de que cualquiera cree la suya. `createRevisionIfCurrent` repite la    │
+ * │ comprobación DENTRO de la transacción que ya bloquea el plan, así que  │
+ * │ sigue siendo el propio INSERT quien decide — el mismo principio que    │
+ * │ el `UNIQUE` de SPEC-030 regla 1, aplicado aquí porque no hay un índice  │
+ * │ que lo exprese (no es "una fila o ninguna", es "la vigente cambió").   │
+ * └──────────────────────────────────────────────────────────────────────┘
  */
 export async function startRevision(
   versionId: string,
@@ -221,7 +237,32 @@ export async function startRevision(
     return { kind: 'denied' };
   }
 
-  const nueva = await deps.repo.createRevision(version.planId, actor.profileId);
+  if (!isTerminal(version.currentVersionState)) {
+    await avisarEnMarcha(version, actor, deps);
+    return { kind: 'revision_in_progress', versionId: version.currentVersionId };
+  }
+
+  const nueva = await deps.repo.createRevisionIfCurrent(
+    version.planId,
+    actor.profileId,
+    version.currentVersionId,
+  );
+
+  if (nueva === null) {
+    // Perdió la carrera: otro callback, casi al mismo instante, ya creó la
+    // suya bajo el mismo lock. `version` quedó desactualizada en ESE
+    // instante —su `currentVersionId` sigue siendo el de la v1 de entrada—,
+    // así que hay que releerla: devolver ese id viejo sería apuntar a la
+    // rutina equivocada.
+    const actualizada = await deps.repo.findVersion(versionId);
+    if (actualizada === null) {
+      await deps.sender.sendMessage(actor.telegramChatId, RESPUESTA_NEUTRA);
+      return { kind: 'denied' };
+    }
+
+    await avisarEnMarcha(actualizada, actor, deps);
+    return { kind: 'revision_in_progress', versionId: actualizada.currentVersionId };
+  }
 
   await deps.sender.sendMessage(
     actor.telegramChatId,
@@ -230,6 +271,19 @@ export async function startRevision(
   );
 
   return { kind: 'revision_started', versionId: nueva };
+}
+
+/** El estado de la vigente, en las mismas palabras que ya usa SPEC-008. */
+async function avisarEnMarcha(
+  version: VersionForRequest,
+  actor: Identity,
+  deps: ChangeRequestDeps,
+): Promise<void> {
+  await deps.sender.sendMessage(
+    actor.telegramChatId,
+    `✏️ La v${version.currentVersionNumber} de ${escapeMarkdownV2(version.clientName)} ya está en marcha\\.\n\n` +
+      escapeMarkdownV2(SIGUIENTE_PASO[version.currentVersionState]),
+  );
 }
 
 /**
@@ -279,23 +333,18 @@ function tecladoDeMotivos(versionId: string): InlineKeyboard {
   return { inline_keyboard: filas };
 }
 
-/** El aviso lleva el comentario ENTERO: el entrenador decide, y necesita leerlo. */
-function avisoAlEntrenador(
-  clientName: string,
-  versionNumber: number,
-  reason: ChangeReason,
-  comment: string | null,
-): string {
-  const lineas = [
+/**
+ * El aviso con el que se entera el entrenador, al pedirse el cambio.
+ *
+ * Nunca lleva el comentario: en este punto todavía no existe —se escribe
+ * DESPUÉS, y ya no se reenvía (ver el docstring de `addComment`)—, así que
+ * el entrenador lo lee cuando decide atender la solicitud, no aquí.
+ */
+function avisoAlEntrenador(clientName: string, versionNumber: number, reason: ChangeReason): string {
+  return [
     `🔔 *${escapeMarkdownV2(clientName)}* pidió un cambio`,
     '',
     `Rutina v${versionNumber}`,
     `Motivo: ${REASON_LABELS[reason]}`,
-  ];
-
-  if (comment !== null && comment.trim().length > 0) {
-    lineas.push(`Comentario: _${escapeMarkdownV2(comment)}_`);
-  }
-
-  return lineas.join('\n');
+  ].join('\n');
 }
