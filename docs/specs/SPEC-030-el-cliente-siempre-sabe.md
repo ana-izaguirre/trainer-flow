@@ -252,11 +252,13 @@ Si una lista está vacía, esa sección no aparece. Si las dos lo están:
    parcial se queda como garantía.
 3. **Toda pregunta de texto libre usa `force_reply`**: el detalle del cambio,
    «Otro» y la molestia del check-in cuando se escribe.
-4. **Todo texto que se atribuye a la solicitud recibe acuse**, y el
-   entrenador recibe **ese texto**. Mientras la solicitud esté abierta y sea
-   lo último que se le preguntó, cada mensaje **se añade** al comentario (con
-   un salto de línea) hasta 500 caracteres. Si se pasa, se guarda hasta el
-   límite y se le dice que el resto no entró.
+4. **Todo texto que se atribuye a la solicitud recibe acuse al cliente**, pero
+   **no** genera un aviso nuevo al entrenador: el que ya tiene desde que se
+   creó la solicitud alcanza para actuar (nota de seguimiento, al final).
+   Mientras la solicitud esté abierta y sea lo último que se le preguntó, cada
+   mensaje **se añade** al comentario (con un salto de línea) hasta 500
+   caracteres. Si se pasa, se guarda hasta el límite y se le dice que el resto
+   no entró.
    *Reemplaza la condición «sin comentario» de SPEC-010.*
 5. **La pregunta más reciente es la que se hizo último**, no la de la fila más
    nueva: la solicitud guarda `asked_at`, que se actualiza cada vez que se le

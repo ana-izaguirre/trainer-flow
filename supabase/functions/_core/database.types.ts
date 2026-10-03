@@ -726,7 +726,7 @@ export type Database = {
           p_source: Database["public"]["Enums"]["version_source"]
           p_template_id?: string
         }
-        Returns: string | null
+        Returns: string
       }
       current_draft_for_trainer: {
         Args: { p_trainer_id: string }
