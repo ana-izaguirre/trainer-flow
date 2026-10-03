@@ -7,7 +7,7 @@
  * Esa separación es lo que hace que un cambio en el formato de Tally no toque
  * las reglas del dominio.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ASSESSMENT_LIMITS, validateAssessment } from './validate-assessment.ts';
 
 function campos(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -369,5 +369,69 @@ describe('la fecha de nacimiento (SPEC-016)', () => {
   it('acepta el 29 de febrero de un bisiesto', () => {
     expect(fecha('1992-02-29')).toBe('1992-02-29');
     expect(fecha('1993-02-29')).toBeNull();
+  });
+
+  // El mismo rango que el CHECK real de la base (migración 0021): entre hace
+  // 120 y hace 10 años. Una fecha válida en el calendario pero fuera de este
+  // rango pasaba antes, y el INSERT reventaba en la base sin que nadie se
+  // enterara (webhook.ts la trataba como error transitorio, no como dato
+  // inválido) — exactamente el bug que esto evita.
+  // En UTC, igual que la implementación: así no depende de la zona horaria
+  // de quien corre los tests, sobre todo en los límites exactos.
+  function haceAnios(anios: number, ajusteDias = 0): string {
+    const hoy = new Date();
+    const calculada = new Date(
+      Date.UTC(hoy.getUTCFullYear() - anios, hoy.getUTCMonth(), hoy.getUTCDate() + ajusteDias),
+    );
+    return calculada.toISOString().slice(0, 10);
+  }
+
+  it('rechaza una fecha en el futuro', () => {
+    expect(fecha(haceAnios(-1))).toBeNull();
+  });
+
+  it('rechaza a alguien con menos de 10 años', () => {
+    expect(fecha(haceAnios(5))).toBeNull();
+    expect(fecha(haceAnios(10, 1))).toBeNull(); // un día más joven que el límite
+  });
+
+  it('rechaza una fecha de hace más de 120 años', () => {
+    expect(fecha(haceAnios(121))).toBeNull();
+    expect(fecha(haceAnios(130))).toBeNull();
+  });
+
+  it('acepta los dos extremos del rango, igual que el CHECK de la base', () => {
+    expect(fecha(haceAnios(10))).toBe(haceAnios(10));
+    expect(fecha(haceAnios(120))).toBe(haceAnios(120));
+  });
+
+  it('acepta una fecha típica dentro del rango', () => {
+    expect(fecha(haceAnios(30))).toBe(haceAnios(30));
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // El 29 de febrero sobre un año que NO es bisiesto: el CHECK real
+  // (`current_date - interval 'N years'`) hace CLAMPING al 28 de febrero;
+  // `Date.UTC` sin corregir hace ROLLOVER al 1 de marzo. Dos resultados
+  // distintos — exactamente la divergencia que esto debe evitar. Solo se
+  // puede probar fijando el reloj: en cualquier otro día del año, ambos
+  // cálculos coinciden y el caso no se manifiesta.
+  describe('el 29 de febrero, con el año límite NO bisiesto', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('el límite coincide con el clamping de Postgres, no con el rollover de Date.UTC', () => {
+      // Hoy: 29 feb 2028 (bisiesto). hoy - 10 años = 2018 (NO bisiesto).
+      // Postgres: date '2028-02-29' - interval '10 years' = '2018-02-28'.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2028-02-29T12:00:00Z'));
+
+      // El límite real (clamping): nacer ESE día cumple exactamente 10 años.
+      expect(fecha('2018-02-28')).toBe('2018-02-28');
+      // Un día más joven que el límite real: con el rollover sin corregir,
+      // esto pasaba como "válido" y el INSERT real lo habría rechazado.
+      expect(fecha('2018-03-01')).toBeNull();
+    });
   });
 });

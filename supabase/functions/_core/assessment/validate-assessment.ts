@@ -79,6 +79,8 @@ export const ASSESSMENT_LIMITS = {
   age: { min: 10, max: 120 },
   weightKg: { min: 20, max: 400 },
   heightCm: { min: 80, max: 250 },
+  /** El mismo rango que el CHECK de `assessments` (migración 0021). */
+  birthDateYears: { min: 10, max: 120 },
 } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -192,6 +194,43 @@ function readOptionalNumber(
   return decimals === 0 ? Math.round(parsed) : Number(parsed.toFixed(decimals));
 }
 
+function esBisiesto(anio: number): boolean {
+  return (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0;
+}
+
+/**
+ * Hoy, menos `anios` años, en el mismo formato que usa el CHECK real:
+ * `current_date - interval 'N years'`. Postgres, ante un 29 de febrero
+ * cuyo año destino no es bisiesto, hace CLAMPING al 28 — nunca avanza al
+ * mes siguiente. `Date.UTC` por sí solo no: interpretaría ese "día 29" como
+ * un desborde y haría ROLLOVER al 1 de marzo. Sin este ajuste, el límite
+ * calculado aquí se corre un día respecto al que aplica la base.
+ */
+function haceAnios(hoy: Date, anios: number): string {
+  const anio = hoy.getUTCFullYear() - anios;
+  const mes = hoy.getUTCMonth();
+  const dia = hoy.getUTCDate();
+  const diaAjustado = mes === 1 && dia === 29 && !esBisiesto(anio) ? 28 : dia;
+
+  return new Date(Date.UTC(anio, mes, diaAjustado)).toISOString().slice(0, 10);
+}
+
+/**
+ * Una fecha válida en el calendario no es una fecha plausible como
+ * nacimiento. Mismo rango que el CHECK real de `assessments` (migración
+ * 0021: entre hace 120 y hace 10 años) — si divergen, la base rechaza datos
+ * que aquí pasaron, y antes de esto ese rechazo no avisaba a nadie: caía
+ * como error transitorio en vez de como evaluación inválida.
+ */
+function isBirthDatePlausible(iso: string): boolean {
+  const { min, max } = ASSESSMENT_LIMITS.birthDateYears;
+  const hoy = new Date();
+  const limiteReciente = haceAnios(hoy, min);
+  const limiteAntiguo = haceAnios(hoy, max);
+
+  return iso >= limiteAntiguo && iso <= limiteReciente;
+}
+
 /**
  * Una fecha en `AAAA-MM-DD`, que es lo que manda un campo de fecha de Tally.
  *
@@ -209,6 +248,8 @@ function readIsoDate(value: unknown): string | null {
   const fecha = new Date(`${limpio}T00:00:00Z`);
   if (Number.isNaN(fecha.getTime())) return null;
   if (fecha.toISOString().slice(0, 10) !== limpio) return null;
+
+  if (!isBirthDatePlausible(limpio)) return null;
 
   return limpio;
 }
