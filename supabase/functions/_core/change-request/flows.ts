@@ -250,14 +250,18 @@ export async function startRevision(
 
   if (nueva === null) {
     // Perdió la carrera: otro callback, casi al mismo instante, ya creó la
-    // suya bajo el mismo lock. No hay estado/número frescos a la mano —no
-    // vale otra consulta solo para un mensaje más detallado de un caso que
-    // dura milisegundos—, así que el aviso aquí es genérico.
-    await deps.sender.sendMessage(
-      actor.telegramChatId,
-      `✏️ Ya se empezó una versión nueva para ${escapeMarkdownV2(version.clientName)} justo ahora\\. Revísala con /ver\\.`,
-    );
-    return { kind: 'revision_in_progress', versionId: version.currentVersionId };
+    // suya bajo el mismo lock. `version` quedó desactualizada en ESE
+    // instante —su `currentVersionId` sigue siendo el de la v1 de entrada—,
+    // así que hay que releerla: devolver ese id viejo sería apuntar a la
+    // rutina equivocada.
+    const actualizada = await deps.repo.findVersion(versionId);
+    if (actualizada === null) {
+      await deps.sender.sendMessage(actor.telegramChatId, RESPUESTA_NEUTRA);
+      return { kind: 'denied' };
+    }
+
+    await avisarEnMarcha(actualizada, actor, deps);
+    return { kind: 'revision_in_progress', versionId: actualizada.currentVersionId };
   }
 
   await deps.sender.sendMessage(

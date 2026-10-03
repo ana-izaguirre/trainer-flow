@@ -94,14 +94,22 @@ function espia(
     abierta?: OpenRequest | null;
     created?: boolean;
     perdioCarrera?: boolean;
+    /** Lo que devuelve la SEGUNDA llamada a `findVersion` en adelante —
+     * la relectura tras perder la carrera. Sin esto, se repite la primera. */
+    versionTrasCarrera?: VersionForRequest | null;
   } = {},
 ): Espia {
   const pasos: string[] = [];
   const mensajes: { chatId: number; text: string; keyboard?: unknown }[] = [];
+  let llamadasFindVersion = 0;
 
   const repo: ChangeRequestRepo = {
     findVersion: () => {
       pasos.push('findVersion');
+      llamadasFindVersion += 1;
+      if (llamadasFindVersion > 1 && opciones.versionTrasCarrera !== undefined) {
+        return Promise.resolve(opciones.versionTrasCarrera);
+      }
       return Promise.resolve(opciones.version === undefined ? version() : opciones.version);
     },
     request: (_v, _c, reason) => {
@@ -520,17 +528,42 @@ describe('✏️ crear v2', () => {
   // revisión bajo el mismo lock — la ventana que `isTerminal` solo no cierra.
 
   describe('la carrera: dos callbacks casi simultáneos', () => {
-    it('si el INSERT pierde la carrera, no ofrece los tres caminos de nuevo', async () => {
-      const { deps, pasos, mensajes } = espia({ perdioCarrera: true });
+    const V2_GANADORA = '1a2b3c4d-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
+    it('si el INSERT pierde la carrera, informa con los datos FRESCOS de quien ganó', async () => {
+      // El `version` con el que arrancó esta llamada quedó desactualizado en
+      // el instante en que el otro callback creó la suya: su
+      // `currentVersionId` sigue siendo el de la v1 de entrada, no el de la
+      // v2 que de verdad existe ahora. Devolver ESE id sería mentir sobre
+      // cuál es la revisión en marcha.
+      const { deps, pasos, mensajes } = espia({
+        perdioCarrera: true,
+        versionTrasCarrera: version({
+          currentVersionId: V2_GANADORA,
+          currentVersionState: 'DRAFT',
+          currentVersionNumber: 2,
+        }),
+      });
 
       const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
 
       // `revision_in_progress`, no `revision_started`: no hay una versión
-      // nueva que preparar, la ganó el otro callback.
-      expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: VERSION_ID });
+      // nueva que preparar, la ganó el otro callback. Y el id es el de ESA
+      // v2, releído después de perder la carrera — no el de la v1 original.
+      expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: V2_GANADORA });
       expect(pasos).toContain(`createRevisionIfCurrent:plan-1:${VERSION_ID}`);
+      expect(pasos.filter((p) => p === 'findVersion')).toHaveLength(2);
       expect(mensajes.at(-1)?.keyboard).toBeUndefined();
-      expect(mensajes.at(-1)?.text).toContain('Carlos');
+      expect(mensajes.at(-1)?.text).toContain('v2');
+    });
+
+    it('si al releer ya no se encuentra la versión, no inventa un id', async () => {
+      const { deps, mensajes } = espia({ perdioCarrera: true, versionTrasCarrera: null });
+
+      const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+      expect(outcome).toEqual({ kind: 'denied' });
+      expect(mensajes.at(-1)?.text).toContain('No puedo');
     });
   });
 });
