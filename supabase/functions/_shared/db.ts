@@ -1412,6 +1412,7 @@ export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRe
           trainerId: fila.trainer_id as string,
           profileId: (fila.client_profile_id as string | null) ?? null,
         },
+        currentVersionId: fila.current_version_id as string,
         currentVersionState: fila.current_version_state as VersionState,
         currentVersionNumber: Number(fila.current_version_number),
       };
