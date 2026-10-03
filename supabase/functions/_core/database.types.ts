@@ -720,12 +720,13 @@ export type Database = {
         Args: {
           p_content?: Json
           p_created_by: string
+          p_expected_current_version_id?: string
           p_plan_id: string
           p_request_id?: string
           p_source: Database["public"]["Enums"]["version_source"]
           p_template_id?: string
         }
-        Returns: string
+        Returns: string | null
       }
       current_draft_for_trainer: {
         Args: { p_trainer_id: string }

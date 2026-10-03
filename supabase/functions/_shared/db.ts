@@ -1516,6 +1516,25 @@ export function createChangeRequestRepo(db: Db, httpRequestId: string): ChangeRe
       return data as string;
     },
 
+    async createRevisionIfCurrent(planId, trainerId, expectedCurrentVersionId) {
+      // La misma RPC, con la guarda de concurrencia: `data === null` aquí
+      // significa que alguien más ya creó una revisión bajo el lock, no un
+      // error — por eso no lanza, a diferencia de `createRevision`.
+      const { data, error } = await db.rpc('create_workout_version', {
+        p_plan_id: planId,
+        p_source: 'manual',
+        p_created_by: trainerId,
+        p_request_id: httpRequestId,
+        p_expected_current_version_id: expectedCurrentVersionId,
+      });
+
+      if (error !== null) {
+        throw new Error(`No se pudo crear la revisión: ${error.code}`);
+      }
+
+      return data as string | null;
+    },
+
     async recordAccepted(versionId, clientId) {
       const { error } = await db.rpc('record_version_accepted', {
         p_version_id: versionId,

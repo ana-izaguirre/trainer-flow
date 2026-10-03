@@ -55,7 +55,8 @@ function version(extra: Partial<VersionForRequest> = {}): VersionForRequest {
     client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
     // Por defecto, nadie empezó una revisión todavía: la vigente es esta
     // misma v1, en SENT. Los tests que simulan una v2 ya en marcha pisan
-    // estos dos campos.
+    // estos tres campos.
+    currentVersionId: VERSION_ID,
     currentVersionState: 'SENT',
     currentVersionNumber: 1,
     ...extra,
@@ -93,6 +94,7 @@ function espia(
     solicitud?: null;
     abierta?: OpenRequest | null;
     created?: boolean;
+    perdioCarrera?: boolean;
   } = {},
 ): Espia {
   const pasos: string[] = [];
@@ -141,6 +143,12 @@ function espia(
     createRevision: (planId) => {
       pasos.push(`createRevision:${planId}`);
       return Promise.resolve('9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b');
+    },
+    createRevisionIfCurrent: (planId, _trainerId, expected) => {
+      pasos.push(`createRevisionIfCurrent:${planId}:${expected}`);
+      return Promise.resolve(
+        opciones.perdioCarrera ?? false ? null : '9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
+      );
     },
     recordAccepted: () => {
       pasos.push('recordAccepted');
@@ -388,6 +396,7 @@ describe('el comentario', () => {
           sentDaysAgo: 1,
         }),
       createRevision: () => Promise.resolve('v2'),
+      createRevisionIfCurrent: () => Promise.resolve('v2'),
       recordAccepted: () => Promise.resolve(),
     };
     const mensajes: { chatId: number; text: string }[] = [];
@@ -432,7 +441,9 @@ describe('✏️ crear v2', () => {
     const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
 
     expect(outcome).toMatchObject({ kind: 'revision_started' });
-    expect(pasos).toContain('createRevision:plan-1');
+    // El plan y el id esperado (la propia v1: nadie creó nada todavía) van
+    // bajo el mismo lock que calcula el número de versión.
+    expect(pasos).toContain(`createRevisionIfCurrent:plan-1:${VERSION_ID}`);
     expect(mensajes.at(-1)?.keyboard).toBeDefined();
   });
 
@@ -475,16 +486,21 @@ describe('✏️ crear v2', () => {
   // Tocar más de uno no debe crear una v3 por encima de la v2 ya en marcha.
 
   describe('ya hay una revisión en marcha', () => {
+    const V2_ID = '9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b';
+
     it.each(['NEW', 'GENERATING', 'DRAFT', 'APPROVED'] as const)(
       'no crea otra si la vigente está en %s',
       async (estado) => {
         const { deps, pasos, mensajes } = espia({
-          version: version({ currentVersionState: estado, currentVersionNumber: 2 }),
+          version: version({ currentVersionId: V2_ID, currentVersionState: estado, currentVersionNumber: 2 }),
         });
 
         const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
 
-        expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: VERSION_ID });
+        // El id que vuelve es el de la v2 EN MARCHA, no el de la v1 original
+        // sobre la que se tocó el botón viejo — si no, nada apuntaría a cuál
+        // es la que de verdad hay que revisar.
+        expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: V2_ID });
         expect(pasos.some((p) => p.startsWith('createRevision'))).toBe(false);
         expect(mensajes[0]?.text).toContain('v2');
       },
@@ -500,8 +516,28 @@ describe('✏️ crear v2', () => {
         const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
 
         expect(outcome).toMatchObject({ kind: 'revision_started' });
-        expect(pasos).toContain('createRevision:plan-1');
+        expect(pasos).toContain(`createRevisionIfCurrent:plan-1:${VERSION_ID}`);
       },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // La comprobación de arriba y el INSERT son dos pasos separados: esto
+  // prueba el caso en que otro callback, casi al mismo instante, ya creó su
+  // revisión bajo el mismo lock — la ventana que `isTerminal` solo no cierra.
+
+  describe('la carrera: dos callbacks casi simultáneos', () => {
+    it('si el INSERT pierde la carrera, no ofrece los tres caminos de nuevo', async () => {
+      const { deps, pasos, mensajes } = espia({ perdioCarrera: true });
+
+      const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+      // `revision_in_progress`, no `revision_started`: no hay una versión
+      // nueva que preparar, la ganó el otro callback.
+      expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: VERSION_ID });
+      expect(pasos).toContain(`createRevisionIfCurrent:plan-1:${VERSION_ID}`);
+      expect(mensajes.at(-1)?.keyboard).toBeUndefined();
+      expect(mensajes.at(-1)?.text).toContain('Carlos');
+    });
   });
 });

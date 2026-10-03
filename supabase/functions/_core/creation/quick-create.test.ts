@@ -121,6 +121,7 @@ function espia(config: Config): Espia {
               clientName: 'Carlos Pérez',
               versionNumber: 1,
               trainerChatId: CHAT,
+              currentVersionId: 'v-vieja',
               currentVersionState: 'SENT',
               currentVersionNumber: 1,
             }

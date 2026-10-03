@@ -30,7 +30,8 @@ import {
   type ChangeReason,
 } from '../domain/change-request.ts';
 import { isTerminal } from '../domain/state-machine.ts';
-import type { ChangeRequestRepo, OpenRequest } from '../ports/change-request-ports.ts';
+import { SIGUIENTE_PASO } from '../creation/flows.ts';
+import type { ChangeRequestRepo, OpenRequest, VersionForRequest } from '../ports/change-request-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
 import { buildKeyboard, type InlineKeyboard } from '../telegram/keyboard.ts';
@@ -218,6 +219,17 @@ export async function addComment(
  * │ encima de la v2 que ya está en marcha, sin que el entrenador lo pida  │
  * │ (regla 3: la v2 nace de UNA decisión, no de varias por accidente).    │
  * └──────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─ Y POR QUÉ LA CREACIÓN VUELVE A COMPROBARLO, BAJO EL LOCK ─────────────┐
+ * │ La comprobación de arriba y el INSERT son dos pasos separados: dos     │
+ * │ callbacks casi simultáneos —dos avisos distintos, o Telegram           │
+ * │ reintentando el mismo— podrían leer los dos "todavía terminal" antes   │
+ * │ de que cualquiera cree la suya. `createRevisionIfCurrent` repite la    │
+ * │ comprobación DENTRO de la transacción que ya bloquea el plan, así que  │
+ * │ sigue siendo el propio INSERT quien decide — el mismo principio que    │
+ * │ el `UNIQUE` de SPEC-030 regla 1, aplicado aquí porque no hay un índice  │
+ * │ que lo exprese (no es "una fila o ninguna", es "la vigente cambió").   │
+ * └──────────────────────────────────────────────────────────────────────┘
  */
 export async function startRevision(
   versionId: string,
@@ -234,14 +246,27 @@ export async function startRevision(
   }
 
   if (!isTerminal(version.currentVersionState)) {
-    await deps.sender.sendMessage(
-      actor.telegramChatId,
-      `✏️ Ya tienes la v${version.currentVersionNumber} de ${escapeMarkdownV2(version.clientName)} en marcha\\. Revísala con /ver\\.`,
-    );
-    return { kind: 'revision_in_progress', versionId };
+    await avisarEnMarcha(version, actor, deps);
+    return { kind: 'revision_in_progress', versionId: version.currentVersionId };
   }
 
-  const nueva = await deps.repo.createRevision(version.planId, actor.profileId);
+  const nueva = await deps.repo.createRevisionIfCurrent(
+    version.planId,
+    actor.profileId,
+    version.currentVersionId,
+  );
+
+  if (nueva === null) {
+    // Perdió la carrera: otro callback, casi al mismo instante, ya creó la
+    // suya bajo el mismo lock. No hay estado/número frescos a la mano —no
+    // vale otra consulta solo para un mensaje más detallado de un caso que
+    // dura milisegundos—, así que el aviso aquí es genérico.
+    await deps.sender.sendMessage(
+      actor.telegramChatId,
+      `✏️ Ya se empezó una versión nueva para ${escapeMarkdownV2(version.clientName)} justo ahora\\. Revísala con /ver\\.`,
+    );
+    return { kind: 'revision_in_progress', versionId: version.currentVersionId };
+  }
 
   await deps.sender.sendMessage(
     actor.telegramChatId,
@@ -250,6 +275,19 @@ export async function startRevision(
   );
 
   return { kind: 'revision_started', versionId: nueva };
+}
+
+/** El estado de la vigente, en las mismas palabras que ya usa SPEC-008. */
+async function avisarEnMarcha(
+  version: VersionForRequest,
+  actor: Identity,
+  deps: ChangeRequestDeps,
+): Promise<void> {
+  await deps.sender.sendMessage(
+    actor.telegramChatId,
+    `✏️ La v${version.currentVersionNumber} de ${escapeMarkdownV2(version.clientName)} ya está en marcha\\.\n\n` +
+      escapeMarkdownV2(SIGUIENTE_PASO[version.currentVersionState]),
+  );
 }
 
 /**

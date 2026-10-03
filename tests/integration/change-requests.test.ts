@@ -350,6 +350,36 @@ describe('las consultas', () => {
     });
   });
 
+  // Regla 13, la ventana de carrera: `_core` comprueba el estado y crea la
+  // revisión en dos pasos separados. Esto prueba la guarda que cierra esa
+  // ventana DENTRO de la misma función atómica, bajo el lock del plan.
+  it('`create_workout_version` con `p_expected_current_version_id` no crea una segunda si ya cambió', async () => {
+    const { versionId, planId, trainerId } = await escenario();
+
+    // Coincide con la vigente real (todavía la v1): crea la v2 normalmente.
+    const { rows: primera } = await db.query<{ create_workout_version: string }>(
+      `SELECT create_workout_version($1, 'manual', $2, null, null, null, $3)`,
+      [planId, trainerId, versionId],
+    );
+    const v2 = primera[0]!.create_workout_version;
+    expect(v2).not.toBeNull();
+
+    // Repetir con el MISMO `expected` (la v1): ya no coincide con la
+    // vigente real (ahora es v2) — ningún callback "ganó" dos veces.
+    const { rows: segunda } = await db.query<{ create_workout_version: string | null }>(
+      `SELECT create_workout_version($1, 'manual', $2, null, null, null, $3)`,
+      [planId, trainerId, versionId],
+    );
+    expect(segunda[0]!.create_workout_version).toBeNull();
+
+    // Y de verdad no se creó una v3: el plan sigue con solo dos versiones.
+    const { rows: conteo } = await db.query<{ n: string }>(
+      `SELECT count(*) AS n FROM workout_versions WHERE plan_id = $1`,
+      [planId],
+    );
+    expect(Number(conteo[0]!.n)).toBe(2);
+  });
+
   it('`open_change_request_for_client` dice cuándo se preguntó', async () => {
     // Es lo que decide contra el check-in quién se queda el texto libre.
     const { versionId, clientId } = await escenario();

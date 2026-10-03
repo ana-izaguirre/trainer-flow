@@ -196,6 +196,7 @@ function fakeChanges(
               versionNumber: 1,
               trainerChatId: 10,
               client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
+              currentVersionId: '3f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b',
               currentVersionState: 'SENT' as const,
               currentVersionNumber: 1,
             }
@@ -244,6 +245,10 @@ function fakeChanges(
       }),
     createRevision: () => {
       pasos.push('createRevision');
+      return Promise.resolve('9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b');
+    },
+    createRevisionIfCurrent: () => {
+      pasos.push('createRevisionIfCurrent');
       return Promise.resolve('9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b');
     },
     recordAccepted: () => {
@@ -1102,6 +1107,7 @@ describe('los botones se enrutan', () => {
         versionNumber: 1,
         trainerChatId: 10,
         client: { clientId: 'c1', trainerId: ENTRENADOR.profileId, profileId: null },
+        currentVersionId: VERSION,
         currentVersionState: 'REJECTED' as const,
         currentVersionNumber: 1,
       },
@@ -1109,7 +1115,7 @@ describe('los botones se enrutan', () => {
     const { result } = ejecutar({ ...conBoton(botones[0]!), update_id: 2 }, { changes });
 
     expect(await result).toMatchObject({ change: { kind: 'revision_started' } });
-    expect(changes.pasos).toContain('createRevision');
+    expect(changes.pasos).toContain('createRevisionIfCurrent');
   });
 
   it('un botón válido llega a su acción', async () => {
@@ -1736,7 +1742,7 @@ describe('las solicitudes de cambio se enrutan', () => {
     const { result } = ejecutar(boton(`act:revise:${VERSION_SENT}`), { changes });
 
     expect(await result).toMatchObject({ change: { kind: 'revision_started' } });
-    expect(changes.pasos).toContain('createRevision');
+    expect(changes.pasos).toContain('createRevisionIfCurrent');
   });
 
   it('un `chg:` NO se confunde con los otros prefijos', async () => {
