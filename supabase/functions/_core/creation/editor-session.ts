@@ -47,14 +47,24 @@ export type EditorOutcome =
   | { readonly kind: 'not_draft_anymore' };
 
 /**
- * SPEC-022 M2. Antes mandaba a «el aviso de un cliente», que ya estaba
- * enterrado en el chat. `/cliente <nombre>` lleva los mismos botones
- * (SPEC-007 regla 7): se nombra un camino que existe.
+ * SPEC-022 M2, ampliado tras testing real (Ana, octubre 2026). Antes solo
+ * explicaba el camino largo («el aviso de un cliente» enterrado en el
+ * chat, luego /cliente <nombre> ...) y nunca mencionaba que `/crear_rutina
+ * <cliente>` (SPEC-031) no necesita ningún borrador previo — justo la
+ * forma que Carlos esperaba usar. Ahora se nombra primero.
  */
 const SIN_BORRADOR = [
   'No tienes ningún borrador abierto\\.',
-  'Escribe /cliente y el nombre \\(por ejemplo /cliente Ana\\), pulsa',
-  '📋 Plantilla o ✍️ A mano en su ficha, y después vuelve a /crear\\_rutina\\.',
+  '',
+  'Lo más rápido: `/crear_rutina <nombre del cliente>`, con los días debajo, en el mismo mensaje\\. Ejemplo:',
+  '',
+  '```',
+  '/crear_rutina Carlos',
+  'Día 1: Empuje',
+  'Press banca 4x8 90',
+  '```',
+  '',
+  'O si prefieres elegir plantilla o ir ejercicio por ejercicio: /cliente y el nombre \\(por ejemplo /cliente Ana\\), pulsa 📋 Plantilla o ✍️ A mano en su ficha\\.',
 ].join('\n');
 
 /**
