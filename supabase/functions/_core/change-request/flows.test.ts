@@ -91,7 +91,6 @@ function espia(
   opciones: {
     version?: VersionForRequest | null;
     comentarioFalla?: boolean;
-    solicitud?: null;
     abierta?: OpenRequest | null;
     created?: boolean;
     perdioCarrera?: boolean;
@@ -126,20 +125,18 @@ function espia(
       );
     },
     findRequest: () =>
-      opciones.solicitud === null
-        ? Promise.resolve(null)
-        : Promise.resolve({
-            requestId: 'req-1',
-            versionId: VERSION_ID,
-            planId: 'plan-1',
-            versionNumber: 1,
-            state: 'OPEN' as const,
-            reason: 'too_hard' as const,
-            comment: 'No termino la semana 1',
-            clientName: 'Carlos Pérez',
-                trainerId: 'p-trainer',
-                sentDaysAgo: 9,
-          }),
+      Promise.resolve({
+        requestId: 'req-1',
+        versionId: VERSION_ID,
+        planId: 'plan-1',
+        versionNumber: 1,
+        state: 'OPEN' as const,
+        reason: 'too_hard' as const,
+        comment: 'No termino la semana 1',
+        clientName: 'Carlos Pérez',
+        trainerId: 'p-trainer',
+        sentDaysAgo: 9,
+      }),
     createRevision: (planId) => {
       pasos.push(`createRevision:${planId}`);
       return Promise.resolve('9f8a1c2e-0b4d-4e6f-8a91-2c3d4e5f6a7b');
@@ -363,16 +360,19 @@ describe('✏️ pedir un cambio', () => {
 });
 
 describe('el comentario', () => {
-  it('se guarda y se le reenvía al entrenador', async () => {
+  it('se guarda, SIN reenviar nada al entrenador', async () => {
+    // El aviso original ya tiene el botón para empezar la v2: repetirlo por
+    // cada mensaje del cliente era una notificación sin límite sobre el
+    // mismo botón. Al cliente se le confirma que quedó guardado, no que se
+    // "envió" — ya no hay un reenvío en tiempo real que prometer.
     const { deps, pasos, mensajes } = espia();
 
     const outcome = await addComment('req-1', 'c1', 'No termino la semana 1', CLIENTE, deps);
 
     expect(outcome).toMatchObject({ kind: 'commented', truncated: false });
     expect(pasos).toContain('addComment');
-    expect(mensajes.find((m) => m.chatId === 10)?.text).toContain('No termino');
-    // SPEC-030 regla 4: el acuse dice que se envió, no solo «apuntado».
-    expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('Enviado');
+    expect(mensajes.some((m) => m.chatId === 10)).toBe(false);
+    expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('Guardado');
   });
 
   it('SPEC-030 · si se pasó de 500 caracteres, el acuse lo dice', async () => {
@@ -416,13 +416,6 @@ describe('el comentario', () => {
 
     expect(outcome).toMatchObject({ kind: 'commented', truncated: true });
     expect(mensajes.find((m) => m.chatId === 500)?.text).toContain('límite');
-  });
-
-  it('si la solicitud desaparece entre guardar y leer, no revienta', async () => {
-    const { deps, mensajes } = espia({ solicitud: null });
-
-    expect(await addComment('req-1', 'c1', 'hola', CLIENTE, deps)).toEqual({ kind: 'denied' });
-    expect(mensajes).toEqual([]);
   });
 
   it('sobre una solicitud que ya no es suya, no se guarda', async () => {

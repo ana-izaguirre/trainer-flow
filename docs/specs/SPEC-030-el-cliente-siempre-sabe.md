@@ -11,7 +11,7 @@
 | Regla | Pieza | Estado |
 |---|---|---|
 | 1, 2 | Una abierta no se pisa; solo avisa quien crea la fila (`created`) | ✅ migración 0027, `flows.ts`, CA-1, CA-2 |
-| 4 | El comentario se AÑADE, hasta 500 car., con aviso si se trunca | ✅ `add_change_comment`, CA-4 |
+| 4 | El comentario se AÑADE, hasta 500 car., con aviso si se trunca. **Ya NO se reenvía al entrenador por cada mensaje** (nota al final: bloquear ese ruido) | ✅ `add_change_comment`, CA-4 |
 | 5 | `asked_at` decide contra el check-in, y se actualiza al re-preguntar | ✅ |
 | 6 | `/cambio_rutina` — los tres casos | ✅ `webhook.ts`, CA-7 |
 | 7 | `/rutina` avisa del cambio pendiente antes de la rutina | ✅ CA-6 |
@@ -325,8 +325,9 @@ con la columna nueva `asked_at`.
 - **CA-3** — DADO «Otro», CUANDO lo pulsa, ENTONCES el mensaje lleva
   `force_reply` y el entrenador recibe «esperando el detalle».
 - **CA-4** — DADO una solicitud con comentario, CUANDO el cliente escribe otra
-  vez, ENTONCES el texto se añade, recibe «📨 Enviado…» y el entrenador lo
-  recibe.
+  vez, ENTONCES el texto se añade y recibe «📝 Guardado…». **El entrenador NO
+  recibe un aviso nuevo** (nota de seguimiento, más abajo): el que ya tiene,
+  del aviso original, es suficiente para actuar.
 - **CA-5** — DADO una solicitud abierta y un check-in enviado DESPUÉS, CUANDO
   el cliente vuelve a pulsar «Pedir un cambio» y escribe, ENTONCES el texto va
   a la solicitud (regla 5).
@@ -382,3 +383,24 @@ supabase/functions/_shared/db.ts                       createLinkReminderRepo, v
 supabase/functions/sweep-generating/index.ts           corre los dos barridos (regla 13, sin cron nuevo)
 docs/specs/SPEC-010 (reglas 6 y 11), docs/DEPLOY.md (comandos de BotFather, paso 8b)
 ```
+
+## 12. Nota de seguimiento — regla 4, sin aviso repetido
+
+Ana, en testing real: cada comentario del cliente le reenviaba al entrenador
+un aviso nuevo, con su propio botón, mientras la solicitud seguía abierta —
+"si hay un cambio en curso se deben bloquear los envíos". El entrenador ya
+tiene, desde el aviso ORIGINAL (`requestChange`), todo lo que necesita para
+decidir: el motivo y el botón para empezar la v2. Nada de lo que el cliente
+escriba después cambia esa decisión, así que repetir el aviso solo generaba
+una notificación de Telegram por mensaje, sin aportar nada nuevo que atender
+en el momento.
+
+`addComment` deja de llamar a `avisoAlEntrenador`: el comentario se sigue
+guardando (acumulado, hasta 500 caracteres, igual que antes), pero ya no se
+reenvía. Al cliente se le confirma con «📝 Guardado\. Tu entrenador lo verá
+cuando revise tu pedido\.» en vez de «Enviado…», porque ya no es exacto
+prometer un envío en tiempo real.
+
+Como consecuencia, `avisoAlEntrenador` perdió su parámetro `comment`: el
+único llamador que queda (`requestChange`, el aviso original) lo pasaba
+siempre en `null` — no existe ningún comentario todavía en ese punto.

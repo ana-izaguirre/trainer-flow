@@ -155,7 +155,7 @@ export async function requestChange(
   // El entrenador se entera ya, con el botón para empezar la v2.
   await deps.sender.sendMessage(
     version.trainerChatId,
-    avisoAlEntrenador(version.clientName, version.versionNumber, reason, null),
+    avisoAlEntrenador(version.clientName, version.versionNumber, reason),
     buildKeyboard(['revise'], versionId),
   );
 
@@ -164,7 +164,16 @@ export async function requestChange(
 
 /**
  * El detalle que escribe después. Se le AÑADE al comentario que ya hubiera
- * —no lo reemplaza— y se le reenvía al entrenador tal cual (regla 4).
+ * —no lo reemplaza— (regla 4).
+ *
+ * ┌─ YA NO LE REENVÍA UN AVISO AL ENTRENADOR ──────────────────────────────┐
+ * │ El aviso original (`requestChange`) ya tiene el botón para empezar la  │
+ * │ v2. Repetirlo por cada mensaje del cliente era una notificación nueva  │
+ * │ sin límite sobre el mismo botón, mientras el cambio sigue en curso: no │
+ * │ hay nada nuevo que decidir por escribir más. El comentario queda       │
+ * │ guardado, y lo ve cuando decide atender la solicitud, no mensaje a     │
+ * │ mensaje.                                                               │
+ * └──────────────────────────────────────────────────────────────────────┘
  */
 export async function addComment(
   requestId: string,
@@ -176,29 +185,12 @@ export async function addComment(
   const guardado = await deps.repo.addComment(requestId, clientId, comment);
   if (!guardado.saved) return { kind: 'denied' };
 
-  const solicitud = await deps.repo.findRequest(requestId);
-  if (solicitud === null) return { kind: 'denied' };
-
   await deps.sender.sendMessage(
     actor.telegramChatId,
     guardado.truncated
-      ? '📨 Enviado a tu entrenador\\. Guardé hasta el límite: el resto no entró\\.'
-      : '📨 Enviado a tu entrenador\\. Te aviso aquí cuando tenga tu nueva rutina\\.',
+      ? '📝 Guardado\\. Guardé hasta el límite: el resto no entró\\.'
+      : '📝 Guardado\\. Tu entrenador lo verá cuando revise tu pedido\\.',
   );
-
-  const version = await deps.repo.findVersion(solicitud.versionId);
-  if (version !== null) {
-    await deps.sender.sendMessage(
-      version.trainerChatId,
-      avisoAlEntrenador(
-        solicitud.clientName,
-        solicitud.versionNumber,
-        solicitud.reason,
-        solicitud.comment,
-      ),
-      buildKeyboard(['revise'], solicitud.versionId),
-    );
-  }
 
   return { kind: 'commented', requestId, truncated: guardado.truncated };
 }
@@ -337,23 +329,18 @@ function tecladoDeMotivos(versionId: string): InlineKeyboard {
   return { inline_keyboard: filas };
 }
 
-/** El aviso lleva el comentario ENTERO: el entrenador decide, y necesita leerlo. */
-function avisoAlEntrenador(
-  clientName: string,
-  versionNumber: number,
-  reason: ChangeReason,
-  comment: string | null,
-): string {
-  const lineas = [
+/**
+ * El aviso con el que se entera el entrenador, al pedirse el cambio.
+ *
+ * Nunca lleva el comentario: en este punto todavía no existe —se escribe
+ * DESPUÉS, y ya no se reenvía (ver el docstring de `addComment`)—, así que
+ * el entrenador lo lee cuando decide atender la solicitud, no aquí.
+ */
+function avisoAlEntrenador(clientName: string, versionNumber: number, reason: ChangeReason): string {
+  return [
     `🔔 *${escapeMarkdownV2(clientName)}* pidió un cambio`,
     '',
     `Rutina v${versionNumber}`,
     `Motivo: ${REASON_LABELS[reason]}`,
-  ];
-
-  if (comment !== null && comment.trim().length > 0) {
-    lineas.push(`Comentario: _${escapeMarkdownV2(comment)}_`);
-  }
-
-  return lineas.join('\n');
+  ].join('\n');
 }
