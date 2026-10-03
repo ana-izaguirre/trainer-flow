@@ -194,6 +194,27 @@ function readOptionalNumber(
   return decimals === 0 ? Math.round(parsed) : Number(parsed.toFixed(decimals));
 }
 
+function esBisiesto(anio: number): boolean {
+  return (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0;
+}
+
+/**
+ * Hoy, menos `anios` años, en el mismo formato que usa el CHECK real:
+ * `current_date - interval 'N years'`. Postgres, ante un 29 de febrero
+ * cuyo año destino no es bisiesto, hace CLAMPING al 28 — nunca avanza al
+ * mes siguiente. `Date.UTC` por sí solo no: interpretaría ese "día 29" como
+ * un desborde y haría ROLLOVER al 1 de marzo. Sin este ajuste, el límite
+ * calculado aquí se corre un día respecto al que aplica la base.
+ */
+function haceAnios(hoy: Date, anios: number): string {
+  const anio = hoy.getUTCFullYear() - anios;
+  const mes = hoy.getUTCMonth();
+  const dia = hoy.getUTCDate();
+  const diaAjustado = mes === 1 && dia === 29 && !esBisiesto(anio) ? 28 : dia;
+
+  return new Date(Date.UTC(anio, mes, diaAjustado)).toISOString().slice(0, 10);
+}
+
 /**
  * Una fecha válida en el calendario no es una fecha plausible como
  * nacimiento. Mismo rango que el CHECK real de `assessments` (migración
@@ -204,12 +225,8 @@ function readOptionalNumber(
 function isBirthDatePlausible(iso: string): boolean {
   const { min, max } = ASSESSMENT_LIMITS.birthDateYears;
   const hoy = new Date();
-  const limiteReciente = new Date(Date.UTC(hoy.getUTCFullYear() - min, hoy.getUTCMonth(), hoy.getUTCDate()))
-    .toISOString()
-    .slice(0, 10);
-  const limiteAntiguo = new Date(Date.UTC(hoy.getUTCFullYear() - max, hoy.getUTCMonth(), hoy.getUTCDate()))
-    .toISOString()
-    .slice(0, 10);
+  const limiteReciente = haceAnios(hoy, min);
+  const limiteAntiguo = haceAnios(hoy, max);
 
   return iso >= limiteAntiguo && iso <= limiteReciente;
 }
