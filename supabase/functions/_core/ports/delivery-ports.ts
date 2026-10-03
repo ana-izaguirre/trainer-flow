@@ -46,6 +46,8 @@ export interface VersionForDelivery {
   readonly plan: PlanSummary | null;
   /** SPEC-030 regla 10: `1` es la primera entrega, más que eso es una revisión. */
   readonly versionNumber: number;
+  /** SPEC-037: ya calculado — nunca la edad ni la fecha de nacimiento. */
+  readonly clientIsMinor: boolean;
 }
 
 export interface DeliveryRepo {

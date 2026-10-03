@@ -189,14 +189,22 @@ async function enviar(
     // renglón por día), no la rutina entera — nunca se acerca al límite de
     // Telegram, así que `sendLongMessage` lo manda siempre en un solo envío,
     // con el teclado de navegación + los dos botones de SPEC-010 regla 10.
+    const indice = formatIndexForClient(version.content, {
+      clientName: version.clientName,
+      plan: version.plan,
+      versionNumber: version.versionNumber,
+    });
+    // SPEC-037 regla 4: solo en la primera entrega, nunca en una revisión —
+    // ya se dijo una vez, repetirlo en cada v2 sería ruido.
+    const texto =
+      version.versionNumber === 1 && version.clientIsMinor
+        ? `${indice}\n\n⚠️ Sos menor de edad\\. Pedile a un padre o tutor que hable con tu entrenador\\.`
+        : indice;
+
     await sendLongMessage(
       deps.sender,
       version.clientChatId,
-      formatIndexForClient(version.content, {
-        clientName: version.clientName,
-        plan: version.plan,
-        versionNumber: version.versionNumber,
-      }),
+      texto,
       buildNavKeyboard(
         {
           view: { kind: 'index' },

@@ -62,6 +62,7 @@ const PERFIL = { profileId: 'perfil-cliente', chatId: 500 };
 function version(
   state: VersionForDelivery['state'] = 'APPROVED',
   versionNumber = 1,
+  clientIsMinor = false,
 ): VersionForDelivery {
   return {
     versionId: 'v1',
@@ -72,6 +73,7 @@ function version(
     trainerChatId: 10,
     plan: { goal: 'Fuerza', daysPerWeek: 3, sessionMinutes: 60 },
     versionNumber,
+    clientIsMinor,
   };
 }
 
@@ -390,6 +392,31 @@ describe('entregar', () => {
     expect(mensajes.some((m) => m.chatId === 10 && m.text.includes('recibió su rutina'))).toBe(
       true,
     );
+  });
+
+  // SPEC-037 CA-5/CA-6.
+  it('CA-5 · la primera entrega a un cliente menor lleva el aviso de consentimiento', async () => {
+    const { deps, mensajes } = espia({ version: version('APPROVED', 1, true) });
+
+    await deliverVersion('v1', deps);
+
+    expect(mensajes.some((m) => m.chatId === 500 && m.text.includes('padre o tutor'))).toBe(true);
+  });
+
+  it('CA-6 · una v2 a un cliente menor NO repite el aviso', async () => {
+    const { deps, mensajes } = espia({ version: version('APPROVED', 2, true) });
+
+    await deliverVersion('v1', deps);
+
+    expect(mensajes.some((m) => m.chatId === 500 && m.text.includes('padre o tutor'))).toBe(false);
+  });
+
+  it('sin ser menor, la primera entrega no lleva ningún aviso de consentimiento', async () => {
+    const { deps, mensajes } = espia({ version: version('APPROVED', 1, false) });
+
+    await deliverVersion('v1', deps);
+
+    expect(mensajes.some((m) => m.chatId === 500 && m.text.includes('padre o tutor'))).toBe(false);
   });
 
   it('la rutina al cliente lleva sus dos botones', async () => {

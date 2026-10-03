@@ -25,6 +25,7 @@
 import { assessmentChanges } from '../assessment/changes.ts';
 import { mapFormFields } from '../assessment/field-mapping.ts';
 import { TALLY_MAPPING } from '../assessment/mapping.ts';
+import { isMinorClient } from '../assessment/minor.ts';
 import { parseTallyEnvelope, redactCredentialUrls } from '../assessment/tally-envelope.ts';
 import { readUpdateToken, redactUpdateToken } from '../assessment/update-token.ts';
 import { validateAssessment } from '../assessment/validate-assessment.ts';
@@ -109,6 +110,8 @@ export interface TallyDeps {
    */
   readonly botUsername: string;
   readonly requestId: string;
+  /** SPEC-037: igual patrón que `ChangeRequestDeps.now` — `_core` no llama a `Date.now()`. */
+  readonly now: () => Date;
 }
 
 /**
@@ -255,7 +258,11 @@ export async function handleTallyWebhook(
     // El aviso dice QUE hay limitaciones, no cuáles: un mensaje de Telegram se
     // ve en la pantalla de bloqueo, y el detalle se lee al abrir la rutina.
     const aviso = buildAssessmentArrived(
-      { ...parsed.value, clientName: parsed.value.fullName },
+      {
+        ...parsed.value,
+        clientName: parsed.value.fullName,
+        isMinor: isMinorClient(parsed.value, deps.now()),
+      },
       ids.versionId,
       buildDeepLink(deps.botUsername, linkToken),
     );

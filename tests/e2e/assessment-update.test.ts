@@ -224,6 +224,7 @@ describe('E2E · SPEC-027 — el cliente actualiza sus datos', () => {
         newLinkToken: () => 'no-se-usa-con-token-valido-00000',
         botUsername: 'mibot',
         requestId: '00000000-0000-4000-8000-000000000000',
+        now: () => new Date(),
       },
     );
 

@@ -46,6 +46,8 @@ export interface AssessmentSummary {
   readonly hasLimitations: boolean;
   /** Se acepta para que quien llama no tenga que filtrarlo: aquí NO se usa. */
   readonly limitationsDetail?: string | null;
+  /** SPEC-037: ya calculado por `isMinorClient` — nunca la edad ni la fecha. */
+  readonly isMinor: boolean;
 }
 
 export const MOTIVO: Readonly<Record<AIFailureReason, string>> = {
@@ -85,6 +87,12 @@ export function buildAssessmentArrived(
   // El QUÉ, no el CUÁL. Ver el recuadro de arriba.
   if (summary.hasLimitations) {
     lines.push('', '⚠️ Declaró limitaciones \\(las verás en la rutina\\)');
+  }
+
+  // SPEC-037: solo avisa, nunca bloquea (D1). La edad o fecha exacta no
+  // viajan aquí — `isMinor` ya llega calculado.
+  if (summary.isMinor) {
+    lines.push('', '⚠️ Es menor de edad\\. Gestiona el consentimiento de un padre o tutor\\.');
   }
 
   // SPEC-014: el enlace de vinculación, para reenviárselo.

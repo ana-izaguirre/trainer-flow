@@ -74,6 +74,7 @@ export function createHandler(deps: HandlerDeps): (request: Request) => Promise<
           newLinkToken,
           botUsername: deps.botUsername,
           requestId,
+          now: () => new Date(),
         },
       );
 

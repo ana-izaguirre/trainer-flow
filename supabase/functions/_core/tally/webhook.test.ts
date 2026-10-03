@@ -112,6 +112,7 @@ function espia(
       newLinkToken: () => 'token-de-32-caracteres-exactos-x',
       botUsername: 'mibot',
       requestId: 'req-1',
+      now: () => new Date('2026-10-02T00:00:00Z'),
     },
     llamadas,
     guardado,
@@ -291,6 +292,19 @@ describe('la escritura', () => {
       equipment: 'Mancuernas',
       hasLimitations: false,
     });
+  });
+
+  // SPEC-037 CA-1/CA-3: el cálculo de isMinor se cablea end-to-end, con la
+  // edad declarada (los casos de borde de isMinorClient ya están cubiertos
+  // en minor.test.ts — esto solo confirma que el dato llega hasta el aviso).
+  it('SPEC-037: una evaluación de un menor lleva el aviso de consentimiento', async () => {
+    const { deps, avisos } = espia();
+    const cuerpoConEdad = JSON.parse(CUERPO) as { data: { fields: unknown[] } };
+    cuerpoConEdad.data.fields.push({ key: 'h', label: 'Edad', type: 'INPUT_NUMBER', value: 15 });
+
+    await handleTallyWebhook(entrada({ rawBody: JSON.stringify(cuerpoConEdad) }), deps);
+
+    expect(avisos.some((a) => a.includes('menor de edad'))).toBe(true);
   });
 
   it('el link_token lo genera quien tiene crypto, no el dominio', async () => {

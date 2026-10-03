@@ -33,6 +33,7 @@ import type { IntakeRepo } from '../_core/ports/intake-ports.ts';
 import type { LinkResendRepo } from '../_core/ports/link-ports.ts';
 import type { LinkReminderRepo } from '../_core/ports/link-reminder-ports.ts';
 import type { CreationRepo } from '../_core/ports/creation-ports.ts';
+import { isMinorClient } from '../_core/assessment/minor.ts';
 import type { CheckinAnswers } from '../_core/checkin/answers.ts';
 import type { CheckinForReply, CheckinRepo } from '../_core/ports/checkin-ports.ts';
 import type { ClientSummary, QueryRepo } from '../_core/ports/query-ports.ts';
@@ -744,6 +745,13 @@ async function readDelivery(
             daysPerWeek: Number(fila.days_per_week),
             sessionMinutes: Number(fila.session_minutes),
           },
+    // SPEC-037: la MISMA función que ya usa tally/webhook.ts para el aviso
+    // al entrenador — un solo criterio de "es menor", nunca dos que puedan
+    // divergir entre TypeScript y SQL.
+    clientIsMinor: isMinorClient(
+      { age: toNumberOrNull(fila.age), birthDate: fila.birth_date as string | null },
+      new Date(),
+    ),
   };
 }
 
