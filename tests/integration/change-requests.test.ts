@@ -317,6 +317,39 @@ describe('las consultas', () => {
     expect(rows[0].client_profile_id).not.toBeNull();
   });
 
+  // Regla 13: sin esto, `startRevision` no puede distinguir "primera vez
+  // que tocan el botón" de "ya hay una v2 en marcha, esto es un aviso viejo".
+  it('`version_for_request` trae también la versión VIGENTE del plan', async () => {
+    const { versionId, planId } = await escenario();
+
+    const antes = await db.query(`SELECT * FROM version_for_request($1)`, [versionId]);
+    // Todavía no se creó ninguna revisión: la vigente es esta misma v1.
+    expect(antes.rows[0]).toMatchObject({
+      current_version_id: versionId,
+      current_version_state: 'SENT',
+      current_version_number: 1,
+    });
+
+    // La misma función atómica que usa `createRevision` (SPEC-000 §3).
+    const { rows: nueva } = await db.query<{ create_workout_version: string }>(
+      `SELECT create_workout_version($1, 'manual', (SELECT trainer_id FROM clients WHERE id = (
+         SELECT client_id FROM workout_plans WHERE id = $1
+       )))`,
+      [planId],
+    );
+    const v2 = nueva[0]!.create_workout_version;
+
+    // Preguntar OTRA VEZ por la v1 original ahora dice que la vigente es la
+    // v2, en NEW: es la señal que evita crear una v3 por encima.
+    const despues = await db.query(`SELECT * FROM version_for_request($1)`, [versionId]);
+    expect(despues.rows[0]).toMatchObject({
+      version_id: versionId,
+      current_version_id: v2,
+      current_version_state: 'NEW',
+      current_version_number: 2,
+    });
+  });
+
   it('`open_change_request_for_client` dice cuándo se preguntó', async () => {
     // Es lo que decide contra el check-in quién se queda el texto libre.
     const { versionId, clientId } = await escenario();

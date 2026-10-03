@@ -53,6 +53,11 @@ function version(extra: Partial<VersionForRequest> = {}): VersionForRequest {
     versionNumber: 1,
     trainerChatId: 10,
     client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
+    // Por defecto, nadie empezó una revisión todavía: la vigente es esta
+    // misma v1, en SENT. Los tests que simulan una v2 ya en marcha pisan
+    // estos dos campos.
+    currentVersionState: 'SENT',
+    currentVersionNumber: 1,
     ...extra,
   };
 }
@@ -462,5 +467,41 @@ describe('✏️ crear v2', () => {
 
     expect(await startRevision(VERSION_ID, ENTRENADOR, deps)).toEqual({ kind: 'denied' });
     expect(pasos.some((p) => p.startsWith('createRevision'))).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Bug real de testing: cada comentario del cliente reenvía un aviso con su
+  // propio botón «Crear otra versión», los tres apuntando a la misma v1.
+  // Tocar más de uno no debe crear una v3 por encima de la v2 ya en marcha.
+
+  describe('ya hay una revisión en marcha', () => {
+    it.each(['NEW', 'GENERATING', 'DRAFT', 'APPROVED'] as const)(
+      'no crea otra si la vigente está en %s',
+      async (estado) => {
+        const { deps, pasos, mensajes } = espia({
+          version: version({ currentVersionState: estado, currentVersionNumber: 2 }),
+        });
+
+        const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+        expect(outcome).toEqual({ kind: 'revision_in_progress', versionId: VERSION_ID });
+        expect(pasos.some((p) => p.startsWith('createRevision'))).toBe(false);
+        expect(mensajes[0]?.text).toContain('v2');
+      },
+    );
+
+    it.each(['SENT', 'REJECTED'] as const)(
+      'SÍ crea la siguiente si la vigente ya está resuelta (%s)',
+      async (estado) => {
+        const { deps, pasos } = espia({
+          version: version({ currentVersionState: estado, currentVersionNumber: 1 }),
+        });
+
+        const outcome = await startRevision(VERSION_ID, ENTRENADOR, deps);
+
+        expect(outcome).toMatchObject({ kind: 'revision_started' });
+        expect(pasos).toContain('createRevision:plan-1');
+      },
+    );
   });
 });

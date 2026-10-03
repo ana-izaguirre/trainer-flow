@@ -9,7 +9,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { ChangeReason } from '../domain/change-request.ts';
-import type { VersionRef } from '../domain/version.ts';
+import type { VersionRef, VersionState } from '../domain/version.ts';
 
 /** La versión sobre la que se pide el cambio, con su pertenencia. */
 export interface VersionForRequest extends VersionRef {
@@ -18,6 +18,16 @@ export interface VersionForRequest extends VersionRef {
   readonly clientName: string;
   readonly versionNumber: number;
   readonly trainerChatId: number;
+  /**
+   * El estado y número de la versión VIGENTE del plan ahora mismo —
+   * `workout_plans.current_version_id`, no esta `versionId`.
+   *
+   * Son el mismo valor que `state`/`versionNumber` mientras nadie empezó
+   * una revisión todavía. Dejan de serlo en cuanto `startRevision` crea la
+   * v2: a partir de ahí, dicen que ya hay una en marcha.
+   */
+  readonly currentVersionState: VersionState;
+  readonly currentVersionNumber: number;
 }
 
 /** La solicitud, tal y como la ve el entrenador. */

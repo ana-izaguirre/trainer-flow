@@ -1120,6 +1120,9 @@ export type Database = {
           client_id: string
           client_name: string
           client_profile_id: string
+          current_version_id: string
+          current_version_number: number
+          current_version_state: Database["public"]["Enums"]["version_state"]
           plan_id: string
           state: Database["public"]["Enums"]["version_state"]
           trainer_chat_id: number

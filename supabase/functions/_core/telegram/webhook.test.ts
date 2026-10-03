@@ -196,6 +196,8 @@ function fakeChanges(
               versionNumber: 1,
               trainerChatId: 10,
               client: { clientId: 'c1', trainerId: 'p-trainer', profileId: 'p-cliente' },
+              currentVersionState: 'SENT' as const,
+              currentVersionNumber: 1,
             }
           : (opciones.version as null),
       );
@@ -1100,6 +1102,8 @@ describe('los botones se enrutan', () => {
         versionNumber: 1,
         trainerChatId: 10,
         client: { clientId: 'c1', trainerId: ENTRENADOR.profileId, profileId: null },
+        currentVersionState: 'REJECTED' as const,
+        currentVersionNumber: 1,
       },
     });
     const { result } = ejecutar({ ...conBoton(botones[0]!), update_id: 2 }, { changes });

@@ -29,6 +29,7 @@ import {
   REASON_LABELS,
   type ChangeReason,
 } from '../domain/change-request.ts';
+import { isTerminal } from '../domain/state-machine.ts';
 import type { ChangeRequestRepo, OpenRequest } from '../ports/change-request-ports.ts';
 import type { TelegramSender } from '../ports/telegram-ports.ts';
 import { escapeMarkdownV2 } from '../telegram/format.ts';
@@ -50,7 +51,9 @@ export type ChangeOutcome =
   | { readonly kind: 'already_requested'; readonly requestId: string }
   | { readonly kind: 'accepted'; readonly versionId: string }
   | { readonly kind: 'commented'; readonly requestId: string; readonly truncated: boolean }
-  | { readonly kind: 'revision_started'; readonly versionId: string };
+  | { readonly kind: 'revision_started'; readonly versionId: string }
+  /** Ya hay una v2+ sin resolver: no se crea otra (ver `startRevision`). */
+  | { readonly kind: 'revision_in_progress'; readonly versionId: string };
 
 /**
  * Lo mismo para una versión ajena que para una que no existe o no está
@@ -206,6 +209,15 @@ export async function addComment(
  * SPEC-008: no hay un camino especial por ser una revisión.
  *
  * **La solicitud sigue abierta** hasta que la v2 se envíe (regla 12).
+ *
+ * ┌─ POR QUÉ COMPRUEBA LA VIGENTE, NO SOLO ESTA ──────────────────────────┐
+ * │ Cada comentario que el cliente escribe (`addComment`) le reenvía al   │
+ * │ entrenador un aviso nuevo, y los tres —el original y los de cada      │
+ * │ comentario— llevan su propio botón apuntando a esta MISMA v1. Sin     │
+ * │ esta comprobación, tocar el botón en más de un aviso crea una v3 por  │
+ * │ encima de la v2 que ya está en marcha, sin que el entrenador lo pida  │
+ * │ (regla 3: la v2 nace de UNA decisión, no de varias por accidente).    │
+ * └──────────────────────────────────────────────────────────────────────┘
  */
 export async function startRevision(
   versionId: string,
@@ -219,6 +231,14 @@ export async function startRevision(
   if (version === null || actor.role !== 'trainer' || version.client.trainerId !== actor.profileId) {
     await deps.sender.sendMessage(actor.telegramChatId, RESPUESTA_NEUTRA);
     return { kind: 'denied' };
+  }
+
+  if (!isTerminal(version.currentVersionState)) {
+    await deps.sender.sendMessage(
+      actor.telegramChatId,
+      `✏️ Ya tienes la v${version.currentVersionNumber} de ${escapeMarkdownV2(version.clientName)} en marcha\\. Revísala con /ver\\.`,
+    );
+    return { kind: 'revision_in_progress', versionId };
   }
 
   const nueva = await deps.repo.createRevision(version.planId, actor.profileId);
