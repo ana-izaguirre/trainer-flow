@@ -8,6 +8,7 @@
 [![Deno](https://img.shields.io/badge/Deno-Edge%20Functions-70FFAF?logo=deno&logoColor=black)](supabase/functions/deno.json)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase&logoColor=white)](docs/DATA-MODEL.md)
 [![SDD](https://img.shields.io/badge/m%C3%A9todo-Spec%20Driven%20Development-8A63D2)](docs/specs/)
+[![Licencia](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE)
 
 [English](README.md) · **Español**
 
