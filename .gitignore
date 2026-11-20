@@ -16,6 +16,7 @@ supabase/.env
 dist/
 coverage/
 *.tsbuildinfo
+web/.next/
 
 # Sistema operativo y editor
 .DS_Store
